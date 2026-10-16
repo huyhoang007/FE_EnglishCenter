@@ -1,0 +1,238 @@
+/**
+ * ClientRoutes — định tuyến cho Client Portal (mount tại /)
+ * -----------------------------------------------------------
+ * Bao gồm:
+ *   /login             → LoginPage (full-bleed)
+ *   /register          → RegisterPage (full-bleed)
+ *   /                  → redirect tới Gold Flow course
+ *   /courses/:id       → CourseDetailPage
+ *   /exams/:id         → ExamRoomPage
+ *   /study/:slug       → StudyRoomPage (phòng học trực tuyến)
+ *   /schedule          → SchedulePage
+ *   /learning-path     → LearningPathPage (AI luyện viết)
+ *   /my-courses        → MyCoursesPage
+ *
+ * Stub pages (placeholder) dùng chung để tránh lộ chữ "Dev X"
+ *   /admin             → Admin portal (lazy)
+ *   /mentor/grading    → Mentor portal (lazy)
+ */
+
+import React, { Suspense } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { ClientLayout } from '@/portals/client/layouts/ClientLayout';
+import LoginPage from '@/portals/client/pages/auth/LoginPage';
+import RegisterPage from '@/portals/client/pages/auth/RegisterPage';
+import CourseDetailPage from '@/portals/client/pages/courses/CourseDetailPage';
+import ExamRoomPage from '@/portals/client/pages/exams/ExamRoomPage';
+import MyCoursesPage from '@/portals/client/pages/student/MyCoursesPage';
+import StudyRoomPage from '@/portals/client/pages/student/StudyRoomPage';
+import SchedulePage from '@/portals/client/pages/student/SchedulePage';
+import LearningPathPage from '@/portals/client/pages/student/LearningPathPage';
+import { ProtectedRoute } from '@/shared/components/ProtectedRoute';
+import { CLIENT_ROUTES, ADMIN_ROUTES, MENTOR_ROUTES } from '@/shared/constants/routes';
+import { ArrowRight, BookOpen, Sparkles, Wrench } from 'lucide-react';
+import { Card } from '@/shared/components/Card';
+import { Badge } from '@/shared/components/Badge';
+import { Button } from '@/shared/components/Button';
+
+const DEFAULT_COURSE = 'ielts-intensive-mastery';
+
+interface PlaceholderProps {
+  title: string;
+  description: string;
+  emoji: string;
+  status?: 'preview' | 'ready';
+  features?: string[];
+}
+
+const Placeholder: React.FC<PlaceholderProps> = ({
+  title,
+  description,
+  emoji,
+  status = 'ready',
+  features = [],
+}) => {
+  return (
+    <div className="space-y-6">
+      <Card hoverable className="relative overflow-hidden">
+        <div className="absolute -top-24 -right-20 w-72 h-72 bg-blue-100/40 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-10 w-64 h-64 bg-violet-100/40 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-6">
+          <div
+            className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#0052CC] to-[#7C3AED] flex items-center justify-center text-4xl shadow-lg shrink-0 text-white"
+            aria-hidden="true"
+          >
+            {emoji}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-extrabold text-slate-900">{title}</h1>
+              <Badge
+                variant={status === 'ready' ? 'primary' : 'neutral'}
+                size="sm"
+                icon={status === 'ready' ? Sparkles : Wrench}
+              >
+                {status === 'ready' ? 'Available' : 'Preview'}
+              </Badge>
+            </div>
+            <p className="mt-2 text-slate-600 max-w-2xl">{description}</p>
+          </div>
+        </div>
+      </Card>
+
+      {features.length > 0 && (
+        <Card>
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-[#0052CC]" />
+            Upcoming capabilities
+          </h2>
+          <ul className="mt-4 space-y-2.5">
+            {features.map((f, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200/70"
+              >
+                <span className="w-6 h-6 rounded-md bg-blue-50 text-[#0052CC] text-xs font-extrabold flex items-center justify-center shrink-0">
+                  {i + 1}
+                </span>
+                <span className="text-sm text-slate-700">{f}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <Card className="bg-gradient-to-br from-blue-50 via-white to-violet-50">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-slate-900">Back to the Gold Flow</h3>
+            <p className="text-sm text-slate-600 mt-1">
+              Continue exploring the flagship course to see the end-to-end
+              learning experience.
+            </p>
+          </div>
+          <Button
+            variant="primary"
+            size="md"
+            rightIcon={ArrowRight}
+            onClick={() =>
+              (window.location.href = `/courses/${DEFAULT_COURSE}`)
+            }
+          >
+            Open flagship course
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+const LoadingFallback: React.FC = () => (
+  <div className="min-h-[40vh] flex items-center justify-center text-slate-500 text-sm">
+    Loading workspace…
+  </div>
+);
+
+const AdminPlaceholder: React.FC = () => (
+  <Placeholder
+    emoji="🛡️"
+    title="Administration Console"
+    description="Manage users, courses, mentors, orders and core platform parameters from a single workspace."
+    features={[
+      'Account lifecycle management (Student / Mentor / Admin) with role-based access control',
+      'Revenue, enrollment, and retention analytics dashboards',
+      'Audit log and platform configuration',
+    ]}
+  />
+);
+
+const MentorPlaceholder: React.FC = () => (
+  <Placeholder
+    emoji="✍️"
+    title="Mentor Grading Workspace"
+    description="Queue of pending Speaking/Writing submissions with detailed feedback panels."
+    features={[
+      'Kanban board: Pending / In Review / Completed',
+      'Audio player + transcript for Speaking submissions',
+      'AI-suggested rubric that mentors can refine before sending',
+    ]}
+  />
+);
+
+const ClientRoutesComponent: React.FC = () => {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <Routes>
+        {/* Auth — full-bleed */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* Workspace pages inside ClientLayout */}
+        <Route element={<ClientLayout />}>
+          <Route
+            path="/"
+            element={
+              <Navigate to={`/courses/${DEFAULT_COURSE}`} replace />
+            }
+          />
+          <Route
+            path={CLIENT_ROUTES.course()}
+            element={<CourseDetailPage />}
+          />
+          <Route
+            path={CLIENT_ROUTES.exam()}
+            element={<ExamRoomPage />}
+          />
+          <Route
+            path={CLIENT_ROUTES.study()}
+            element={<StudyRoomPage />}
+          />
+          <Route
+            path={CLIENT_ROUTES.study(':slug', ':lessonId')}
+            element={<StudyRoomPage />}
+          />
+          <Route path={CLIENT_ROUTES.schedule} element={<SchedulePage />} />
+          <Route
+            path={CLIENT_ROUTES.learningPath}
+            element={<LearningPathPage />}
+          />
+          <Route
+            path={CLIENT_ROUTES.myCourses}
+            element={<MyCoursesPage />}
+          />
+          <Route
+            path={CLIENT_ROUTES.myLearning}
+            element={<MyCoursesPage />}
+          />
+
+          {/* Admin/Mentor placeholders — gated to demonstrate portal separation */}
+          <Route
+            path={ADMIN_ROUTES.dashboard}
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminPlaceholder />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={MENTOR_ROUTES.grading}
+            element={
+              <ProtectedRoute allowedRoles={['MENTOR']}>
+                <MentorPlaceholder />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+
+        {/* 404 → flagship course */}
+        <Route
+          path="*"
+          element={<Navigate to={`/courses/${DEFAULT_COURSE}`} replace />}
+        />
+      </Routes>
+    </Suspense>
+  );
+};
+
+export const ClientRoutes = ClientRoutesComponent;
+export default ClientRoutesComponent;
