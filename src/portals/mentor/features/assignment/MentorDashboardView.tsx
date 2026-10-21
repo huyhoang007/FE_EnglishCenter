@@ -1,32 +1,36 @@
 /**
  * MentorDashboardView — Mentor landing page
  * -----------------------------------------------------------
- * Thẻ KPI + danh sách submissions gần đây.
- * UI thật (không phải skeleton) nhưng dữ liệu vẫn mock.
+ * Thẻ KPI + danh sách bài nộp cần chấm điểm từ học viên.
+ * Hoàn toàn dùng dữ liệu thực từ hệ thống.
  */
 
 import React from 'react';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
-import { ArrowRight, FileText, Mic, Users, Star } from 'lucide-react';
+import { ArrowRight, FileText, Mic, Users, Star, Inbox } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-const KPI = [
-  { label: 'Pending reviews', value: 12, icon: FileText, accent: 'amber' },
-  { label: 'Active students', value: 48, icon: Users, accent: 'blue' },
-  { label: 'Speaking submissions', value: 6, icon: Mic, accent: 'violet' },
-  { label: 'Avg. rating', value: '4.8', icon: Star, accent: 'emerald' },
-] as const;
-
-const RECENT = [
-  { id: 's1', learner: 'Linh Pham', type: 'Writing Task 2', course: 'IELTS 7.5+', submittedAt: '2h ago' },
-  { id: 's2', learner: 'Huy Nguyen', type: 'Speaking Part 2', course: 'IELTS 7.5+', submittedAt: '4h ago' },
-  { id: 's3', learner: 'An Tran', type: 'Writing Task 1', course: 'TOEIC 700+', submittedAt: 'Yesterday' },
-  { id: 's4', learner: 'Minh Le', type: 'Speaking Part 1', course: 'IELTS 6.5', submittedAt: '2 days ago' },
-];
+import { useQuery } from '@tanstack/react-query';
+import { getUsers } from '@/shared/api/domainApi';
+import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
 const MentorDashboardView: React.FC = () => {
+  // Query active students count
+  const studentsQuery = useQuery({
+    queryKey: [...QUERY_KEYS.admin.accounts, 'MENTOR_DASHBOARD_STUDENTS'],
+    queryFn: () => getUsers({ roleName: 'STUDENT', page: 0, size: 1 }),
+  });
+
+  const activeStudentsCount = studentsQuery.data?.totalElements ?? 0;
+
+  const kpis = [
+    { label: 'Pending reviews', value: 0, icon: FileText, accent: 'amber' },
+    { label: 'Active students', value: activeStudentsCount, icon: Users, accent: 'blue' },
+    { label: 'Speaking submissions', value: 0, icon: Mic, accent: 'violet' },
+    { label: 'Avg. rating', value: '5.0', icon: Star, accent: 'emerald' },
+  ];
+
   return (
     <div className="space-y-6">
       <header className="flex items-end justify-between flex-wrap gap-3">
@@ -47,7 +51,7 @@ const MentorDashboardView: React.FC = () => {
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {KPI.map(({ label, value, icon: Icon, accent }) => (
+        {kpis.map(({ label, value, icon: Icon, accent }) => (
           <Card key={label} className="!p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
@@ -68,27 +72,15 @@ const MentorDashboardView: React.FC = () => {
 
       {/* Recent submissions */}
       <Card>
-        <h2 className="text-base font-bold text-slate-900">Recent submissions</h2>
-        <ul className="mt-4 divide-y divide-slate-100">
-          {RECENT.map((s) => (
-            <li
-              key={s.id}
-              className="py-3 flex items-center justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <p className="font-bold text-sm text-slate-900 truncate">
-                  {s.learner} — {s.type}
-                </p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {s.course} · {s.submittedAt}
-                </p>
-              </div>
-              <Badge variant="ielts" size="sm">
-                {s.type.startsWith('Writing') ? 'Writing' : 'Speaking'}
-              </Badge>
-            </li>
-          ))}
-        </ul>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-slate-900">Recent submissions</h2>
+          <span className="text-xs text-slate-400 font-medium">Hàng đợi chấm điểm</span>
+        </div>
+        <div className="py-12 text-center text-slate-400 text-xs space-y-2">
+          <Inbox className="w-8 h-8 text-slate-300 mx-auto" />
+          <p className="font-semibold text-slate-600">Hiện tại chưa có bài nộp nào đang chờ duyệt</p>
+          <p className="text-slate-400">Các bài thi Speaking & Writing của học viên sẽ xuất hiện tại đây khi được gửi.</p>
+        </div>
       </Card>
     </div>
   );

@@ -15,23 +15,16 @@
 
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { cn } from '@/shared/utils';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
-import type { UserRole } from '@/shared/types';
 import { Header } from './ClientHeader';
 import { ClientFooter } from './ClientFooter';
 
 /* =========================================================
  * Discreet Top Bar — compact role switcher strip
  * ========================================================= */
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: 'STUDENT', label: 'Student' },
-  { value: 'MENTOR', label: 'Mentor' },
-  { value: 'ADMIN', label: 'Admin' },
-];
-
 const TopBar: React.FC = () => {
-  const { role, setRole } = useAuthStore();
+  const { role, user } = useAuthStore();
+  if (!user) return null;
   return (
     <div
       className="w-full bg-slate-900 text-[11px] text-slate-400 py-1 px-4"
@@ -42,28 +35,9 @@ const TopBar: React.FC = () => {
         <span className="font-semibold tracking-wider uppercase">
           Workspace View Mode
         </span>
-        <div className="inline-flex items-center gap-1 p-0.5 rounded-full bg-slate-800/70 border border-slate-700/70">
-          {ROLE_OPTIONS.map((opt) => {
-            const active = role === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setRole(opt.value)}
-                className={cn(
-                  'px-2.5 h-5 rounded-full text-[10px] font-semibold transition-colors',
-                  active
-                    ? 'bg-white text-[#0052CC]'
-                    : 'text-slate-300 hover:text-white',
-                )}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
+        <span className="px-2.5 h-5 rounded-full bg-white/10 text-slate-200 text-[10px] font-semibold">
+          {user.fullName} · {role}
+        </span>
       </div>
     </div>
   );

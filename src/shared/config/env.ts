@@ -8,7 +8,7 @@
 const env = (import.meta as { env?: Record<string, string> }).env ?? {};
 
 export const ENV = {
-  apiUrl: env.VITE_API_URL ?? 'http://localhost:8081',
+  apiUrl: env.VITE_API_URL ?? 'http://localhost:8080',
   appEnv: env.VITE_APP_ENV ?? 'development',
   appName: env.VITE_APP_NAME ?? 'PrepMaster',
   payOsClientId: env.VITE_PAYOS_CLIENT_ID ?? '',

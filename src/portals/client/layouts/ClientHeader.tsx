@@ -20,7 +20,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { cn } from '@/shared/utils';
-import { useAuthStore, ROLE_MOCK_PROFILE } from '@/shared/auth/useAuthStore';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
 import type { UserRole } from '@/shared/types';
 
 export interface HeaderProps {
@@ -43,19 +43,24 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Programs & Paths',
     to: '/courses',
-    roles: ['GUEST', 'STUDENT', 'MENTOR', 'ADMIN'],
+    roles: ['GUEST', 'USER', 'STUDENT', 'MENTOR', 'ADMIN'],
     hasDropdown: true,
   },
   {
     label: 'Practice & Mock Tests',
     to: '/exams',
-    roles: ['GUEST', 'STUDENT', 'MENTOR', 'ADMIN'],
+    roles: ['GUEST', 'USER', 'STUDENT', 'MENTOR', 'ADMIN'],
     hasDropdown: true,
   },
   {
     label: '1-on-1 Mentorship',
     to: '/schedule',
     roles: ['STUDENT', 'MENTOR'],
+  },
+  {
+    label: 'Mentors',
+    to: '/mentors',
+    roles: ['GUEST', 'USER', 'STUDENT', 'MENTOR', 'ADMIN'],
   },
   {
     label: 'Admin Portal',
@@ -66,6 +71,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const ROLE_LABEL: Record<UserRole, string> = {
   GUEST: 'Guest',
+  USER: 'Learner',
   STUDENT: 'Student',
   MENTOR: 'Mentor',
   ADMIN: 'Administrator',
@@ -73,7 +79,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 
 export const Header: React.FC<HeaderProps> = ({ className }) => {
   const navigate = useNavigate();
-  const { role, userName, logout, isAuthenticated } = useAuthStore();
+  const { role, userName, user, logout, isAuthenticated } = useAuthStore();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -105,8 +111,8 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
     navigate('/login', { replace: true });
   };
 
-  const profile = ROLE_MOCK_PROFILE[role];
-  const displayName = userName || profile.fullName;
+  const displayName = user?.fullName || userName || 'User';
+  const displayEmail = user?.email || '';
   const avatarInitial = displayName.charAt(0).toUpperCase();
   const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(role));
   const showAuthenticatedCluster = isAuthenticated && role !== 'GUEST';
@@ -312,8 +318,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
                 aria-expanded={userMenuOpen}
               >
                 <span
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
-                  style={{ background: profile.avatarColor }}
+                  className="w-7 h-7 rounded-full bg-[#0052CC] flex items-center justify-center text-white font-bold text-xs shrink-0"
                   aria-hidden="true"
                 >
                   {avatarInitial}
@@ -341,7 +346,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
                       {displayName}
                     </p>
                     <p className="text-xs text-slate-500 truncate mt-0.5">
-                      {profile.email}
+                      {displayEmail}
                     </p>
                     <span className="inline-flex items-center mt-2 h-5 px-2 rounded-md bg-[#E0F2FE] text-[#0052CC] text-[10px] font-bold uppercase tracking-wider">
                       {ROLE_LABEL[role]}

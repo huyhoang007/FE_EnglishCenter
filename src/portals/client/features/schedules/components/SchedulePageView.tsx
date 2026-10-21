@@ -27,6 +27,9 @@ import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
 import { cn } from '@/shared/utils';
 import { formatVND } from '@/shared/utils';
+import { useQuery } from '@tanstack/react-query';
+import { getMentors } from '@/shared/api/domainApi';
+import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
 /* ============================================================
  *  Dữ liệu mẫu
@@ -116,6 +119,34 @@ export const SchedulePageView: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<number>(0);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
+
+  // Query real mentor from backend
+  const { data: mentorsData } = useQuery({
+    queryKey: QUERY_KEYS.mentor.directory({ page: 0 }),
+    queryFn: () => getMentors({ page: 0, size: 5 }),
+  });
+
+  const realMentor = mentorsData?.data?.[0];
+
+  const mentorForBooking = useMemo(() => {
+    if (realMentor) {
+      return {
+        id: realMentor.userId,
+        fullName: realMentor.fullName,
+        title: realMentor.specialization || realMentor.department || 'Chuyên gia IELTS',
+        avatarUrl:
+          realMentor.avatarUrl ||
+          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(realMentor.email)}`,
+        rating: realMentor.ratingAverage || 5.0,
+        ratingCount: 120,
+        pricePerHour: realMentor.hourlyRate || 300000,
+        bio:
+          realMentor.biography ||
+          'Giảng viên giàu kinh nghiệm luyện thi chứng chỉ quốc tế IELTS/TOEIC/VSTEP tại PrepMaster.',
+      };
+    }
+    return MENTOR_FOR_BOOKING;
+  }, [realMentor]);
 
   const slots = useMemo(() => SLOTS_BY_DAY[selectedDay] ?? [], [selectedDay]);
 
@@ -239,38 +270,38 @@ export const SchedulePageView: React.FC = () => {
             <Card>
               <div className="flex items-start gap-4">
                 <img
-                  src={MENTOR_FOR_BOOKING.avatarUrl}
-                  alt={MENTOR_FOR_BOOKING.fullName}
+                  src={mentorForBooking.avatarUrl}
+                  alt={mentorForBooking.fullName}
                   className="w-16 h-16 rounded-full bg-slate-100 border-2 border-white shadow-md shrink-0"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-base font-extrabold text-slate-900">
-                      Thầy {MENTOR_FOR_BOOKING.fullName}
+                      Thầy {mentorForBooking.fullName}
                     </h3>
                     <Badge variant="ai" size="sm" icon={Sparkles}>
                       Top Mentor
                     </Badge>
                   </div>
                   <p className="text-xs text-ai font-semibold mt-0.5">
-                    {MENTOR_FOR_BOOKING.title}
+                    {mentorForBooking.title}
                   </p>
                   <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                    {MENTOR_FOR_BOOKING.bio}
+                    {mentorForBooking.bio}
                   </p>
                   <div className="mt-3 flex items-center gap-4 text-xs">
                     <span className="inline-flex items-center gap-1 font-bold text-amber-600">
                       <Star
                         className="w-3.5 h-3.5 fill-amber-400 text-amber-400"
                       />
-                      {MENTOR_FOR_BOOKING.rating.toFixed(1)}
+                      {mentorForBooking.rating.toFixed(1)}
                       <span className="text-slate-500 font-medium">
-                        ({MENTOR_FOR_BOOKING.ratingCount.toLocaleString('vi-VN')} đánh giá)
+                        ({mentorForBooking.ratingCount.toLocaleString('vi-VN')} đánh giá)
                       </span>
                     </span>
                     <span className="text-slate-300">|</span>
                     <span className="font-extrabold text-primary">
-                      {formatVND(MENTOR_FOR_BOOKING.pricePerHour)}/giờ
+                      {formatVND(mentorForBooking.pricePerHour)}/giờ
                     </span>
                   </div>
                 </div>
@@ -406,7 +437,7 @@ export const SchedulePageView: React.FC = () => {
             <div className="p-5 space-y-4">
               <SummaryRow
                 label="Giảng viên"
-                value={`Thầy ${MENTOR_FOR_BOOKING.fullName}`}
+                value={`Thầy ${mentorForBooking.fullName}`}
                 icon={User}
               />
               <SummaryRow
@@ -438,7 +469,7 @@ export const SchedulePageView: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">Học phí</span>
                 <span className="text-lg font-extrabold text-primary">
-                  {formatVND(MENTOR_FOR_BOOKING.pricePerHour)}
+                  {formatVND(mentorForBooking.pricePerHour)}
                 </span>
               </div>
 
@@ -466,7 +497,7 @@ export const SchedulePageView: React.FC = () => {
         <VietQRModal
           dayLabel={DAY_LABELS[selectedDay].full}
           slot={selectedSlot}
-          amount={MENTOR_FOR_BOOKING.pricePerHour}
+          amount={mentorForBooking.pricePerHour}
           onClose={() => setShowCheckout(false)}
         />
       )}

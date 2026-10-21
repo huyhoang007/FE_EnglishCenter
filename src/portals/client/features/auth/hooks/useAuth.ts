@@ -1,7 +1,5 @@
 ﻿/**
  * useAuth — selectors gọn cho useAuthStore
- * -----------------------------------------------------------
- * Tách ra để các component không cần biết cấu trúc store bên trong.
  */
 
 import { useAuthStore } from '@/shared/auth/useAuthStore';
@@ -18,8 +16,6 @@ export function useAuth() {
     login: s.login,
     register: s.register,
     logout: s.logout,
-    mockLogin: s.mockLogin,
-    setRole: s.setRole,
     clearError: s.clearError,
     reset: s.reset,
   }));

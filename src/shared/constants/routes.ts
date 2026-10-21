@@ -26,6 +26,10 @@ export const CLIENT_ROUTES = {
   learningPath: '/learning-path',
   myCourses: '/my-courses',
   myLearning: '/my-learning',
+  mentors: '/mentors',
+  mentorDetail: (id: string = ':id') => `/mentors/${id}`,
+  profile: '/profile',
+  settings: '/settings',
 } as const;
 
 export const MENTOR_ROUTES = {
@@ -35,6 +39,9 @@ export const MENTOR_ROUTES = {
 
 export const ADMIN_ROUTES = {
   dashboard: '/admin',
-  accounts: '/admin/accounts',
+  students: '/admin/students',
+  mentors: '/admin/mentors',
   courses: '/admin/courses',
+  accounts: '/admin/accounts',
+  settings: '/admin/settings',
 } as const;

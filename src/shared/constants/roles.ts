@@ -9,6 +9,7 @@ import type { UserRole } from '@/shared/types';
 
 export const ROLES = {
   GUEST: 'GUEST',
+  USER: 'USER',
   STUDENT: 'STUDENT',
   MENTOR: 'MENTOR',
   ADMIN: 'ADMIN',
@@ -16,6 +17,7 @@ export const ROLES = {
 
 export const ROLE_LABEL: Record<UserRole, string> = {
   GUEST: 'Guest',
+  USER: 'User',
   STUDENT: 'Student',
   MENTOR: 'Mentor',
   ADMIN: 'Admin',
@@ -23,6 +25,7 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 
 export const ROLE_ACCENT: Record<UserRole, string> = {
   GUEST: 'slate',
+  USER: 'amber',
   STUDENT: 'sky',
   MENTOR: 'violet',
   ADMIN: 'slate',

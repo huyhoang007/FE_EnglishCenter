@@ -29,11 +29,11 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
-import type { CurrentLevel, TargetExam } from '@/shared/types';
+import type { CurrentLevel, TargetExam, UserRole } from '@/shared/types';
 import { cn } from '@/shared/utils';
 
 interface RegisterFormProps {
-  onSuccessRedirect?: (role: 'STUDENT') => string;
+  onSuccessRedirect?: (role: UserRole) => string;
 }
 
 const TARGET_EXAMS: { value: TargetExam; label: string; desc: string }[] = [

@@ -1,16 +1,14 @@
 /**
  * Auth Store (Zustand)
  * -----------------------------------------------------------
- * Quản lý trạng thái xác thực toàn cục:
+ * Quản lý trạng thái xác thực toàn cục (dữ liệu thật từ Backend):
  *   - user, accessToken, refreshToken
  *   - isAuthenticated
- *   - role (mock — dùng cho Role Switcher trên cùng để demo phân quyền)
- *   - userName (mock — hiển thị khi GUEST hoặc khi chưa có user thật)
+ *   - role (từ User entity do Backend trả về: ADMIN, MENTOR, STUDENT, USER, GUEST)
  *   - login() / register() / logout()
- *   - mockLogin(role) — đăng nhập nhanh theo vai trò (phục vụ demo)
- *   - setRole(role) — chuyển đổi góc nhìn vai trò tức thì (Role Switcher)
+ *   - fetchMyProfile()
  *
- * Trạng thái được lưu vào localStorage để giữ phiên khi reload.
+ * Trạng thái được lưu vào localStorage để giữ phiên khi reload trang.
  */
 
 import { create } from 'zustand';
@@ -19,7 +17,6 @@ import {
   getMyProfileApi,
   loginApi,
   logoutApi,
-  mockStudentDemoApi,
   registerApi,
 } from '@/shared/auth/authService';
 import type {
@@ -29,17 +26,6 @@ import type {
   UserRole,
 } from '@/shared/types';
 
-/* ----------------- Mock user theo role (dùng cho Role Switcher demo) ----------------- */
-export const ROLE_MOCK_PROFILE: Record<
-  UserRole,
-  { fullName: string; email: string; avatarColor: string }
-> = {
-  GUEST: { fullName: 'Khách vãng lai', email: 'guest@prepmaster.ai', avatarColor: '#94A3B8' },
-  STUDENT: { fullName: 'Nguyễn Văn A', email: 'student@prepmaster.ai', avatarColor: '#2563EB' },
-  MENTOR: { fullName: 'Mentor David', email: 'mentor@prepmaster.ai', avatarColor: '#7C3AED' },
-  ADMIN: { fullName: 'Admin Master', email: 'admin@prepmaster.ai', avatarColor: '#0F172A' },
-};
-
 interface AuthState {
   user: AuthUser | null;
   accessToken: string | null;
@@ -48,21 +34,17 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
 
-  /** Role hiện tại đang xem (mock) — dùng cho Role Switcher */
+  /** Role của người dùng hiện tại do Backend xác thực */
   role: UserRole;
-  /** Tên hiển thị nhanh (mock) — dùng cho Sidebar footer */
+  /** Tên đầy đủ của người dùng */
   userName: string;
 
   /** Actions */
   login: (payload: LoginRequest) => Promise<AuthUser>;
   register: (payload: RegisterRequest) => Promise<AuthUser>;
   logout: () => Promise<void>;
-  /** Mock nhanh theo role — dùng cho demo/chấm điểm */
-  mockLogin: (role: UserRole) => Promise<AuthUser>;
   /** Lấy lại thông tin user mới nhất từ BE */
   fetchMyProfile: () => Promise<AuthUser | null>;
-  /** Đổi góc nhìn vai trò tức thì (Role Switcher bar trên cùng) */
-  setRole: (role: UserRole) => void;
   clearError: () => void;
   /** Reset state khi cần */
   reset: () => void;
@@ -76,7 +58,7 @@ const initialState = {
   isLoading: false,
   error: null,
   role: 'GUEST' as UserRole,
-  userName: ROLE_MOCK_PROFILE.GUEST.fullName,
+  userName: '',
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -87,14 +69,6 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => set({ error: null }),
 
       reset: () => set({ ...initialState }),
-
-      setRole: (role) => {
-        const profile = ROLE_MOCK_PROFILE[role];
-        set({
-          role,
-          userName: profile.fullName,
-        });
-      },
 
       login: async (payload) => {
         set({ isLoading: true, error: null });
@@ -118,7 +92,7 @@ export const useAuthStore = create<AuthState>()(
           return user;
         } catch (err) {
           const message =
-            err instanceof Error ? err.message : 'Đăng nhập thất bại';
+            err instanceof Error ? err.message : 'Đăng nhập thất bại. Vui lòng thử lại.';
           set({ isLoading: false, error: message });
           throw err;
         }
@@ -146,48 +120,13 @@ export const useAuthStore = create<AuthState>()(
           return user;
         } catch (err) {
           const message =
-            err instanceof Error ? err.message : 'Đăng ký thất khoản';
+            err instanceof Error ? err.message : 'Đăng ký thất bại. Vui lòng thử lại.';
           set({ isLoading: false, error: message });
           throw err;
         }
       },
 
-      mockLogin: async (role) => {
-        set({ isLoading: true, error: null });
-        try {
-          // Chỉ hỗ trợ STUDENT mock. Mentor/Admin phải login thật qua BE.
-          if (role !== 'STUDENT') {
-            const msg = `Demo nhanh chỉ hỗ trợ vai trò STUDENT. Vui lòng đăng nhập ${role} qua Backend.`;
-            set({ isLoading: false, error: msg });
-            throw new Error(msg);
-          }
-          const res = await mockStudentDemoApi();
-          if (!res.success) {
-            set({ isLoading: false, error: res.message });
-            throw new Error(res.message);
-          }
-          const { user, accessToken, refreshToken } = res.data;
-          const profile = ROLE_MOCK_PROFILE[role];
-          set({
-            user,
-            accessToken,
-            refreshToken,
-            isAuthenticated: true,
-            role,
-            userName: user.fullName || profile.fullName,
-            isLoading: false,
-            error: null,
-          });
-          return user;
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : 'Đăng nhập nhanh thất bại';
-          set({ isLoading: false, error: message });
-          throw err;
-        }
-      },
-
-      /** Lấy lại thông tin user mới nhất từ BE (sau khi token có thể đã refresh) */
+      /** Lấy lại thông tin user mới nhất từ BE */
       fetchMyProfile: async () => {
         const accessToken = _get().accessToken;
         if (!accessToken) return null;
@@ -205,8 +144,9 @@ export const useAuthStore = create<AuthState>()(
         try {
           await logoutApi();
         } catch {
-          /* ignore — vẫn logout phía client */
+          /* ignore — vẫn clear state phía client */
         }
+        localStorage.removeItem('prepmaster-ai-auth');
         set({ ...initialState });
       },
     }),
@@ -225,7 +165,7 @@ export const useAuthStore = create<AuthState>()(
   ),
 );
 
-/* ------------ Selectors tiện ích (dùng ngoài component) ------------ */
+/* ------------ Selectors tiện ích ------------ */
 export const selectUser = (s: AuthState) => s.user;
 export const selectRole = (s: AuthState): UserRole => s.role;
 export const selectIsAuthenticated = (s: AuthState) => s.isAuthenticated;

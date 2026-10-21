@@ -28,6 +28,9 @@ import MyCoursesPage from '@/portals/client/pages/student/MyCoursesPage';
 import StudyRoomPage from '@/portals/client/pages/student/StudyRoomPage';
 import SchedulePage from '@/portals/client/pages/student/SchedulePage';
 import LearningPathPage from '@/portals/client/pages/student/LearningPathPage';
+import MentorDirectoryPage from '@/portals/client/pages/mentors/MentorDirectoryPage';
+import MentorDetailPage from '@/portals/client/pages/mentors/MentorDetailPage';
+import ProfilePage from '@/portals/client/pages/profile/ProfilePage';
 import { ProtectedRoute } from '@/shared/components/ProtectedRoute';
 import { CLIENT_ROUTES, ADMIN_ROUTES, MENTOR_ROUTES } from '@/shared/constants/routes';
 import { ArrowRight, BookOpen, Sparkles, Wrench } from 'lucide-react';
@@ -190,6 +193,24 @@ const ClientRoutesComponent: React.FC = () => {
           <Route
             path={CLIENT_ROUTES.study(':slug', ':lessonId')}
             element={<StudyRoomPage />}
+          />
+          <Route path="/mentors" element={<MentorDirectoryPage />} />
+          <Route path="/mentors/:id" element={<MentorDetailPage />} />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute allowedRoles={['USER', 'STUDENT', 'MENTOR', 'ADMIN']}>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute allowedRoles={['USER', 'STUDENT', 'MENTOR', 'ADMIN']}>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
           />
           <Route path={CLIENT_ROUTES.schedule} element={<SchedulePage />} />
           <Route

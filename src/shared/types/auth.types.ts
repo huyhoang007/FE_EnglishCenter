@@ -9,18 +9,22 @@ import type { ApiResponse } from '@/shared/types';
 
 /** Các vai trò người dùng trong hệ thống PrepMaster AI
  *  - GUEST: Khách vãng lai, chưa đăng nhập (chỉ xem nội dung public).
- *  - STUDENT: Học viên.
+ *  - USER: Người dùng đã đăng ký, chưa mua gói khóa học.
+ *  - STUDENT: Học viên chính thức (đã mua khóa học).
  *  - MENTOR: Giảng viên / người chấm bài.
  *  - ADMIN: Quản trị hệ thống.
  */
-export type UserRole = 'GUEST' | 'STUDENT' | 'MENTOR' | 'ADMIN';
+export type UserRole = 'GUEST' | 'USER' | 'STUDENT' | 'MENTOR' | 'ADMIN';
 
 /** Thông tin người dùng trả về sau khi đăng nhập */
 export interface AuthUser {
   id: string;
   fullName: string;
   email: string;
+  phone?: string;
   role: UserRole;
+  isActive?: boolean;
+  createdAt?: string;
   avatarUrl?: string;
 }
 
