@@ -13,4 +13,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  server: {
+    port: 5173,
+    proxy: {
+      // Backend Dev 2 chạy ở http://localhost:8080
+      // Giữ nguyên đường dẫn /api/v1/... nên không phải sửa service.
+      '/api': {
+        target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 });

@@ -35,7 +35,7 @@ import type {
   Exam,
   ExamResult,
   Question,
-} from './examTypes';
+} from '@/shared/types/exam.types';
 
 export interface ExamRoomViewProps {
   exam: Exam;
@@ -455,7 +455,7 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ exam }) => {
                 variant="ai"
                 size="md"
                 rightIcon={ArrowRight}
-                onClick={() => navigate('/courses/ielts-intensive-mastery')}
+                onClick={() => navigate('/courses')}
               >
                 Về trang khóa học
               </Button>

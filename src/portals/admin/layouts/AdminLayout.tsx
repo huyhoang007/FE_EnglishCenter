@@ -10,6 +10,7 @@ import {
   Users,
   GraduationCap,
   BookOpen,
+  Award,
   ShieldCheck,
   Settings,
   Bell,
@@ -34,6 +35,7 @@ const MANAGEMENT_NAV: NavItem[] = [
   { to: '/admin/students', label: 'Students', icon: Users },
   { to: '/admin/mentors', label: 'Mentors', icon: GraduationCap },
   { to: '/admin/courses', label: 'Courses', icon: BookOpen },
+  { to: '/admin/certificates', label: 'Certificates', icon: Award },
 ];
 
 const OTHER_NAV: NavItem[] = [

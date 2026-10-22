@@ -69,6 +69,10 @@ export interface PayOSTransaction extends PayOSPaymentData {
 /* ============================================================
  *  4. Request / Response shapes (khớp Backend Dev 4)
  * ============================================================ */
+
+/** Cổng thanh toán khả dụng trong modal checkout. */
+export type PaymentMethod = 'VIETQR' | 'VNPAY';
+
 export type CreatePayOSOrderRequest = {
   courseId: string;
   courseTitle: string;

@@ -5,7 +5,7 @@
  * tuân thủ chuẩn DTO ApiResponse<T> của dự án.
  */
 
-import type { ApiResponse } from '@/shared/types';
+import type { ApiResponse } from '@/shared/types/apiResponse';
 
 /** Các vai trò người dùng trong hệ thống PrepMaster AI
  *  - GUEST: Khách vãng lai, chưa đăng nhập (chỉ xem nội dung public).
@@ -50,6 +50,8 @@ export interface RegisterRequest {
   email: string;
   password: string;
   confirmPassword: string;
+  /** Số điện thoại (tuỳ chọn) — backend `RegisterRequest` có `phone`. */
+  phone?: string;
   targetExam: TargetExam;
   currentLevel: CurrentLevel;
 }

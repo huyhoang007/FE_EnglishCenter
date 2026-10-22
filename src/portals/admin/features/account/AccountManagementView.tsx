@@ -32,7 +32,7 @@ import {
   updateUserStatus,
 } from '@/shared/api/domainApi';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
-import type { UserDto } from '@/shared/api/apiTypes';
+import type { AuthUser } from '@/shared/types';
 
 export const AccountManagementView: React.FC = () => {
   const queryClient = useQueryClient();
@@ -108,7 +108,7 @@ export const AccountManagementView: React.FC = () => {
     }
   };
 
-  const rawUsers: UserDto[] = usersQuery.data?.data ?? [];
+  const rawUsers: AuthUser[] = usersQuery.data?.data ?? [];
   const rolesList = rolesQuery.data ?? [];
   const selectedUser = userDetailQuery.data;
 
@@ -455,7 +455,7 @@ export const AccountManagementView: React.FC = () => {
                     User ID hệ thống
                   </span>
                   <p className="font-mono text-slate-600 text-[11px] mt-0.5 select-all">
-                    {selectedUser.id}
+                    {selectedUser.userId}
                   </p>
                 </div>
               </div>

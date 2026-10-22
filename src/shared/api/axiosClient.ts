@@ -1,8 +1,15 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
+/**
+ * Base URL của Backend Dev 2.
+ *
+ * Mặc định dùng đường dẫn tương đối `/api/v1` để đi qua dev proxy của
+ * Vite (xem `vite.config.js`) — tránh CORS và không phụ thuộc hostname.
+ * Khi build production, đặt `VITE_API_URL` thành domain thật (VD:
+ * https://api.prepmaster.com) qua biến môi trường.
+ */
 export const API_BASE_URL =
-  (import.meta as { env?: Record<string, string> }).env?.VITE_API_URL ??
-  'http://localhost:8080';
+  (import.meta as { env?: Record<string, string> }).env?.VITE_API_URL ?? '';
 
 export interface BeResponse<T> {
   code?: number;

@@ -45,7 +45,7 @@ import {
   getStudyLesson,
   MOCK_ENROLLED_COURSES,
 } from '@/mocks';
-import type { CourseSection, Lesson } from '@/shared/types';
+import type { Course, CourseSection, Lesson } from '@/shared/types';
 import type {
   StudyLesson,
   StudyTabKey,
@@ -233,7 +233,12 @@ export const StudyRoomView: React.FC = () => {
                 size="sm"
                 leftIcon={Award}
                 onClick={() =>
-                  navigate(`/courses/${course.slug}`)
+                  // Route /courses/:id của Dev 2 nhận UUID; dùng `code`
+                  // (VD: "IELTS-75-INT") làm khoá tìm kiếm thay vì slug
+                  // cũ — CourseDetailPage sẽ tự tra cứu ra UUID.
+                  navigate(
+                    `/courses/${(course as Course & { code?: string }).code ?? course.id}`,
+                  )
                 }
               >
                 Hồ sơ

@@ -17,12 +17,13 @@
  *   /mentor/grading    → Mentor portal (lazy)
  */
 
-import React, { Suspense } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ClientLayout } from '@/portals/client/layouts/ClientLayout';
 import LoginPage from '@/portals/client/pages/auth/LoginPage';
 import RegisterPage from '@/portals/client/pages/auth/RegisterPage';
 import CourseDetailPage from '@/portals/client/pages/courses/CourseDetailPage';
+import CourseMarketplacePage from '@/portals/client/pages/courses/CourseMarketplacePage';
 import ExamRoomPage from '@/portals/client/pages/exams/ExamRoomPage';
 import MyCoursesPage from '@/portals/client/pages/student/MyCoursesPage';
 import StudyRoomPage from '@/portals/client/pages/student/StudyRoomPage';
@@ -37,8 +38,6 @@ import { ArrowRight, BookOpen, Sparkles, Wrench } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
-
-const DEFAULT_COURSE = 'ielts-intensive-mastery';
 
 interface PlaceholderProps {
   title: string;
@@ -110,7 +109,7 @@ const Placeholder: React.FC<PlaceholderProps> = ({
           <div>
             <h3 className="font-bold text-slate-900">Back to the Gold Flow</h3>
             <p className="text-sm text-slate-600 mt-1">
-              Continue exploring the flagship course to see the end-to-end
+              Continue exploring the course catalog to see the end-to-end
               learning experience.
             </p>
           </div>
@@ -118,11 +117,9 @@ const Placeholder: React.FC<PlaceholderProps> = ({
             variant="primary"
             size="md"
             rightIcon={ArrowRight}
-            onClick={() =>
-              (window.location.href = `/courses/${DEFAULT_COURSE}`)
-            }
+            onClick={() => (window.location.href = '/courses')}
           >
-            Open flagship course
+            Browse course catalog
           </Button>
         </div>
       </Card>
@@ -175,9 +172,12 @@ const ClientRoutesComponent: React.FC = () => {
           <Route
             path="/"
             element={
-              <Navigate to={`/courses/${DEFAULT_COURSE}`} replace />
+              <Navigate to="/courses" replace />
             }
           />
+          {/* Sàn khóa học — GET /api/v1/courses */}
+          <Route path="/courses" element={<CourseMarketplacePage />} />
+          {/* Chi tiết — GET /api/v1/courses/{id} + contents/vocabularies/homework */}
           <Route
             path={CLIENT_ROUTES.course()}
             element={<CourseDetailPage />}
@@ -245,11 +245,8 @@ const ClientRoutesComponent: React.FC = () => {
           />
         </Route>
 
-        {/* 404 → flagship course */}
-        <Route
-          path="*"
-          element={<Navigate to={`/courses/${DEFAULT_COURSE}`} replace />}
-        />
+        {/* 404 → sàn khóa học */}
+        <Route path="*" element={<Navigate to="/courses" replace />} />
       </Routes>
     </Suspense>
   );

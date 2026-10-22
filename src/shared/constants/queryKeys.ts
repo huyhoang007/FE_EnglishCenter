@@ -4,13 +4,24 @@
  * Giúp dễ dàng invalidate / prefetch và tránh typo.
  */
 
+/**
+ * catalog: Certificates + Courses (Dev 2) — điểm vào chính của màn
+ * hình sàn khóa học và trang chi tiết khóa học.
+ */
 export const QUERY_KEYS = {
   auth: {
     me: ['auth', 'me'] as const,
   },
   catalog: {
-    courses: ['catalog', 'courses'] as const,
+    courses: (params?: unknown) => ['catalog', 'courses', params] as const,
+    /** Giải mã slug/mã khóa học → UUID (backend chỉ nhận UUID) */
+    resolve: (id: string) => ['catalog', 'resolve', id] as const,
     course: (id: string) => ['catalog', 'course', id] as const,
+    contents: (id: string) => ['catalog', 'contents', id] as const,
+    vocabularies: (id: string) => ['catalog', 'vocabularies', id] as const,
+    homework: (id: string) => ['catalog', 'homework', id] as const,
+    certificates: ['catalog', 'certificates'] as const,
+    certificate: (id: string) => ['catalog', 'certificate', id] as const,
   },
   learning: {
     myCourses: ['learning', 'my-courses'] as const,
@@ -37,5 +48,7 @@ export const QUERY_KEYS = {
     roles: ['admin', 'roles'] as const,
     mentors: ['admin', 'mentors'] as const,
     courses: ['admin', 'courses'] as const,
+    courseContents: (id: string) =>
+      ['admin', 'course-contents', id] as const,
   },
 } as const;

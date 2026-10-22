@@ -5,8 +5,8 @@
  * chuẩn DTO ApiResponse<T> của dự án.
  */
 
-import type { ApiResponse } from '@/shared/types';
-import type { UserRole } from '@/portals/client/features/auth';
+import type { ApiResponse } from '@/shared/types/apiResponse';
+import type { UserRole } from '@/shared/types/auth.types';
 
 /** Loại chứng chỉ mà khóa học hướng tới */
 export type CertificateType = 'IELTS' | 'TOEIC' | 'VSTEP';

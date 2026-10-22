@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   LogOut,
@@ -79,12 +79,27 @@ const ROLE_LABEL: Record<UserRole, string> = {
 
 export const Header: React.FC<HeaderProps> = ({ className }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { role, userName, user, logout, isAuthenticated } = useAuthStore();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [keywordInput, setKeywordInput] = useState('');
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Đồng bộ `keyword` của ô tìm kiếm với sàn khóa học.
+   * Điều hướng tới `/courses?keyword=…` (đọc bởi CourseMarketplacePage).
+   */
+  useEffect(() => {
+    if (location.pathname === '/courses') return;
+    if (!keywordInput.trim()) return;
+    const timer = window.setTimeout(() => {
+      navigate(`/courses?keyword=${encodeURIComponent(keywordInput.trim())}`);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [keywordInput, navigate, location.pathname]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -176,18 +191,23 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
 
       {/* ============== RIGHT CLUSTER ============== */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Search bar */}
-        {showAuthenticatedCluster && (
-          <div className="hidden md:flex items-center gap-2 h-10 px-3.5 rounded-full bg-slate-50 border border-slate-200/80 focus-within:border-[#0052CC] focus-within:bg-white transition-colors min-w-[220px]">
-            <Search className="w-4 h-4 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Search courses, topics..."
-              className="bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400 w-full"
-              aria-label="Search courses, topics"
-            />
-          </div>
-        )}
+        {/* Search bar — dẫn tới /courses?keyword= (GET /api/v1/courses?keyword=) */}
+        <div className="hidden md:flex items-center gap-2 h-10 px-3.5 rounded-full bg-slate-50 border border-slate-200/80 focus-within:border-[#0052CC] focus-within:bg-white transition-colors min-w-[220px]">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && keywordInput.trim()) {
+                navigate(`/courses?keyword=${encodeURIComponent(keywordInput.trim())}`);
+              }
+            }}
+            placeholder="Search courses, topics..."
+            className="bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400 w-full"
+            aria-label="Search courses, topics"
+          />
+        </div>
 
         {!showAuthenticatedCluster ? (
           <>

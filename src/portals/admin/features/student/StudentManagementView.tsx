@@ -32,7 +32,7 @@ import {
   Check,
 } from 'lucide-react';
 import { getUsers, updateUserStatus } from '@/shared/api/domainApi';
-import type { User } from '@/shared/types';
+import type { AuthUser } from '@/shared/types';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
 export const StudentManagementView: React.FC = () => {
@@ -67,7 +67,7 @@ export const StudentManagementView: React.FC = () => {
   });
 
   // Combine backend users with rich presentation data
-  const backendStudents: User[] = usersData?.data ?? [];
+  const backendStudents: AuthUser[] = usersData?.data ?? [];
 
   // Dynamic KPI Stats from backend data
   const totalStudentsCount = usersData?.totalElements ?? backendStudents.length;

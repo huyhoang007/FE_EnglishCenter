@@ -14,6 +14,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { StoreApi, UseBoundStore } from 'zustand';
 
 export interface Enrollment {
   id: string;
@@ -30,8 +31,12 @@ export interface Enrollment {
 export interface EnrollPayload {
   courseId: string;
   courseTitle?: string;
-  userId: string;
+  userId?: string;
   amount?: number;
+  /** Thời điểm ghi danh (ISO) — dùng cho bản ghi local. */
+  enrolledAt?: string;
+  /** Mã đơn hàng liên quan (VD: orderCode của PayOS). */
+  orderId?: string | number;
   meta?: Record<string, unknown>;
 }
 
@@ -57,6 +62,15 @@ const initialState = {
   error: null,
 };
 
+/**
+ * Tham chiếu tới store để `subscribe` gọi được API của Zustand mà không
+ * tạo tham chiếu vòng trong initializer (`useEnrollmentStore` dùng chính
+ * nó qua `subscribe`). Gán sau khi store được tạo — hàm `subscribe` chỉ
+ * được gọi ở runtime nên tới lúc đó `storeRef` đã có giá trị.
+ */
+type EnrollmentStore = UseBoundStore<StoreApi<EnrollmentState>>;
+let storeRef: EnrollmentStore | undefined;
+
 export const useEnrollmentStore = create<EnrollmentState>()(
   persist(
     (set, get) => ({
@@ -67,9 +81,9 @@ export const useEnrollmentStore = create<EnrollmentState>()(
           id: `enr_${Date.now()}`,
           courseId: payload.courseId,
           courseTitle: payload.courseTitle,
-          userId: payload.userId,
+          userId: payload.userId ?? '',
           status: 'ACTIVE',
-          enrolledAt: new Date().toISOString(),
+          enrolledAt: payload.enrolledAt ?? new Date().toISOString(),
           meta: payload.meta,
         };
         set((s) => ({
@@ -83,7 +97,7 @@ export const useEnrollmentStore = create<EnrollmentState>()(
       subscribe: (listener) => {
         // Zustand cho sẵn subscribe ở store level; ta wrap lại để
         // các component có thể dùng cú pháp subscribe(fn) quen thuộc.
-        return useEnrollmentStore.subscribe(listener);
+        return storeRef?.subscribe(listener) ?? (() => {});
       },
 
       reset: () => set({ ...initialState }),
@@ -94,6 +108,8 @@ export const useEnrollmentStore = create<EnrollmentState>()(
     },
   ),
 );
+
+storeRef = useEnrollmentStore;
 
 /* ------------ Selectors tiện ích ------------ */
 export const selectIsEnrolled = (courseId: string) => (s: EnrollmentState) =>
