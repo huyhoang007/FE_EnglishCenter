@@ -265,22 +265,79 @@ const STUDY_LESSON_TOEIC_CURRENT: StudyLesson = {
 };
 
 /* ============================================================
- *  2 khóa đã ghi danh (cho MyCoursesView)
+ *  Khóa TOEIC thứ 3 — TOEIC Cấp tốc 750+
+ * ============================================================ */
+export const MOCK_COURSE_TOEIC_SPEED: Course = {
+  id: 'crs_toeic_speed_02',
+  slug: 'toeic-cap-toc-750',
+  title: 'TOEIC Cấp Tốc 750+ Chinh Phục Đề Thi Thật',
+  subtitle:
+    'Luyện 10 bộ đề ETS mới nhất kèm chiến thuật bẫy Part 5-7 và mẹo nghe Part 3-4',
+  certificate: 'TOEIC',
+  level: 'INTERMEDIATE',
+  price: 2490000,
+  originalPrice: 3500000,
+  durationHours: 35,
+  totalLessons: 30,
+  rating: 4.9,
+  ratingCount: 756,
+  studentEnrolled: 1820,
+  thumbnailUrl:
+    'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80',
+  coverUrl:
+    'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1600&q=80',
+  shortDescription:
+    'Khóa luyện thi cấp tốc 4 tuần dành cho học viên cần bằng gấp, tập trung giải đề thực chiến và kỹ năng làm bài.',
+  targetDescription:
+    'Nâng 150-200 điểm TOEIC trong 30 ngày với phương pháp phân loại câu hỏi.',
+  outcomes: [
+    'Chiến thuật xử lý nhanh Part 5 trong 15 phút',
+    'Nghe bắt keyword Part 3 & 4 không cần dịch',
+    'Kỹ thuật đọc lướt Skimming & Scanning cho Part 7',
+  ],
+  mentor: {
+    id: 'mnt_alex_vu',
+    fullName: 'Alex Vũ',
+    title: 'Senior TOEIC Coach · 990 TOEIC',
+    rating: 4.9,
+    studentCount: 2800,
+    experience: '8 năm luyện thi TOEIC cấp tốc',
+    avatarUrl:
+      'https://api.dicebear.com/7.x/avataaars/svg?seed=alex&backgroundColor=b6e3f4',
+  },
+  curriculum: [
+    {
+      id: 'sec_speed_1',
+      order: 1,
+      title: 'Chuyên đề 1: Giải mã 10 bẫy ngữ pháp Part 5',
+      lessons: [
+        {
+          id: 'speed_l1',
+          order: 1,
+          title: 'Từ loại biến đổi & bẫy tính từ/phó từ',
+          description: 'Cách chọn đáp án đúng trong 10 giây không cần dịch nghĩa.',
+          durationMinutes: 20,
+          type: 'VIDEO',
+          status: 'COMPLETED',
+        },
+        {
+          id: 'speed_l2',
+          order: 2,
+          title: 'Mẹo phân biệt liên từ & giới từ',
+          description: 'Although vs In spite of, Because vs Because of.',
+          durationMinutes: 25,
+          type: 'VIDEO',
+          status: 'ENROLLED',
+        },
+      ],
+    },
+  ],
+};
+
+/* ============================================================
+ *  Khóa đã ghi danh (cho MyCoursesView)
  * ============================================================ */
 export const MOCK_ENROLLED_COURSES: EnrolledCourse[] = [
-  {
-    course: MOCK_COURSE,
-    mentor: MOCK_COURSE.mentor,
-    progress: {
-      percent: 45,
-      completedLessonIds: ['l1'],
-      currentLessonId: 'l2', // đang học dở Line Graph Analysis
-      studiedHours: 12.5,
-      status: 'IN_PROGRESS',
-      enrolledAt: '2026-09-15T08:00:00.000Z',
-    },
-    nextLesson: MOCK_COURSE.curriculum[0].lessons[1], // l2 Line Graph
-  },
   {
     course: MOCK_COURSE_TOEIC,
     mentor: MOCK_COURSE_TOEIC.mentor,
@@ -299,6 +356,32 @@ export const MOCK_ENROLLED_COURSES: EnrolledCourse[] = [
     },
     nextLesson: MOCK_COURSE_TOEIC.curriculum[1].lessons[1],
   },
+  {
+    course: MOCK_COURSE_TOEIC_SPEED,
+    mentor: MOCK_COURSE_TOEIC_SPEED.mentor,
+    progress: {
+      percent: 30,
+      completedLessonIds: ['speed_l1'],
+      currentLessonId: 'speed_l2',
+      studiedHours: 6.0,
+      status: 'IN_PROGRESS',
+      enrolledAt: '2026-09-01T08:00:00.000Z',
+    },
+    nextLesson: MOCK_COURSE_TOEIC_SPEED.curriculum[0].lessons[1],
+  },
+  {
+    course: MOCK_COURSE,
+    mentor: MOCK_COURSE.mentor,
+    progress: {
+      percent: 45,
+      completedLessonIds: ['l1'],
+      currentLessonId: 'l2', // đang học dở Line Graph Analysis
+      studiedHours: 12.5,
+      status: 'IN_PROGRESS',
+      enrolledAt: '2026-09-15T08:00:00.000Z',
+    },
+    nextLesson: MOCK_COURSE.curriculum[0].lessons[1], // l2 Line Graph
+  },
 ];
 
 /* ============================================================
@@ -307,6 +390,25 @@ export const MOCK_ENROLLED_COURSES: EnrolledCourse[] = [
 const STUDY_LESSONS: Record<string, StudyLesson> = {
   l2: STUDY_LESSON_IELTS_CURRENT,
   toeic_l4: STUDY_LESSON_TOEIC_CURRENT,
+  speed_l2: {
+    lesson: MOCK_COURSE_TOEIC_SPEED.curriculum[0].lessons[1],
+    section: MOCK_COURSE_TOEIC_SPEED.curriculum[0],
+    summary: [
+      'Nắm vững 5 cặp liên từ - giới từ thường gặp nhất trong TOEIC Part 5.',
+      'Quy tắc xét đuôi danh từ/cụm danh từ phía sau chỗ trống.',
+      'Luyện 20 câu trắc nghiệm thực chiến bấm giờ 30s/câu.',
+    ],
+    materials: [
+      {
+        id: 'mat_speed_1',
+        title: 'Bảng tổng hợp Liên từ & Giới từ TOEIC',
+        fileName: 'conjunctions-prepositions-cheat-sheet.pdf',
+        fileType: 'pdf',
+        sizeKb: 1420,
+      },
+    ],
+    vocabulary: [],
+  },
   // Fallback chung cho các bài học khác — dùng để demo navigation
   l1: {
     lesson: MOCK_COURSE.curriculum[0].lessons[0],

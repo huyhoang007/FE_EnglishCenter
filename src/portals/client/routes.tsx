@@ -26,6 +26,7 @@ import CourseDetailPage from '@/portals/client/pages/courses/CourseDetailPage';
 import CourseMarketplacePage from '@/portals/client/pages/courses/CourseMarketplacePage';
 import ExamRoomPage from '@/portals/client/pages/exams/ExamRoomPage';
 import MyCoursesPage from '@/portals/client/pages/student/MyCoursesPage';
+import CoursePlayerPage from '@/portals/client/pages/student/CoursePlayerPage';
 import StudyRoomPage from '@/portals/client/pages/student/StudyRoomPage';
 import SchedulePage from '@/portals/client/pages/student/SchedulePage';
 import LearningPathPage from '@/portals/client/pages/student/LearningPathPage';
@@ -224,6 +225,10 @@ const ClientRoutesComponent: React.FC = () => {
           <Route
             path={CLIENT_ROUTES.myLearning}
             element={<MyCoursesPage />}
+          />
+          <Route
+            path="/my-courses/:slug/learn"
+            element={<CoursePlayerPage />}
           />
 
           {/* Admin/Mentor placeholders — gated to demonstrate portal separation */}

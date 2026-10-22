@@ -26,6 +26,7 @@ export const CLIENT_ROUTES = {
   learningPath: '/learning-path',
   myCourses: '/my-courses',
   myLearning: '/my-learning',
+  learnCourse: (slug: string = ':slug') => `/my-courses/${slug}/learn`,
   mentors: '/mentors',
   mentorDetail: (id: string = ':id') => `/mentors/${id}`,
   profile: '/profile',
