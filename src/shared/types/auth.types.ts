@@ -49,11 +49,11 @@ export interface RegisterRequest {
   fullName: string;
   email: string;
   password: string;
-  confirmPassword: string;
-  /** Số điện thoại (tuỳ chọn) — backend `RegisterRequest` có `phone`. */
+  confirmPassword?: string;
+  /** Số điện thoại (tuỳ chọn) — backend `RegisterRequest` có `phone` (10-11 số). */
   phone?: string;
-  targetExam: TargetExam;
-  currentLevel: CurrentLevel;
+  targetExam?: TargetExam;
+  currentLevel?: CurrentLevel;
 }
 
 /** Cấu trúc Auth trả về khi đăng nhập / đăng ký thành công */

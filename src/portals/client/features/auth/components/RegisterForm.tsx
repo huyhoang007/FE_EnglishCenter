@@ -1,15 +1,15 @@
 ﻿/**
- * RegisterForm — Form đăng ký học viên mới
+ * RegisterForm — Form đăng ký tài khoản mới
  * -----------------------------------------------------------
- * Fields:
- *   - Họ tên
- *   - Email
- *   - Mật khẩu (có icon eye)
- *   - Mục tiêu điểm (IELTS / TOEIC)
- *   - Trình độ hiện tại (Beginner → Advanced)
- *   - Đồng ý điều khoản
+ * Tuân thủ DTO Backend (RegisterRequest):
+ *   - Họ và tên (fullName) - Bắt buộc
+ *   - Email (email) - Bắt buộc
+ *   - Số điện thoại (phone) - Tùy chọn, 10-11 chữ số
+ *   - Mật khẩu (password) - Bắt buộc, tối thiểu 6 ký tự
+ *   - Xác nhận mật khẩu (confirmPassword) - Kiểm tra khớp mật khẩu
+ *   - Đồng ý điều khoản (agree)
  *
- * Đăng ký thành công → auto login → redirect theo vai trò Student.
+ * Đăng ký thành công → tự động đăng nhập → chuyển hướng.
  */
 
 import React, { useState } from 'react';
@@ -17,11 +17,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   User,
   Mail,
+  Phone,
   Lock,
   Eye,
   EyeOff,
-  Target,
-  TrendingUp,
   UserPlus,
   Sparkles,
   CheckCircle2,
@@ -29,41 +28,12 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
-import type { CurrentLevel, TargetExam, UserRole } from '@/shared/types';
+import type { UserRole } from '@/shared/types';
 import { cn } from '@/shared/utils';
 
 interface RegisterFormProps {
   onSuccessRedirect?: (role: UserRole) => string;
 }
-
-const TARGET_EXAMS: { value: TargetExam; label: string; desc: string }[] = [
-  { value: 'IELTS', label: 'IELTS', desc: 'Academic / General' },
-  { value: 'TOEIC', label: 'TOEIC', desc: 'Listening & Reading' },
-];
-
-const CURRENT_LEVELS: { value: CurrentLevel; label: string; desc: string }[] = [
-  { value: 'BEGINNER', label: 'Beginner', desc: 'Mất gốc, chưa nền tảng' },
-  {
-    value: 'ELEMENTARY',
-    label: 'Elementary',
-    desc: 'Giao tiếp cơ bản',
-  },
-  {
-    value: 'INTERMEDIATE',
-    label: 'Intermediate',
-    desc: 'Đủ dùng trong công việc',
-  },
-  {
-    value: 'UPPER_INTERMEDIATE',
-    label: 'Upper-Int.',
-    desc: 'Tự tin thuyết trình',
-  },
-  {
-    value: 'ADVANCED',
-    label: 'Advanced',
-    desc: 'Chuẩn bị đi thi',
-  },
-];
 
 export const RegisterForm: React.FC<RegisterFormProps> = ({
   onSuccessRedirect = () => '/my-learning',
@@ -74,10 +44,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   const [form, setForm] = useState({
     fullName: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
-    targetExam: 'IELTS' as TargetExam,
-    currentLevel: 'INTERMEDIATE' as CurrentLevel,
     agree: false,
   });
 
@@ -96,8 +65,12 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       next.fullName = 'Họ tên quá ngắn';
 
     if (!form.email.trim()) next.email = 'Vui lòng nhập email';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
       next.email = 'Email không đúng định dạng';
+
+    if (form.phone.trim() && !/^[0-9]{10,11}$/.test(form.phone.trim())) {
+      next.phone = 'Số điện thoại phải từ 10 đến 11 chữ số';
+    }
 
     if (!form.password) next.password = 'Vui lòng nhập mật khẩu';
     else if (form.password.length < 6)
@@ -123,10 +96,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       const user = await register({
         fullName: form.fullName.trim(),
         email: form.email.trim(),
+        phone: form.phone.trim() ? form.phone.trim() : undefined,
         password: form.password,
         confirmPassword: form.confirmPassword,
-        targetExam: form.targetExam,
-        currentLevel: form.currentLevel,
       });
       setNotice(`Chào mừng ${user.fullName} đến với EnglishHub!`);
       setTimeout(() => {
@@ -138,7 +110,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl shadow-brand-900/10 border border-slate-200/70">
+    <div className="w-full max-w-2xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl shadow-brand-900/10 border border-slate-200/70">
       {/* ====== HEADER ====== */}
       <div className="relative px-8 sm:px-12 pt-10 pb-7 bg-gradient-to-br from-brand-600 via-indigo-600 to-indigo-800 text-white overflow-hidden">
         <div className="absolute -top-24 -right-16 w-72 h-72 bg-amber-400/25 rounded-full blur-3xl" />
@@ -154,7 +126,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             </span>
           </Link>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-semibold text-amber-200">
-            <UserPlus className="w-3.5 h-3.5" /> Tạo tài khoản học viên
+            <UserPlus className="w-3.5 h-3.5" /> Tạo tài khoản
           </span>
         </div>
 
@@ -163,8 +135,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             Bắt đầu hành trình mới
           </h1>
           <p className="mt-1.5 text-white/75 text-sm max-w-xl">
-            Tạo tài khoản để nhận lộ trình học cá nhân hoá, đăng ký lớp Mentor
-            1–1 và tham gia ngân hàng đề thi chuẩn hoá.
+            Tạo tài khoản để tham gia các khóa học, luyện thi và trải nghiệm nền tảng học tập tại EnglishHub.
           </p>
         </div>
       </div>
@@ -185,12 +156,12 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-          {/* Row: fullName + email */}
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          {/* Row 1: fullName + email */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Field
               id="fullName"
-              label="Họ và tên"
+              label="Họ và tên *"
               icon={User}
               value={form.fullName}
               onChange={(v) => {
@@ -204,7 +175,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             />
             <Field
               id="email"
-              label="Email"
+              label="Email *"
               icon={Mail}
               type="email"
               value={form.email}
@@ -219,11 +190,28 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             />
           </div>
 
-          {/* Row: password + confirm */}
+          {/* Row 2: phone */}
+          <Field
+            id="phone"
+            label="Số điện thoại"
+            icon={Phone}
+            type="tel"
+            value={form.phone}
+            onChange={(v) => {
+              set('phone', v);
+              if (fieldErrors.phone)
+                setFieldErrors((p) => ({ ...p, phone: '' }));
+            }}
+            placeholder="0912345678 (tùy chọn)"
+            error={fieldErrors.phone}
+            autoComplete="tel"
+          />
+
+          {/* Row 3: password + confirm */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <PasswordField
               id="password"
-              label="Mật khẩu"
+              label="Mật khẩu *"
               value={form.password}
               onChange={(v) => {
                 set('password', v);
@@ -238,7 +226,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             />
             <PasswordField
               id="confirmPassword"
-              label="Xác nhận mật khẩu"
+              label="Xác nhận mật khẩu *"
               value={form.confirmPassword}
               onChange={(v) => {
                 set('confirmPassword', v);
@@ -253,97 +241,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             />
           </div>
 
-          {/* ====== TARGET EXAM ====== */}
-          <div>
-            <p className="block text-sm font-semibold text-slate-700 mb-2.5 flex items-center gap-1.5">
-              <Target className="w-4 h-4 text-brand-600" />
-              Mục tiêu điểm
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {TARGET_EXAMS.map((opt) => {
-                const active = form.targetExam === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => set('targetExam', opt.value)}
-                    className={cn(
-                      'flex items-center gap-3 px-4 py-3.5 rounded-xl border text-left transition-all',
-                      active
-                        ? 'border-brand-500 bg-brand-50/60 ring-2 ring-brand-500/15'
-                        : 'border-slate-200 bg-white hover:border-slate-300',
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition',
-                        active
-                          ? 'bg-brand-600 text-white'
-                          : 'bg-slate-100 text-slate-500',
-                      )}
-                    >
-                      {opt.label === 'IELTS' ? 'I' : 'T'}
-                    </div>
-                    <div>
-                      <p
-                        className={cn(
-                          'font-bold text-sm',
-                          active ? 'text-brand-700' : 'text-slate-800',
-                        )}
-                      >
-                        {opt.label}
-                      </p>
-                      <p className="text-[11px] text-slate-500">{opt.desc}</p>
-                    </div>
-                    {active && (
-                      <CheckCircle2 className="w-4 h-4 text-brand-600 ml-auto" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* ====== CURRENT LEVEL ====== */}
-          <div>
-            <p className="block text-sm font-semibold text-slate-700 mb-2.5 flex items-center gap-1.5">
-              <TrendingUp className="w-4 h-4 text-brand-600" />
-              Trình độ hiện tại
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-              {CURRENT_LEVELS.map((opt) => {
-                const active = form.currentLevel === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => set('currentLevel', opt.value)}
-                    className={cn(
-                      'flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all',
-                      active
-                        ? 'border-brand-500 bg-brand-50/60 ring-2 ring-brand-500/15'
-                        : 'border-slate-200 bg-white hover:border-slate-300',
-                    )}
-                  >
-                    <p
-                      className={cn(
-                        'font-bold text-xs uppercase tracking-wide',
-                        active ? 'text-brand-700' : 'text-slate-800',
-                      )}
-                    >
-                      {opt.label}
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                      {opt.desc}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Agree */}
-          <label className="flex items-start gap-2.5 cursor-pointer select-none text-sm">
+          <label className="flex items-start gap-2.5 cursor-pointer select-none text-sm pt-1">
             <input
               type="checkbox"
               checked={form.agree}
@@ -367,7 +266,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             </span>
           </label>
           {fieldErrors.agree && (
-            <p className="text-xs text-rose-600 font-medium -mt-4">
+            <p className="text-xs text-rose-600 font-medium -mt-3">
               {fieldErrors.agree}
             </p>
           )}
@@ -377,7 +276,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             type="submit"
             disabled={isLoading}
             className={cn(
-              'w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-semibold text-white shadow-lg transition-all',
+              'w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-semibold text-white shadow-lg transition-all mt-2',
               'bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700',
               'shadow-brand-600/25 hover:shadow-xl hover:shadow-brand-600/30',
               'disabled:opacity-60 disabled:cursor-not-allowed',
@@ -424,6 +323,7 @@ interface FieldProps {
   type?: string;
   error?: string;
   autoComplete?: string;
+  className?: string;
 }
 
 const Field: React.FC<FieldProps> = ({
@@ -436,8 +336,9 @@ const Field: React.FC<FieldProps> = ({
   type = 'text',
   error,
   autoComplete,
+  className,
 }) => (
-  <div>
+  <div className={className}>
     <label
       htmlFor={id}
       className="block text-sm font-semibold text-slate-700 mb-1.5"

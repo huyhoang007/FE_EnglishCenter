@@ -33,17 +33,18 @@ export const loginApi = async (payload: LoginRequest): Promise<AuthResponse> => 
 };
 
 export const registerApi = async (payload: RegisterRequest): Promise<AuthResponse> => {
-  if (payload.password !== payload.confirmPassword) {
+  if (payload.confirmPassword && payload.password !== payload.confirmPassword) {
     return errorResponse('Mật khẩu xác nhận không khớp', 'PASSWORD_MISMATCH');
   }
   try {
+    const cleanPhone = payload.phone?.trim() ? payload.phone.trim() : undefined;
     await registerRequest({
-      email: payload.email,
+      email: payload.email.trim(),
       password: payload.password,
-      fullName: payload.fullName,
-      phone: payload.phone,
+      fullName: payload.fullName.trim(),
+      phone: cleanPhone,
     });
-    return loginApi({ email: payload.email, password: payload.password });
+    return loginApi({ email: payload.email.trim(), password: payload.password });
   } catch (error) {
     return errorResponse(getErrorMessage(error, 'Đăng ký tài khoản thất bại.'), 'REGISTER_FAILED');
   }
