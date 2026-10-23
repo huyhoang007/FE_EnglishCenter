@@ -201,7 +201,7 @@ const CourseDetailPage: React.FC = () => {
   const hours = Math.floor(totalMinutes / 60);
 
   return (
-    <div style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}>
+    <div style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}>
       {/* =========================================================
        * HERO
        * ========================================================= */}
@@ -1069,7 +1069,7 @@ const ContentsSkeleton: React.FC = () => (
 const CourseDetailSkeleton: React.FC = () => (
   <div
     className="min-h-[70vh]"
-    style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+    style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
   >
     <div className="bg-[#0F172A] py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto space-y-4">

@@ -257,7 +257,7 @@ export const CoursePlayerView: React.FC = () => {
   return (
     <div
       className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6"
-      style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+      style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
     >
       {/* ============================================================
        *  TOPBAR: Nút "Quay lại" + Tiêu đề + Dải Pills thống kê

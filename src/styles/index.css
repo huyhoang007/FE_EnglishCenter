@@ -1,6 +1,6 @@
 /* =====================================================
  * English Center Platform — Global Stylesheet
- * Typography: Plus Jakarta Sans (premium EdTech font)
+ * Typography: Poppins (Primary font - Nolez Education style) & Be Vietnam Pro (Fallback)
  * ===================================================== */
 @tailwind base;
 @tailwind components;
@@ -16,9 +16,9 @@
   --accent-bg: rgba(0, 82, 204, 0.08);
   --accent-border: rgba(0, 82, 204, 0.4);
 
-  --sans: 'Be Vietnam Pro', 'Plus Jakarta Sans', 'Inter', system-ui,
+  --sans: 'Poppins', 'Be Vietnam Pro', 'Inter', system-ui,
     -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --heading: 'Be Vietnam Pro', 'Plus Jakarta Sans', 'Inter', system-ui,
+  --heading: 'Poppins', 'Be Vietnam Pro', 'Inter', system-ui,
     -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
@@ -42,7 +42,7 @@ body,
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  font-family: 'Be Vietnam Pro', 'Plus Jakarta Sans', 'Inter', system-ui,
+  font-family: 'Poppins', 'Be Vietnam Pro', 'Inter', system-ui,
     -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-feature-settings: 'cv11', 'ss01';
   letter-spacing: -0.005em;
@@ -62,7 +62,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Be Vietnam Pro', 'Inter', system-ui, sans-serif;
   font-weight: 700;
   color: var(--text-h);
   letter-spacing: -0.018em;

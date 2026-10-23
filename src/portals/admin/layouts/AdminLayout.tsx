@@ -65,7 +65,7 @@ export const AdminLayout: React.FC = () => {
   return (
     <div
       className="min-h-screen bg-[#F8FAFC] text-slate-800 flex"
-      style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+      style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
     >
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (

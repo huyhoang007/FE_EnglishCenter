@@ -50,7 +50,7 @@ export const AppLayout: React.FC = () => {
   return (
     <div
       className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col"
-      style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+      style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
     >
       <TopBar />
       <div className="w-full px-4 sm:px-6 lg:px-8">

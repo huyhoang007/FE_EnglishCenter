@@ -143,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
         'mt-3 mb-2',
         className,
       )}
-      style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+      style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
     >
       {/* ============== LOGO ============== */}
       <Link

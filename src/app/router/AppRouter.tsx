@@ -17,7 +17,7 @@ const AdminRoutes = lazy(() => import('@/portals/admin/routes'));
 const LoadingShell: React.FC = () => (
   <div
     className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 text-sm"
-    style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+    style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
   >
     <div className="flex items-center gap-3">
       <span className="inline-block w-4 h-4 border-2 border-slate-300 border-t-[#0052CC] rounded-full animate-spin" />

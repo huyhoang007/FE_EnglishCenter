@@ -145,7 +145,7 @@ const CourseMarketplacePage: React.FC = () => {
   return (
     <div
       className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
-      style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+      style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
     >
       {/* ========== PAGE HEADER ========== */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">

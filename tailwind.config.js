@@ -68,6 +68,8 @@ export default {
 
       fontFamily: {
         sans: [
+          'Poppins',
+          'Be Vietnam Pro',
           'Inter',
           'SF Pro Display',
           'system-ui',
@@ -75,6 +77,12 @@ export default {
           'BlinkMacSystemFont',
           'Segoe UI',
           'Roboto',
+          'sans-serif',
+        ],
+        heading: [
+          'Poppins',
+          'Be Vietnam Pro',
+          'Inter',
           'sans-serif',
         ],
       },

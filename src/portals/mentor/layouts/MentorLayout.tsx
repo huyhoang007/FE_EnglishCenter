@@ -31,7 +31,7 @@ export const MentorLayout: React.FC = () => {
   return (
     <div
       className="min-h-screen bg-slate-50 text-slate-800 grid grid-cols-1 lg:grid-cols-[260px_1fr]"
-      style={{ fontFamily: "'Be Vietnam Pro', sans-serif" }}
+      style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
     >
       {/* ============= SIDEBAR ============= */}
       <aside className="hidden lg:flex flex-col bg-white border-r border-slate-200 px-4 py-5">
