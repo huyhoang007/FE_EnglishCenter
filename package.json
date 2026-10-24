@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:payments": "node --test tests/payment.test.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",

@@ -34,6 +34,7 @@ import MentorDirectoryPage from '@/portals/client/pages/mentors/MentorDirectoryP
 import MentorDetailPage from '@/portals/client/pages/mentors/MentorDetailPage';
 import ProfilePage from '@/portals/client/pages/profile/ProfilePage';
 import { ProtectedRoute } from '@/shared/components/ProtectedRoute';
+import { PaymentHistoryView } from '@/portals/client/features/checkout/components/PaymentHistoryView';
 import { CLIENT_ROUTES, ADMIN_ROUTES, MENTOR_ROUTES } from '@/shared/constants/routes';
 import { ArrowRight, BookOpen, Sparkles, Wrench } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
@@ -213,6 +214,7 @@ const ClientRoutesComponent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/payments" element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><PaymentHistoryView /></ProtectedRoute>} />
           <Route path={CLIENT_ROUTES.schedule} element={<SchedulePage />} />
           <Route
             path={CLIENT_ROUTES.learningPath}
@@ -220,15 +222,15 @@ const ClientRoutesComponent: React.FC = () => {
           />
           <Route
             path={CLIENT_ROUTES.myCourses}
-            element={<MyCoursesPage />}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT', 'MENTOR', 'ADMIN']}><MyCoursesPage /></ProtectedRoute>}
           />
           <Route
             path={CLIENT_ROUTES.myLearning}
-            element={<MyCoursesPage />}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT', 'MENTOR', 'ADMIN']}><MyCoursesPage /></ProtectedRoute>}
           />
           <Route
             path="/my-courses/:slug/learn"
-            element={<CoursePlayerPage />}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><CoursePlayerPage /></ProtectedRoute>}
           />
 
           {/* Admin/Mentor placeholders — gated to demonstrate portal separation */}

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * LoginForm — Real Authentication Form (Clean & Direct)
  * -----------------------------------------------------------
  * Đăng nhập thực tế thông qua Backend API (không dùng mock data).
@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Mail,
   Lock,
@@ -35,6 +35,7 @@ const redirectAfterLogin = (role: UserRole): string => {
 
 export const LoginForm: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isLoading, error, clearError } = useAuthStore();
 
   const [email, setEmail] = useState('');
@@ -72,7 +73,9 @@ export const LoginForm: React.FC = () => {
       const user = await login({ email, password, rememberMe });
       setNotice(`Chào mừng ${user.fullName}!`);
       setTimeout(() => {
-        navigate(redirectAfterLogin(user.role), { replace: true });
+        const from = (location.state as { from?: string } | null)?.from;
+        const returnToCourse = ['USER', 'STUDENT'].includes(user.role) && typeof from === 'string' && /^\/courses\/[^/]+(?:\?.*)?$/.test(from);
+        navigate(returnToCourse ? from! : redirectAfterLogin(user.role), { replace: true });
       }, 300);
     } catch {
       /* error message đã được lưu trong store và hiển thị trên UI */

@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
+  Receipt,
   Users,
   GraduationCap,
   BookOpen,
@@ -32,6 +33,7 @@ interface NavItem {
 }
 
 const MANAGEMENT_NAV: NavItem[] = [
+  { to: '/admin/payments', label: 'Payments', icon: Receipt },
   { to: '/admin/students', label: 'Students', icon: Users },
   { to: '/admin/mentors', label: 'Mentors', icon: GraduationCap },
   { to: '/admin/courses', label: 'Courses', icon: BookOpen },

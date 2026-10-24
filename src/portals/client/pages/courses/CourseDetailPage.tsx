@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CourseDetailPage — Chi tiết & Phòng học (route `/courses/:id`)
  * -----------------------------------------------------------
  * Dữ liệu THẬT từ Dev 2 backend:
@@ -18,7 +18,12 @@
 
 import React, { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
+import { createPaymentOrder, fetchEnrollmentStatus, paymentKeys } from '@/shared/api/paymentService';
+import { SePayCheckoutModal } from '@/portals/client/features/checkout';
+import { useToast } from '@/shared/components/Toast';
+import { paymentError } from '@/shared/utils/payment';
 import {
   ArrowLeft,
   Award,
@@ -78,8 +83,18 @@ type Tab = 'syllabus' | 'vocabulary' | 'homework';
  * Page
  * ========================================================= */
 const CourseDetailPage: React.FC = () => {
+  const identity = useAuthStore(s => s.user?.id ?? 'guest');
+  return <CourseDetailContent key={identity} />;
+};
+
+const CourseDetailContent: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user, isAuthenticated, role } = useAuthStore();
+  const viewerId = user?.id ?? 'guest';
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [checkoutCode, setCheckoutCode] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('syllabus');
   const [lockedLesson, setLockedLesson] = useState<CourseContentDto | null>(
     null,
@@ -119,23 +134,48 @@ const CourseDetailPage: React.FC = () => {
   });
 
   const { data: contents = [], isLoading: contentsLoading } = useQuery({
-    queryKey: QUERY_KEYS.catalog.contents(courseId ?? ''),
+    queryKey: [...QUERY_KEYS.catalog.contents(courseId ?? ''), viewerId],
     queryFn: () => fetchCourseContents(courseId!),
     enabled: Boolean(courseId),
   });
 
   const { data: vocabularies = [], isLoading: vocabLoading } = useQuery({
-    queryKey: QUERY_KEYS.catalog.vocabularies(courseId ?? ''),
+    queryKey: [...QUERY_KEYS.catalog.vocabularies(courseId ?? ''), viewerId],
     queryFn: () => fetchCourseVocabularies(courseId!),
     enabled: Boolean(courseId),
   });
 
   const { data: homework = [], isLoading: hwLoading } = useQuery({
-    queryKey: QUERY_KEYS.catalog.homework(courseId ?? ''),
+    queryKey: [...QUERY_KEYS.catalog.homework(courseId ?? ''), viewerId],
     queryFn: () => fetchCourseHomework(courseId!),
     enabled: Boolean(courseId),
   });
 
+  const enrollment = useQuery({
+    queryKey: paymentKeys.enrollment(viewerId, courseId ?? ''),
+    queryFn: ({ signal }) => fetchEnrollmentStatus(courseId!, signal),
+    enabled: Boolean(isAuthenticated && courseId), staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+  const purchase = useMutation({
+    mutationFn: () => createPaymentOrder(courseId!),
+    onSuccess: order => {
+      setCheckoutCode(order.orderCode);
+      void queryClient.invalidateQueries({ queryKey: paymentKeys.all });
+    },
+    onError: error => {
+      toast.error(paymentError(error));
+      void queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+    },
+  });
+  function buyCourse() {
+    if (!isAuthenticated) { navigate('/login', { state: { from: `/courses/${id}` } }); return; }
+    if (enrollment.data?.enrolled) { navigate(`/my-courses/${courseId}/learn`); return; }
+    if (!['USER', 'STUDENT'].includes(role)) { toast.error('Chỉ tài khoản người học có thể mua khóa học.'); return; }
+    if (!purchase.isPending && courseId) purchase.mutate();
+  }
+  const hasEnrollment = Boolean(enrollment.data?.enrolled);
+  const purchaseDisabled = isAuthenticated && (enrollment.isPending || enrollment.isError || (!hasEnrollment && (!['USER', 'STUDENT'].includes(role) || course?.status !== 'active' || !course.price || course.price <= 0)));
   const lessons = filterByType(contents, 'lesson');
 
   /* ---------- Loading / Error ---------- */
@@ -464,11 +504,15 @@ const CourseDetailPage: React.FC = () => {
                     )}
                   </div>
 
+                  <Button fullWidth size="lg" isLoading={purchase.isPending} disabled={purchaseDisabled}
+                    onClick={buyCourse} className="bg-[#0052CC] hover:bg-[#0040A8]">
+                    {hasEnrollment ? 'Vào học ngay' : !isAuthenticated ? 'Đăng nhập để mua khóa học' : course.status !== 'active' || !course.price || course.price <= 0 ? 'Khóa học chưa mở bán' : 'Mua khóa học'}
+                  </Button>
+                  {enrollment.isError && isAuthenticated && <div role="alert" className="text-xs text-rose-700">{paymentError(enrollment.error)} <button type="button" onClick={() => void enrollment.refetch()} className="underline font-bold">Thử lại</button></div>}
                   <Button
-                    variant="primary"
+                    variant="outline"
                     size="md"
                     fullWidth
-                    className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
                     onClick={() => {
                       if (activeVideo) {
                         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -488,7 +532,7 @@ const CourseDetailPage: React.FC = () => {
 
                   <p className="text-xs text-slate-500 flex items-start gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-px" />
-                    Truy cập trọn đời · Hoàn tiền trong 30 ngày
+                    Mở khóa học sau khi thanh toán được xác nhận
                   </p>
                 </div>
               </div>
@@ -557,6 +601,7 @@ const CourseDetailPage: React.FC = () => {
       </section>
 
       {/* ========== MODAL: bài học bị khóa ========== */}
+      {checkoutCode && <SePayCheckoutModal key={`${viewerId}:${checkoutCode}`} orderCode={checkoutCode} onClose={() => setCheckoutCode(null)} />}
       {lockedLesson && (
         <Modal onClose={() => setLockedLesson(null)}>
           <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
@@ -578,10 +623,10 @@ const CourseDetailPage: React.FC = () => {
               className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
               onClick={() => {
                 setLockedLesson(null);
-                navigate('/login', { state: { from: `/courses/${id}` } });
+                buyCourse();
               }}
             >
-              Đăng nhập để tiếp tục
+              {isAuthenticated ? (hasEnrollment ? 'Vào học ngay' : 'Đăng ký khóa học') : 'Đăng nhập để tiếp tục'}
             </Button>
             <Button
               variant="outline"

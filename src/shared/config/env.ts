@@ -11,9 +11,6 @@ export const ENV = {
   apiUrl: env.VITE_API_URL ?? 'http://localhost:8080',
   appEnv: env.VITE_APP_ENV ?? 'development',
   appName: env.VITE_APP_NAME ?? 'PrepMaster',
-  payOsClientId: env.VITE_PAYOS_CLIENT_ID ?? '',
-  payOsApiKey: env.VITE_PAYOS_API_KEY ?? '',
-  payOsChecksumKey: env.VITE_PAYOS_CHECKSUM_KEY ?? '',
 } as const;
 
 export type EnvShape = typeof ENV;

@@ -10,4 +10,4 @@ export * from './catalog.types';
 export * from './course.types';
 export * from './exam.types';
 export * from './learning.types';
-export * from './payment.types';
+export * from './sepay.types';

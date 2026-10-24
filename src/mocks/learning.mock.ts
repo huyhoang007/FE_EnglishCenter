@@ -268,6 +268,7 @@ const STUDY_LESSON_TOEIC_CURRENT: StudyLesson = {
  *  Khóa TOEIC thứ 3 — TOEIC Cấp tốc 750+
  * ============================================================ */
 export const MOCK_COURSE_TOEIC_SPEED: Course = {
+  vocabularyBank: [],
   id: 'crs_toeic_speed_02',
   slug: 'toeic-cap-toc-750',
   title: 'TOEIC Cấp Tốc 750+ Chinh Phục Đề Thi Thật',
@@ -318,7 +319,7 @@ export const MOCK_COURSE_TOEIC_SPEED: Course = {
           description: 'Cách chọn đáp án đúng trong 10 giây không cần dịch nghĩa.',
           durationMinutes: 20,
           type: 'VIDEO',
-          status: 'COMPLETED',
+          status: 'ENROLLED',
         },
         {
           id: 'speed_l2',

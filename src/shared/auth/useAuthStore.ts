@@ -12,6 +12,7 @@
  */
 
 import { create } from 'zustand';
+import { queryClient } from '@/shared/api/queryClient';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   getMyProfileApi,
@@ -170,3 +171,15 @@ export const selectUser = (s: AuthState) => s.user;
 export const selectRole = (s: AuthState): UserRole => s.role;
 export const selectIsAuthenticated = (s: AuthState) => s.isAuthenticated;
 export const selectUserName = (s: AuthState) => s.userName;
+
+// Discard user-dependent course data when signing in, out, or switching accounts.
+useAuthStore.subscribe((state, previous) => {
+  if (state.user?.id !== previous.user?.id || state.isAuthenticated !== previous.isAuthenticated) {
+    void queryClient.cancelQueries();
+    queryClient.clear();
+    localStorage.removeItem('prepmaster-ai-enrollments');
+  } else if (state.role !== previous.role) {
+    void queryClient.invalidateQueries({ queryKey: ['catalog'] });
+    void queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+  }
+});

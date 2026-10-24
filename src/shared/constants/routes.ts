@@ -25,6 +25,7 @@ export const CLIENT_ROUTES = {
   schedule: '/schedule',
   learningPath: '/learning-path',
   myCourses: '/my-courses',
+  payments: '/payments',
   myLearning: '/my-learning',
   learnCourse: (slug: string = ':slug') => `/my-courses/${slug}/learn`,
   mentors: '/mentors',
@@ -44,5 +45,6 @@ export const ADMIN_ROUTES = {
   mentors: '/admin/mentors',
   courses: '/admin/courses',
   accounts: '/admin/accounts',
+  payments: '/admin/payments',
   settings: '/admin/settings',
 } as const;

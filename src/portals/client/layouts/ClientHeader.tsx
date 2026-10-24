@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Header — Floating Capsule Pill (Premium EdTech)
  * -----------------------------------------------------------
  *  - max-w-7xl mx-auto rounded-full shadow-md border
@@ -11,6 +11,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
+  Receipt,
   LogOut,
   User,
   Settings,
@@ -38,7 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'My Courses',
     to: '/my-courses',
-    roles: ['STUDENT', 'MENTOR'],
+    roles: ['USER', 'STUDENT', 'MENTOR'],
   },
   {
     label: 'Programs & Paths',
@@ -373,6 +374,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
                     </span>
                   </div>
                   <ul className="py-1">
+                    {['USER', 'STUDENT'].includes(role) && <li><Link to="/payments" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"><Receipt className="w-4 h-4 text-slate-400" />Payments</Link></li>}
                     <li>
                       <Link
                         to="/my-courses"

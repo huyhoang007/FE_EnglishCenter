@@ -1,0 +1,40 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Receipt, RefreshCw } from 'lucide-react';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
+import { fetchAdminOrder, fetchAdminOrders, fetchWebhookEvents } from '@/shared/api/paymentService';
+import { Button } from '@/shared/components/Button';
+import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
+import { formatVND } from '@/shared/utils/format';
+import { ORDER_LABELS, paymentDate, paymentError } from '@/shared/utils/payment';
+import type { OrderStatus, WebhookEvent } from '@/shared/types/sepay.types';
+import { PaymentStatusBadge } from '@/portals/client/features/checkout/components/PaymentStatusBadge';
+
+const OUTCOMES: Record<string, string> = {
+  PAID: 'Đã xác nhận và cấp quyền học', UNKNOWN_ORDER: 'Không khớp đơn hàng',
+  IGNORED_OUTGOING: 'Bỏ qua giao dịch tiền ra', WRONG_ACCOUNT_OR_UNSUPPORTED_VA: 'Sai tài khoản nhận hoặc tài khoản ảo chưa hỗ trợ',
+  EXTRA_TRANSFER_REVIEW_REQUIRED: 'Chuyển thêm tiền vào đơn đã thanh toán',
+  AMOUNT_OR_ORDER_STATE_REVIEW_REQUIRED: 'Sai số tiền hoặc đơn đã hủy / hết hạn',
+  RECEIVED: 'Đã tiếp nhận',
+};
+function EventList({ events }: { events: WebhookEvent[] }) {
+  if (!events.length) return <p className="text-sm text-slate-500 py-5">Chưa có thông báo giao dịch.</p>;
+  return <div className="space-y-3">{events.map(event => <article key={event.sepay_id} className="border border-slate-200 rounded-xl p-4 text-sm"><div className="flex flex-wrap justify-between gap-2"><p className="font-bold text-slate-800">{OUTCOMES[event.outcome] || event.outcome}</p><span className="text-xs text-slate-500">{paymentDate(event.received_at)}</span></div><p className="text-xs text-slate-500 mt-2">SePay #{event.sepay_id}{event.order_code && ` · ${event.order_code}`}</p><details className="mt-3"><summary className="cursor-pointer text-xs font-bold text-blue-700">Dữ liệu gốc để đối soát</summary><pre className="text-xs bg-slate-50 rounded-lg mt-2 p-3 max-h-60 overflow-auto whitespace-pre-wrap break-all">{event.raw_payload}</pre></details></article>)}</div>;
+}
+export function PaymentManagementView() {
+  const userId = useAuthStore(s => s.user?.id ?? '');
+  const [status, setStatus] = useState<OrderStatus | ''>('');
+  const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [showEvents, setShowEvents] = useState(false);
+  const orders = useQuery({ queryKey: ['payments', userId, 'admin', status, page], queryFn: ({ signal }) => fetchAdminOrders(status, page, signal), staleTime: 0 });
+  const detail = useQuery({ queryKey: ['payments', userId, 'admin-order', selected], queryFn: ({ signal }) => fetchAdminOrder(selected!, signal), enabled: Boolean(selected), staleTime: 0 });
+  const events = useQuery({ queryKey: ['payments', userId, 'admin-events', selected], queryFn: ({ signal }) => fetchWebhookEvents(selected ?? undefined, signal), enabled: Boolean(selected || showEvents), staleTime: 0 });
+  function refresh() { void orders.refetch(); if (selected) void detail.refetch(); if (selected || showEvents) void events.refetch(); }
+  return <section className="space-y-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="font-extrabold text-2xl text-slate-900 flex items-center gap-2"><Receipt className="w-6 h-6 text-blue-700" />Quản lý thanh toán</h1><p className="text-sm text-slate-500 mt-2">Theo dõi đơn khóa học và đối soát thông báo giao dịch SePay.</p></div><Button variant="outline" leftIcon={RefreshCw} disabled={orders.isFetching || detail.isFetching || events.isFetching} onClick={refresh}>Làm mới</Button></div>
+    <div className="flex flex-wrap justify-between gap-3"><label className="text-sm font-semibold flex gap-3 items-center">Trạng thái<select aria-label="Lọc trạng thái thanh toán" value={status} onChange={event => { setStatus(event.target.value as OrderStatus | ''); setPage(0); }} className="border border-slate-200 rounded-xl px-3 py-2 bg-white"><option value="">Tất cả</option>{Object.entries(ORDER_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><Button variant="outline" onClick={() => { setSelected(null); setShowEvents(value => !value); }}>{showEvents ? 'Đóng thông báo gần đây' : 'Thông báo SePay gần đây'}</Button></div>
+    {orders.isPending ? <Skeleton className="h-64" /> : orders.isError ? <ErrorState message={paymentError(orders.error)} onRetry={() => void orders.refetch()} /> : orders.data?.data.length ? <><div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr>{['Đơn hàng / khóa học', 'Học viên', 'Số tiền', 'Trạng thái', ''].map((title, i) => <th key={i} scope="col" className="px-5 py-4 whitespace-nowrap">{title}</th>)}</tr></thead><tbody>{orders.data.data.map(order => <tr key={order.orderId} className="border-t border-slate-100"><td className="px-5 py-4 min-w-52"><p className="font-bold">{order.orderCode}</p><p className="text-xs text-slate-500 mt-1">{order.courseTitle}</p><p className="text-xs text-slate-400 mt-1">{paymentDate(order.createdAt)}</p></td><td className="px-5 py-4 text-xs font-mono break-all max-w-48">{order.studentId}</td><td className="px-5 py-4 whitespace-nowrap font-bold">{formatVND(order.amount)}</td><td className="px-5 py-4"><PaymentStatusBadge status={order.status} /></td><td className="px-5 py-4"><Button variant="outline" size="sm" onClick={() => { setSelected(order.orderId); setShowEvents(false); }}>Chi tiết</Button></td></tr>)}</tbody></table></div><Pagination currentPage={orders.data.currentPage} totalPages={orders.data.totalPages} onChange={setPage} /></> : <EmptyState title="Chưa có đơn phù hợp" />}
+    {selected && <section className="rounded-2xl bg-white border border-slate-200 p-5 space-y-4"><div className="flex justify-between items-center"><h2 className="font-extrabold text-lg">Chi tiết đơn hàng</h2><Button variant="ghost" size="sm" onClick={() => setSelected(null)}>Đóng chi tiết</Button></div>{detail.isPending ? <Skeleton className="h-28" /> : detail.isError ? <ErrorState message={paymentError(detail.error)} onRetry={() => void detail.refetch()} /> : detail.data && <><div className="grid sm:grid-cols-2 gap-4 text-sm"><div><p className="text-slate-500">Mã đơn</p><p className="font-bold">{detail.data.orderCode}</p></div><div><p className="text-slate-500">Khóa học</p><p className="font-bold">{detail.data.courseTitle}</p></div><div><p className="text-slate-500">Số tiền</p><p className="font-bold">{formatVND(detail.data.amount)}</p></div><div><p className="text-slate-500">Trạng thái</p><PaymentStatusBadge status={detail.data.status} /></div><div><p className="text-slate-500">Tài khoản nhận</p><p>{detail.data.bankCode} · {detail.data.accountNumber}</p><p>{detail.data.accountName}</p></div><div><p className="text-slate-500">Đã xác nhận</p><p>{paymentDate(detail.data.paidAt)}</p></div></div>{detail.data.status === 'REVIEW_REQUIRED' && <p className="rounded-xl bg-amber-50 text-amber-900 p-4 text-sm">Đơn cần được kiểm tra theo giao dịch ngân hàng thực tế. Chưa có thao tác hoàn tiền hoặc tự đặt trạng thái đã thanh toán.</p>}</>}<h3 className="font-bold pt-3">Thông báo liên quan · tối đa 100 bản ghi gần nhất</h3>{events.isPending ? <Skeleton className="h-28" /> : events.isError ? <ErrorState message={paymentError(events.error)} onRetry={() => void events.refetch()} /> : <EventList events={events.data ?? []} />}</section>}
+    {showEvents && !selected && <section className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4"><h2 className="font-bold text-lg">100 thông báo gần nhất</h2><p className="text-sm text-slate-500">Bao gồm giao dịch không khớp đơn và các khoản cần đối soát.</p>{events.isPending ? <Skeleton className="h-28" /> : events.isError ? <ErrorState message={paymentError(events.error)} onRetry={() => void events.refetch()} /> : <EventList events={events.data ?? []} />}</section>}
+  </section>;
+}
