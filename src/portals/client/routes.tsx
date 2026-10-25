@@ -6,7 +6,11 @@
  *   /register          → RegisterPage (full-bleed)
  *   /                  → redirect tới Gold Flow course
  *   /courses/:id       → CourseDetailPage
- *   /exams/:id         → ExamRoomPage
+ *   /exams             → ExamListPage (ngân hàng đề — Dev 3)
+ *   /exams/:id         → ExamDetailPage (giới thiệu đề — Dev 3)
+ *   /exams/history     → ExamHistoryPage (lịch sử thi — Dev 3)
+ *   /exams/attempts/:attemptId        → ExamRoomPage (phòng thi — Dev 3)
+ *   /exams/attempts/:attemptId/result → ExamResultPage (kết quả — Dev 3)
  *   /study/:slug       → StudyRoomPage (phòng học trực tuyến)
  *   /schedule          → SchedulePage
  *   /learning-path     → LearningPathPage (lộ trình học — Dev 5)
@@ -27,6 +31,10 @@ import RegisterPage from '@/portals/client/pages/auth/RegisterPage';
 import CourseDetailPage from '@/portals/client/pages/courses/CourseDetailPage';
 import CourseMarketplacePage from '@/portals/client/pages/courses/CourseMarketplacePage';
 import ExamRoomPage from '@/portals/client/pages/exams/ExamRoomPage';
+import ExamListPage from '@/portals/client/pages/exams/ExamListPage';
+import ExamDetailPage from '@/portals/client/pages/exams/ExamDetailPage';
+import ExamResultPage from '@/portals/client/pages/exams/ExamResultPage';
+import ExamHistoryPage from '@/portals/client/pages/exams/ExamHistoryPage';
 import MyCoursesPage from '@/portals/client/pages/student/MyCoursesPage';
 import CoursePlayerPage from '@/portals/client/pages/student/CoursePlayerPage';
 import StudyRoomPage from '@/portals/client/pages/student/StudyRoomPage';
@@ -188,9 +196,23 @@ const ClientRoutesComponent: React.FC = () => {
             path={CLIENT_ROUTES.course()}
             element={<CourseDetailPage />}
           />
+          {/* Khảo thí — Dev 3 */}
+          <Route path={CLIENT_ROUTES.exams} element={<ExamListPage />} />
           <Route
             path={CLIENT_ROUTES.exam()}
-            element={<ExamRoomPage />}
+            element={<ExamDetailPage />}
+          />
+          <Route
+            path={CLIENT_ROUTES.examHistory}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><ExamHistoryPage /></ProtectedRoute>}
+          />
+          <Route
+            path={CLIENT_ROUTES.examAttempt()}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><ExamRoomPage /></ProtectedRoute>}
+          />
+          <Route
+            path={CLIENT_ROUTES.examResult()}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><ExamResultPage /></ProtectedRoute>}
           />
           <Route
             path={CLIENT_ROUTES.study()}
