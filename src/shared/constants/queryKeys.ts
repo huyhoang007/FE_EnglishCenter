@@ -29,6 +29,16 @@ export const QUERY_KEYS = {
   },
   exam: {
     room: (id: string) => ['exam', id] as const,
+    /* ---------- Dev 3: Exam ---------- */
+    list: (params?: unknown) => ['exam', 'list', params] as const,
+    detail: (examId: string) => ['exam', 'detail', examId] as const,
+    attempt: (attemptId: string) => ['exam', 'attempt', attemptId] as const,
+    result: (attemptId: string) => ['exam', 'result', attemptId] as const,
+    myAttempts: (page: number) => ['exam', 'my-attempts', page] as const,
+    gradingQueue: (page: number) => ['exam', 'grading-queue', page] as const,
+    gradingAttempt: (attemptId: string) => ['exam', 'grading', attemptId] as const,
+    adminList: (params?: unknown) => ['exam', 'admin', 'list', params] as const,
+    adminDetail: (examId: string) => ['exam', 'admin', 'detail', examId] as const,
   },
   schedule: {
     bookings: ['schedule', 'bookings'] as const,

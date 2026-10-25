@@ -20,6 +20,11 @@ export const CLIENT_ROUTES = {
   home: '/',
   course: (id: string = ':id') => `/courses/${id}`,
   exam: (id: string = ':id') => `/exams/${id}`,
+  /* ---------- Dev 3: Exam ---------- */
+  exams: '/exams',
+  examHistory: '/exams/history',
+  examAttempt: (attemptId: string = ':attemptId') => `/exams/attempts/${attemptId}`,
+  examResult: (attemptId: string = ':attemptId') => `/exams/attempts/${attemptId}/result`,
   study: (slug: string = ':slug', lessonId?: string) =>
     lessonId ? `/study/${slug}/${lessonId}` : `/study/${slug}`,
   schedule: '/schedule',
@@ -41,6 +46,8 @@ export const MENTOR_ROUTES = {
   dashboard: '/mentor',
   grading: '/mentor/grading',
   schedule: '/mentor/schedule',
+  /* Dev 3: chấm Writing/Speaking của bài thi */
+  examGrading: '/mentor/exam-grading',
 } as const;
 
 export const ADMIN_ROUTES = {
@@ -52,4 +59,7 @@ export const ADMIN_ROUTES = {
   payments: '/admin/payments',
   bookings: '/admin/bookings',
   settings: '/admin/settings',
+  /* Dev 3: quản lý đề thi */
+  exams: '/admin/exams',
+  examEditor: (examId: string = ':examId') => `/admin/exams/${examId}`,
 } as const;
