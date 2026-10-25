@@ -11,6 +11,7 @@ import {
   Users,
   GraduationCap,
   BookOpen,
+  BookA,
   Award,
   ShieldCheck,
   Settings,
@@ -28,6 +29,7 @@ import {
 import { cn } from '@/shared/utils/cn';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { NotificationBell } from '@/shared/components/NotificationBell';
+import { LanguageToggle } from '@/shared/i18n/LanguageToggle';
 
 interface NavItem {
   to: string;
@@ -42,6 +44,7 @@ const MANAGEMENT_NAV: NavItem[] = [
   { to: '/admin/students', label: 'Students', icon: Users },
   { to: '/admin/mentors', label: 'Mentors', icon: GraduationCap },
   { to: '/admin/courses', label: 'Courses', icon: BookOpen },
+  { to: '/admin/vocabularies', label: 'Vocabulary', icon: BookA },
   { to: '/admin/certificates', label: 'Certificates', icon: Award },
   { to: '/admin/learning-paths', label: 'Learning Paths', icon: Route },
   { to: '/admin/practice-exams', label: 'AI Practice', icon: Sparkles },
@@ -274,6 +277,9 @@ export const AdminLayout: React.FC = () => {
 
           {/* Right: Notification, Mail, Admin Chip */}
           <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Language switcher EN / VI */}
+            <LanguageToggle />
+
             {/* Notifications (Dev 5 — API thật) */}
             <NotificationBell />
 

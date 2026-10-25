@@ -16,6 +16,7 @@
  */
 
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatCard } from '@/portals/admin/components/StatCard';
 import { Button } from '@/shared/components/Button';
@@ -59,8 +60,12 @@ import type {
   ContentType,
   CourseDto,
   CourseStatus,
+  HomeworkSubmissionType,
   UpdateCoursePayload,
 } from '@/shared/types/catalog.types';
+import { ExamPicker } from './components/ExamPicker';
+import { VocabularyBankPicker } from './components/VocabularyBankPicker';
+import { buildVocabularyTitle } from '@/shared/api/courseContentBuilder';
 
 /** Backend trả status lowercase — map sang nhãn tiếng Việt + màu. */
 const STATUS_META: Record<
@@ -485,9 +490,12 @@ const CourseTable: React.FC<{
                 className="hover:bg-slate-50/60 transition-colors"
               >
                 <td className="py-3 px-4 max-w-[280px]">
-                  <span className="font-bold text-slate-900 block truncate">
+                  <Link
+                    to={`/admin/courses/${c.courseId}`}
+                    className="font-bold text-slate-900 block truncate hover:text-[#0052CC] transition-colors"
+                  >
                     {c.title}
-                  </span>
+                  </Link>
                   <span className="font-mono text-[10px] text-slate-400">
                     {c.code}
                   </span>
@@ -1050,9 +1058,24 @@ const ContentModal: React.FC<{
     title: '',
     description: '',
     contentOrder: '0',
+    /* --- lesson --- */
     isPreview: false,
     videoUrl: '',
     durationMinutes: '',
+    /* --- vocabulary --- */
+    setIds: [] as string[],
+    /** Tên bộ từ vựng (setId → title) — dùng để dựng tiêu đề tự động. */
+    setTitles: {} as Record<string, string>,
+    /* --- homework --- */
+    submissionType: 'text' as HomeworkSubmissionType,
+    examId: '',
+    instructions: '',
+    dueDate: '',
+    maxScore: '',
+    passingScore: '',
+    timeLimitMinutes: '',
+    maxAttempts: '',
+    attachmentUrl: '',
   };
   const [form, setForm] = useState(emptyForm);
   const lastCourseId = React.useRef<string | null>(null);
@@ -1072,22 +1095,110 @@ const ContentModal: React.FC<{
     enabled: Boolean(course?.courseId),
   });
 
+  /** Đổi loại nội dung → reset các field riêng của loại cũ. */
+  const handleTypeChange = (next: ContentType) => {
+    setForm((f) => ({
+      ...emptyForm,
+      contentType: next,
+      // Tiêu đề / mô tả / thứ tự KHÔNG áp dụng cho nội dung 'vocabulary'
+      // (nội dung này chỉ là con trỏ tới các bộ trong kho chung) → reset luôn.
+      title: next === 'vocabulary' ? '' : f.title,
+      description: next === 'vocabulary' ? '' : f.description,
+      contentOrder: next === 'vocabulary' ? '0' : f.contentOrder,
+    }));
+  };
+
+  /** Tick / bỏ tick 1 bộ từ vựng trong kho chung. */
+  const toggleSet = (setId: string, title: string) => {
+    setForm((f) => {
+      const setTitles = { ...f.setTitles };
+      if (f.setIds.includes(setId)) {
+        delete setTitles[setId];
+      } else {
+        setTitles[setId] = title;
+      }
+      return {
+        ...f,
+        setTitles,
+        setIds: f.setIds.includes(setId)
+          ? f.setIds.filter((id) => id !== setId)
+          : [...f.setIds, setId],
+      };
+    });
+  };
   const createMutation = useMutation({
     mutationFn: () => {
       if (!course) throw new Error('Chưa chọn khóa học');
-      // contentData gửi lên là JSON **string**
-      const contentData = JSON.stringify({
-        isPreview: form.isPreview,
-        videoUrl: form.videoUrl.trim() || undefined,
-        durationMinutes: form.durationMinutes
-          ? Number(form.durationMinutes)
-          : undefined,
-      });
+      // Nội dung 'vocabulary' không có tiêu đề do admin gõ → không bắt buộc.
+      const isVocabulary = form.contentType === 'vocabulary';
+      if (!isVocabulary && !form.title.trim()) {
+        throw new Error('Tiêu đề là bắt buộc');
+      }
+
+      // contentData gửi lên là JSON **string** — shape đúng theo contentType.
+      let contentData = '{}';
+      let vocabularySetIds: string[] | undefined;
+      let examId: string | undefined;
+      // Tiêu đề gửi lên — với 'vocabulary' ta tự dựng từ tên các bộ đã tick.
+      let title = form.title.trim();
+
+      if (form.contentType === 'lesson') {
+        contentData = JSON.stringify({
+          isPreview: form.isPreview,
+          videoUrl: form.videoUrl.trim() || undefined,
+          durationMinutes: form.durationMinutes
+            ? Number(form.durationMinutes)
+            : undefined,
+        });
+      } else if (isVocabulary) {
+        if (form.setIds.length === 0) {
+          throw new Error('Cần chọn ít nhất một bộ từ vựng');
+        }
+        vocabularySetIds = form.setIds;
+        contentData = JSON.stringify({ setIds: form.setIds });
+        title = buildVocabularyTitle(
+          form.setIds,
+          form.setTitles,
+          CONTENT_TYPE_LABEL.vocabulary,
+        );
+      } else {
+        if (
+          form.submissionType === 'multiple_choice' &&
+          !form.examId.trim()
+        ) {
+          throw new Error('Hãy chọn đề thi để liên kết');
+        }
+        examId =
+          form.submissionType === 'multiple_choice'
+            ? form.examId.trim()
+            : undefined;
+        contentData = JSON.stringify({
+          submissionType: form.submissionType,
+          instructions: form.instructions.trim() || undefined,
+          dueDate: form.dueDate || undefined,
+          maxScore: form.maxScore ? Number(form.maxScore) : undefined,
+          passingScore: form.passingScore
+            ? Number(form.passingScore)
+            : undefined,
+          timeLimitMinutes: form.timeLimitMinutes
+            ? Number(form.timeLimitMinutes)
+            : undefined,
+          maxAttempts: form.maxAttempts
+            ? Number(form.maxAttempts)
+            : undefined,
+          attachmentUrl: form.attachmentUrl.trim() || undefined,
+          examId,
+          rubric: [],
+        });
+      }
+
       return createCourseContent(course.courseId, {
         contentType: form.contentType,
-        title: form.title.trim(),
+        title,
         description: form.description.trim() || undefined,
         contentOrder: Number(form.contentOrder) || 0,
+        vocabularySetIds,
+        examId,
         contentData,
       });
     },
@@ -1096,12 +1207,25 @@ const ContentModal: React.FC<{
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.catalog.contents(course!.courseId),
       });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.catalog.vocabularies(course!.courseId),
+      });
       setForm((f) => ({
         ...f,
         title: '',
         description: '',
         videoUrl: '',
         durationMinutes: '',
+        setIds: [],
+        setTitles: {},
+        examId: '',
+        instructions: '',
+        dueDate: '',
+        maxScore: '',
+        passingScore: '',
+        timeLimitMinutes: '',
+        maxAttempts: '',
+        attachmentUrl: '',
       }));
     },
     onError: (err) =>
@@ -1141,9 +1265,7 @@ const ContentModal: React.FC<{
           <Field label="Loại nội dung">
             <select
               value={form.contentType}
-              onChange={(e) =>
-                setForm({ ...form, contentType: e.target.value as ContentType })
-              }
+              onChange={(e) => handleTypeChange(e.target.value as ContentType)}
               className={cn(inputCls(false), 'bg-white')}
             >
               {(Object.keys(CONTENT_TYPE_LABEL) as ContentType[]).map((t) => (
@@ -1154,72 +1276,261 @@ const ContentModal: React.FC<{
             </select>
           </Field>
 
-          <Field label="Tiêu đề" required>
-            <input
-              type="text"
-              required
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="VD: Task 1 Overview"
-              className={inputCls(false)}
-            />
-          </Field>
+          {/*
+            * Nội dung 'vocabulary' chỉ là CON TRỎ tới các bộ trong kho từ
+            * vựng chung → không có tiêu đề / mô tả / thứ tự riêng.
+            * Thứ tự hiển thị do `course_vocabulary_sets.display_order` quản lý.
+            */}
+          {form.contentType !== 'vocabulary' && (
+            <>
+              <Field label="Tiêu đề" required>
+                <input
+                  type="text"
+                  required
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="VD: Task 1 Overview"
+                  className={inputCls(false)}
+                />
+              </Field>
 
-          <Field label="Mô tả">
-            <input
-              type="text"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className={inputCls(false)}
-            />
-          </Field>
+              <Field label="Mô tả">
+                <input
+                  type="text"
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                  className={inputCls(false)}
+                />
+              </Field>
+            </>
+          )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Thứ tự">
-              <input
-                type="number"
-                value={form.contentOrder}
-                onChange={(e) => setForm({ ...form, contentOrder: e.target.value })}
-                className={cn(inputCls(false), 'bg-white')}
-              />
-            </Field>
-            <Field label="Thời lượng (phút)">
-              <input
-                type="number"
-                min="0"
-                value={form.durationMinutes}
-                onChange={(e) => setForm({ ...form, durationMinutes: e.target.value })}
-                className={cn(inputCls(false), 'bg-white')}
-              />
-            </Field>
-          </div>
+          {/* ============ FORM ĐỘNG THEO LOẠI NỘI DUNG ============ */}
+          {form.contentType === 'lesson' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Thứ tự">
+                  <input
+                    type="number"
+                    value={form.contentOrder}
+                    onChange={(e) =>
+                      setForm({ ...form, contentOrder: e.target.value })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  />
+                </Field>
+                <Field label="Thời lượng (phút)">
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.durationMinutes}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        durationMinutes: e.target.value,
+                      })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  />
+                </Field>
+              </div>
 
-          <Field label="Video URL (MP4 hoặc YouTube)">
-            <input
-              type="url"
-              value={form.videoUrl}
-              onChange={(e) => setForm({ ...form, videoUrl: e.target.value })}
-              placeholder="https://…"
-              className={inputCls(false)}
-            />
-          </Field>
+              <Field label="Video URL (MP4 hoặc YouTube)">
+                <input
+                  type="url"
+                  value={form.videoUrl}
+                  onChange={(e) =>
+                    setForm({ ...form, videoUrl: e.target.value })
+                  }
+                  placeholder="https://…"
+                  className={inputCls(false)}
+                />
+              </Field>
 
-          {/* Checkbox học thử */}
-          <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.isPreview}
-              onChange={(e) => setForm({ ...form, isPreview: e.target.checked })}
-              className="mt-0.5 rounded border-amber-300 text-[#0052CC]"
-            />
-            <span className="text-xs text-amber-900 leading-snug">
-              <strong className="font-bold">Bài học thử (miễn phí)</strong>
-              <br />
-              <span className="text-amber-700">
-                Ai cũng xem được video bài này mà không cần ghi danh.
-              </span>
-            </span>
-          </label>
+              {/* Checkbox học thử */}
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isPreview}
+                  onChange={(e) =>
+                    setForm({ ...form, isPreview: e.target.checked })
+                  }
+                  className="mt-0.5 rounded border-amber-300 text-[#0052CC]"
+                />
+                <span className="text-xs text-amber-900 leading-snug">
+                  <strong className="font-bold">Bài học thử (miễn phí)</strong>
+                  <br />
+                  <span className="text-amber-700">
+                    Ai cũng xem được video bài này mà không cần ghi danh.
+                  </span>
+                </span>
+              </label>
+            </>
+          )}
+
+          {/* ---- TỪ VỰNG: chọn bộ trong KHO TỪ VỰNG CHUNG ---- */}
+          {form.contentType === 'vocabulary' && (
+            <>
+              <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3 space-y-2">
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Chọn bộ từ vựng từ kho chung
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Tìm trong kho từ vựng chung và tick chọn các bộ muốn liên
+                  kết vào khóa học này.
+                </p>
+                <VocabularyBankPicker
+                  selectedIds={form.setIds}
+                  onToggle={toggleSet}
+                  courseId={course.courseId}
+                />
+              </div>
+            </>
+          )}
+
+          {/* ---- BÀI TẬP: chọn đề thi / bài kiểm tra định nghĩa sẵn ---- */}
+          {form.contentType === 'homework' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Thứ tự">
+                  <input
+                    type="number"
+                    value={form.contentOrder}
+                    onChange={(e) =>
+                      setForm({ ...form, contentOrder: e.target.value })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  />
+                </Field>
+                <Field label="Hình thức nộp">
+                  <select
+                    value={form.submissionType}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        submissionType: e.target
+                          .value as HomeworkSubmissionType,
+                      })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  >
+                    <option value="text">Tự luận (gõ trả lời)</option>
+                    <option value="file">Nộp file</option>
+                    <option value="multiple_choice">
+                      Trắc nghiệm (phòng thi)
+                    </option>
+                  </select>
+                </Field>
+              </div>
+
+              {form.submissionType === 'multiple_choice' && (
+                <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3 space-y-2">
+                  <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Chọn đề thi / bài kiểm tra
+                  </p>
+                  <ExamPicker
+                    courseId={course.courseId}
+                    selectedExamId={form.examId}
+                    onSelect={(examId) =>
+                      setForm({ ...form, examId })
+                    }
+                  />
+                </div>
+              )}
+
+              <Field label="Hướng dẫn">
+                <textarea
+                  value={form.instructions}
+                  onChange={(e) =>
+                    setForm({ ...form, instructions: e.target.value })
+                  }
+                  rows={3}
+                  placeholder="Học viên cần làm gì?"
+                  className={cn(inputCls(false), 'h-auto py-2 bg-white')}
+                />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Hạn nộp">
+                  <input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) =>
+                      setForm({ ...form, dueDate: e.target.value })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  />
+                </Field>
+                <Field label="Thời gian làm bài (phút)">
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.timeLimitMinutes}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        timeLimitMinutes: e.target.value,
+                      })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Điểm tối đa">
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.maxScore}
+                    onChange={(e) =>
+                      setForm({ ...form, maxScore: e.target.value })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  />
+                </Field>
+                <Field label="Điểm đạt (%)">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={form.passingScore}
+                    onChange={(e) =>
+                      setForm({ ...form, passingScore: e.target.value })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Số lần làm tối đa">
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.maxAttempts}
+                    onChange={(e) =>
+                      setForm({ ...form, maxAttempts: e.target.value })
+                    }
+                    className={cn(inputCls(false), 'bg-white')}
+                  />
+                </Field>
+                <Field label="Link tài liệu">
+                  <input
+                    type="url"
+                    value={form.attachmentUrl}
+                    onChange={(e) =>
+                      setForm({ ...form, attachmentUrl: e.target.value })
+                    }
+                    placeholder="https://… (pdf)"
+                    className={inputCls(false)}
+                  />
+                </Field>
+              </div>
+            </>
+          )}
 
           <Button
             type="submit"

@@ -109,20 +109,6 @@ export async function fetchCourseContents(
   }
 }
 
-/** GET /api/v1/courses/{courseId}/vocabularies */
-export async function fetchCourseVocabularies(
-  courseId: string,
-): Promise<CourseContentDto[]> {
-  try {
-    const { data } = await axiosClient.get<BeResponse<CourseContentDto[]>>(
-      `${BASE}/courses/${courseId}/vocabularies`,
-    );
-    return data?.result ?? [];
-  } catch (err) {
-    throw toApiError(err, 'Không tải được từ vựng');
-  }
-}
-
 /** GET /api/v1/courses/{courseId}/homework */
 export async function fetchCourseHomework(
   courseId: string,

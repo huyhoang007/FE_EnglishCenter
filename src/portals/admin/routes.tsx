@@ -6,7 +6,11 @@ import React, { Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminLayout } from '@/portals/admin/layouts/AdminLayout';
 import { ProtectedRoute } from '@/shared/components/ProtectedRoute';
-import { AdminDashboardView, CourseManagementView } from '@/portals/admin/features/course';
+import { AdminDashboardView, CourseManagementView, AdminCourseDetailView } from '@/portals/admin/features/course';
+import {
+  AdminVocabularyManagementView,
+  AdminVocabularyLibraryView,
+} from '@/portals/admin/features/course';
 import { AccountManagementView } from '@/portals/admin/features/account';
 import { MentorManagementView } from '@/portals/admin/features/mentor';
 import { StudentManagementView } from '@/portals/admin/features/student';
@@ -34,6 +38,12 @@ const AdminRoutes: React.FC = () => {
             <Route path="students" element={<StudentManagementView />} />
             <Route path="mentors" element={<MentorManagementView />} />
             <Route path="courses" element={<CourseManagementView />} />
+            <Route path="vocabularies" element={<AdminVocabularyLibraryView />} />
+            <Route path="courses/:id" element={<AdminCourseDetailView />} />
+            <Route
+              path="courses/:id/vocabularies"
+              element={<AdminVocabularyManagementView />}
+            />
             <Route path="certificates" element={<CertificateManagementView />} />
             <Route path="learning-paths" element={<LearningPathManagementView />} />
             <Route path="practice-exams" element={<PracticeExamManagementView />} />

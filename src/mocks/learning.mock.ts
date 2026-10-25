@@ -268,7 +268,6 @@ const STUDY_LESSON_TOEIC_CURRENT: StudyLesson = {
  *  Khóa TOEIC thứ 3 — TOEIC Cấp tốc 750+
  * ============================================================ */
 export const MOCK_COURSE_TOEIC_SPEED: Course = {
-  vocabularyBank: [],
   id: 'crs_toeic_speed_02',
   slug: 'toeic-cap-toc-750',
   title: 'TOEIC Cấp Tốc 750+ Chinh Phục Đề Thi Thật',
@@ -319,6 +318,7 @@ export const MOCK_COURSE_TOEIC_SPEED: Course = {
           description: 'Cách chọn đáp án đúng trong 10 giây không cần dịch nghĩa.',
           durationMinutes: 20,
           type: 'VIDEO',
+          // Bài này đã hoàn thành — được đánh dấu ở `completedLessonIds`.
           status: 'ENROLLED',
         },
         {
@@ -331,6 +331,26 @@ export const MOCK_COURSE_TOEIC_SPEED: Course = {
           status: 'ENROLLED',
         },
       ],
+    },
+  ],
+  vocabularyBank: [
+    {
+      id: 'speed_v1',
+      word: 'Invoice',
+      ipa: '/ˈɪnvɔɪs/',
+      partOfSpeech: 'noun',
+      meaning: 'Hoá đơn',
+      example: 'Please send me the invoice by email.',
+      exampleTranslation: 'Vui lòng gửi hoá đơn cho tôi qua email.',
+    },
+    {
+      id: 'speed_v2',
+      word: 'Schedule',
+      ipa: '/ˈʃedjuːl/',
+      partOfSpeech: 'noun',
+      meaning: 'Lịch trình',
+      example: 'The meeting schedule has been updated.',
+      exampleTranslation: 'Lịch họp đã được cập nhật.',
     },
   ],
 };

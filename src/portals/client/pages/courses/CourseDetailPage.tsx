@@ -63,10 +63,14 @@ import {
   fetchCourseById,
   fetchCourseContents,
   fetchCourseHomework,
-  fetchCourseVocabularies,
   filterByType,
   resolveCourseId,
 } from '@/shared/api/courseService';
+import {
+  fetchCourseVocabularies,
+  type CourseVocabularySet,
+  type VocabularyWord,
+} from '@/shared/api/vocabularyService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import type {
   CourseContentDto,
@@ -74,7 +78,6 @@ import type {
   HomeworkContentData,
   LessonContentData,
   RubricCriterion,
-  VocabularyContentData,
 } from '@/shared/types/catalog.types';
 
 type Tab = 'syllabus' | 'vocabulary' | 'homework';
@@ -322,7 +325,7 @@ const CourseDetailContent: React.FC = () => {
                 <strong className="font-bold text-white">
                   {vocabularies.length}
                 </strong>{' '}
-                từ vựng
+                bộ từ vựng
               </span>
             )}
             {homework.length > 0 && (
@@ -395,8 +398,7 @@ const CourseDetailContent: React.FC = () => {
                         {
                           key: 'vocabulary' as const,
                           label: `Từ vựng${vocabularies.length ? ` (${vocabularies.length})` : ''}`,
-                        },
-                        {
+                        },                        {
                           key: 'homework' as const,
                           label: `Bài tập${homework.length ? ` (${homework.length})` : ''}`,
                         },
@@ -880,19 +882,24 @@ const LessonRow: React.FC<{
 
 /* =========================================================
  * VocabularyGrid — flashcard + nút loa phát audioUrl
+ *
+ * Dữ liệu đến từ `GET /api/v1/courses/{courseId}/vocabularies` → mảng
+ * `CourseVocabularySet` (mỗi phần tử là 1 BỘ từ vựng đã gán cho khóa học,
+ * chứa danh sách từ bên trong).
  * ========================================================= */
-const VocabularyGrid: React.FC<{ items: CourseContentDto[] }> = ({ items }) => {
+const VocabularyGrid: React.FC<{ items: CourseVocabularySet[] }> = ({
+  items,
+}) => {
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   /** Phát âm thanh từ điển Cambridge qua audioUrl. */
-  const pronounce = (item: CourseContentDto) => {
-    const data = item.contentData as VocabularyContentData | null;
-    const audioUrl = data?.audioUrl;
+  const pronounce = (word: VocabularyWord) => {
+    const audioUrl = word.audioUrl;
     if (!audioUrl) return;
     try {
       const audio = new Audio(audioUrl);
       audio.play().catch(() => setPlayingId(null));
-      setPlayingId(item.contentId);
+      setPlayingId(word.wordId || word.word);
       audio.onended = () => setPlayingId(null);
       audio.onerror = () => setPlayingId(null);
     } catch {
@@ -900,80 +907,118 @@ const VocabularyGrid: React.FC<{ items: CourseContentDto[] }> = ({ items }) => {
     }
   };
 
+  /** Tổng số từ của tất cả bộ đã gán. */
+  const totalWords = items.reduce(
+    (sum, set) => sum + (set.locked ? 0 : set.words.length),
+    0,
+  );
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {items.map((item) => {
-        const d = item.contentData as VocabularyContentData | null;
-        const word = d?.word ?? item.title;
-        return (
-          <div
-            key={item.contentId}
-            className={cn(
-              'rounded-xl border border-slate-200 bg-white p-4',
-              'hover:border-[#0052CC]/40 hover:shadow-md transition-all group',
-            )}
-          >
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <div className="min-w-0">
-                <h4 className="font-extrabold text-lg text-slate-900 group-hover:text-[#0052CC] transition-colors">
-                  {word}
-                </h4>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {d?.phonetic && (
-                    <span className="text-xs text-slate-500 font-mono">
-                      {d.phonetic}
-                    </span>
-                  )}
-                  {d?.partOfSpeech && (
-                    <span className="text-[10px] text-slate-400 italic">
-                      {d.partOfSpeech}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {d?.audioUrl && (
-                <button
-                  type="button"
-                  onClick={() => pronounce(item)}
-                  className={cn(
-                    'p-1.5 rounded-md shrink-0 transition-colors',
-                    playingId === item.contentId
-                      ? 'text-[#0052CC] bg-blue-100'
-                      : 'text-slate-400 hover:text-[#0052CC] hover:bg-blue-50',
-                  )}
-                  aria-label={`Phát âm thanh ${word}`}
-                  title="Nghe phát âm"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {(d?.meaning || item.description) && (
-              <p className="text-sm font-semibold text-slate-700 mb-3">
-                <span className="text-slate-400 text-xs font-normal mr-1">
-                  Nghĩa:
-                </span>
-                {d?.meaning ?? item.description}
+    <div className="space-y-8">
+      {items.map((set) => (
+        <section key={set.setId}>
+          {/* ---- Header của bộ ---- */}
+          <div className="mb-3.5">
+            <h3 className="text-base font-extrabold text-slate-900">
+              {set.title}
+            </h3>
+            {set.description && (
+              <p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed">
+                {set.description}
               </p>
             )}
-
-            {d?.example && (
-              <div className="relative pl-3 border-l-2 border-[#0052CC]/30 bg-slate-50 rounded-r-md py-2 pr-2">
-                <p className="text-xs text-slate-700 italic leading-relaxed">
-                  {d.example}
-                </p>
-                {d.exampleTranslation && (
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    {d.exampleTranslation}
-                  </p>
-                )}
-              </div>
-            )}
+            <p className="text-[11px] font-semibold text-slate-400 mt-1">
+              {set.locked
+                ? 'Đăng ký khóa học để xem từ vựng'
+                : `${set.words.length} từ`}
+            </p>
           </div>
-        );
-      })}
+
+          {set.locked ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-5 py-10 text-center">
+              <p className="text-xs font-bold text-slate-600">
+                Nội dung đang bị khoá
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Đăng ký khóa học để mở bộ từ vựng này.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {set.words.map((word) => (
+                <div
+                  key={word.wordId || word.word}
+                  className={cn(
+                    'rounded-xl border border-slate-200 bg-white p-4',
+                    'hover:border-[#0052CC]/40 hover:shadow-md transition-all group',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <h4 className="font-extrabold text-lg text-slate-900 group-hover:text-[#0052CC] transition-colors">
+                        {word.word}
+                      </h4>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {word.phonetic && (
+                          <span className="text-xs text-slate-500 font-mono">
+                            {word.phonetic}
+                          </span>
+                        )}
+                        {word.partOfSpeech && (
+                          <span className="text-[10px] text-slate-400 italic">
+                            {word.partOfSpeech}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {word.audioUrl && (
+                      <button
+                        type="button"
+                        onClick={() => pronounce(word)}
+                        className={cn(
+                          'p-1.5 rounded-md shrink-0 transition-colors',
+                          playingId === (word.wordId || word.word)
+                            ? 'text-[#0052CC] bg-blue-100'
+                            : 'text-slate-400 hover:text-[#0052CC] hover:bg-blue-50',
+                        )}
+                        aria-label={`Phát âm thanh ${word.word}`}
+                        title="Nghe phát âm"
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {word.meaning && (
+                    <p className="text-sm font-semibold text-slate-700 mb-3">
+                      <span className="text-slate-400 text-xs font-normal mr-1">
+                        Nghĩa:
+                      </span>
+                      {word.meaning}
+                    </p>
+                  )}
+
+                  {word.example && (
+                    <div className="relative pl-3 border-l-2 border-[#0052CC]/30 bg-slate-50 rounded-r-md py-2 pr-2">
+                      <p className="text-xs text-slate-700 italic leading-relaxed">
+                        {word.example}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+
+      {/* Tổng kết */}
+      {totalWords > 0 && (
+        <p className="text-[11px] font-semibold text-slate-400 text-right">
+          Tổng {totalWords} từ vựng
+        </p>
+      )}
     </div>
   );
 };

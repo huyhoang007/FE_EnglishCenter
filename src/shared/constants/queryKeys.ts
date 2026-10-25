@@ -19,6 +19,11 @@ export const QUERY_KEYS = {
     course: (id: string) => ['catalog', 'course', id] as const,
     contents: (id: string) => ['catalog', 'contents', id] as const,
     vocabularies: (id: string) => ['catalog', 'vocabularies', id] as const,
+    /** Kho từ vựng CHUNG — độc lập với khóa học. */
+    vocabularyBank: ['catalog', 'vocabulary-bank'] as const,
+    /** Danh sách bộ từ vựng đã gán cho 1 khóa học. */
+    courseVocabularySets: (id: string) =>
+      ['catalog', 'course-vocabulary-sets', id] as const,
     homework: (id: string) => ['catalog', 'homework', id] as const,
     certificates: ['catalog', 'certificates'] as const,
     certificate: (id: string) => ['catalog', 'certificate', id] as const,
