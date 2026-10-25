@@ -7,6 +7,7 @@
  *          tự kiểm tra trạng thái đơn tới khi PAID). Khi đổi lịch thì dùng lại khu vực này.
  * Phần 3: Lịch của tôi (sắp tới / đã qua) — hủy và đổi lịch.
  * Mentor lấy từ ?mentorId= trên URL, không có thì lấy mentor đầu tiên trong danh sách.
+ * Dải "Chọn giảng viên" cho học viên chuyển mentor (cập nhật ?mentorId=); khi đổi lịch thì khóa mentor cũ.
  * Thời gian BE trả dạng UTC, hiển thị theo giờ máy người dùng.
  */
 
@@ -70,13 +71,15 @@ import type { MentorDto } from '@/shared/api/apiTypes';
 
 /** Số ngày hiển thị trên dải chọn ngày (tính từ hôm nay) */
 const DAYS_TO_SHOW = 7;
+/** Số mentor tải cho dải chọn giảng viên */
+const MENTORS_TO_SHOW = 20;
 
 /* ============================================================
  *  Component chính
  * ============================================================ */
 export const SchedulePageView: React.FC = () => {
   const toast = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const role = useAuthStore((s) => s.role);
   const canCallApi = useCanCallNotificationApi();
   const isStudent = canCallApi && role === 'STUDENT';
@@ -102,8 +105,9 @@ export const SchedulePageView: React.FC = () => {
   // Mentor: đang đổi lịch thì cố định mentor cũ, sau đó tới ?mentorId=, cuối cùng là mentor đầu tiên
   const { data: mentorsData } = useQuery({
     queryKey: QUERY_KEYS.mentor.directory({ page: 0 }),
-    queryFn: () => getMentors({ page: 0, size: 5 }),
+    queryFn: () => getMentors({ page: 0, size: MENTORS_TO_SHOW }),
   });
+  const mentorList = mentorsData?.data ?? [];
   const mentorId =
     rescheduling?.mentorId ?? searchParams.get('mentorId') ?? mentorsData?.data?.[0]?.userId;
 
@@ -134,6 +138,16 @@ export const SchedulePageView: React.FC = () => {
 
   const bookMutation = useBookSlot();
   const rescheduleMutation = useRescheduleBooking();
+
+  /** Chuyển sang mentor khác: lưu vào URL để tải lại lịch trống của mentor đó */
+  const handleSelectMentor = (id: string) => {
+    if (rescheduling || id === mentorId) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('mentorId', id);
+    setSearchParams(next, { replace: true });
+    setSelectedDay(0);
+    setSelectedSlot(null);
+  };
 
   const handleSelectSlot = (slot: MentorScheduleSlot) => {
     if (slot.status !== 'available') return;
@@ -319,8 +333,16 @@ export const SchedulePageView: React.FC = () => {
           </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
-            {/* ==== LEFT: Mentor card + Date strip + Slot grid ==== */}
+            {/* ==== LEFT: Chọn mentor + Mentor card + Date strip + Slot grid ==== */}
             <div className="space-y-5 min-w-0">
+              {!rescheduling && mentorList.length > 1 && (
+                <MentorPicker
+                  mentors={mentorList}
+                  selectedId={mentorId}
+                  onSelect={handleSelectMentor}
+                />
+              )}
+
               <Card>
                 <div className="flex items-start gap-4">
                   <img
@@ -619,6 +641,53 @@ const toMentorCard = (mentor: MentorDto) => ({
 /* ============================================================
  *  Sub components
  * ============================================================ */
+
+/** Dải chọn giảng viên — bấm 1 mentor để xem lịch trống của mentor đó */
+const MentorPicker: React.FC<{
+  mentors: MentorDto[];
+  selectedId?: string;
+  onSelect: (mentorId: string) => void;
+}> = ({ mentors, selectedId, onSelect }) => (
+  <Card>
+    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-3">
+      Chọn giảng viên ({mentors.length})
+    </p>
+    <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+      {mentors.map((m) => {
+        const card = toMentorCard(m);
+        const active = m.userId === selectedId;
+        return (
+          <button
+            key={m.userId}
+            type="button"
+            onClick={() => onSelect(m.userId)}
+            aria-pressed={active}
+            className={cn(
+              'shrink-0 w-48 text-left flex items-center gap-3 p-3 rounded-xl border transition-all',
+              active
+                ? 'border-[#0052CC] bg-blue-50/60 ring-2 ring-[#0052CC]/15'
+                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
+            )}
+          >
+            <img
+              src={card.avatarUrl}
+              alt={card.fullName}
+              className="w-10 h-10 rounded-full bg-slate-100 shrink-0"
+            />
+            <div className="min-w-0">
+              <p className={cn('text-sm truncate', active ? 'font-extrabold text-[#0052CC]' : 'font-bold text-slate-900')}>
+                {card.fullName}
+              </p>
+              <p className="text-[11px] text-slate-500 truncate">{card.title}</p>
+              <p className="text-[11px] font-bold text-slate-700 mt-0.5">{formatVND(card.pricePerHour)}/giờ</p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  </Card>
+);
+
 const SectionHeader: React.FC<{ title: string; subtitle: string }> = ({
   title,
   subtitle,

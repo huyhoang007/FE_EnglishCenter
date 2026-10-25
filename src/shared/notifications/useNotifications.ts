@@ -69,6 +69,16 @@ export function useNotificationList(open: boolean) {
   });
 }
 
+/** Trang /notifications — danh sách có phân trang (page bắt đầu từ 0) */
+export function useNotificationPage(page: number, size = 20) {
+  const enabled = useCanCallNotificationApi();
+  return useQuery({
+    queryKey: QUERY_KEYS.notification.page(page),
+    queryFn: async () => unwrapOrThrow(await getMyNotificationsApi(page, size)),
+    enabled,
+  });
+}
+
 export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -73,6 +73,7 @@ export const QUERY_KEYS = {
     all: ['notification'] as const,
     unreadCount: ['notification', 'unread-count'] as const,
     list: ['notification', 'list'] as const,
+    page: (page: number) => ['notification', 'page', page] as const,
   },
   learningPath: {
     all: ['learning-path'] as const,

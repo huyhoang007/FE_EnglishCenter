@@ -4,3 +4,4 @@
 export * from './notificationService';
 export * from './useNotifications';
 export * from './notificationSocket';
+export * from './notificationLink';

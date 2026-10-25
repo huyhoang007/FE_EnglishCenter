@@ -12,6 +12,7 @@
  *   /learning-path     → LearningPathPage (lộ trình học — Dev 5)
  *   /practice          → PracticePage (luyện đề Writing/Speaking, AI chấm — Dev 5)
  *   /teaching-schedule → TeachingSchedulePage (mentor mở khung giờ dạy 1-1 — Dev 5)
+ *   /notifications     → NotificationsPage (tất cả thông báo — Dev 5)
  *   /my-courses        → MyCoursesPage
  *
  * Stub pages (placeholder) dùng chung để tránh lộ chữ "Dev X"
@@ -37,6 +38,7 @@ import TeachingSchedulePage from '@/portals/client/pages/mentors/TeachingSchedul
 import MentorDirectoryPage from '@/portals/client/pages/mentors/MentorDirectoryPage';
 import MentorDetailPage from '@/portals/client/pages/mentors/MentorDetailPage';
 import ProfilePage from '@/portals/client/pages/profile/ProfilePage';
+import NotificationsPage from '@/portals/client/pages/notifications/NotificationsPage';
 import { ProtectedRoute } from '@/shared/components/ProtectedRoute';
 import { PaymentHistoryView } from '@/portals/client/features/checkout/components/PaymentHistoryView';
 import { CLIENT_ROUTES, ADMIN_ROUTES, MENTOR_ROUTES } from '@/shared/constants/routes';
@@ -225,6 +227,14 @@ const ClientRoutesComponent: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={['MENTOR']}>
                 <TeachingSchedulePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={CLIENT_ROUTES.notifications}
+            element={
+              <ProtectedRoute allowedRoles={['USER', 'STUDENT', 'MENTOR', 'ADMIN']}>
+                <NotificationsPage />
               </ProtectedRoute>
             }
           />

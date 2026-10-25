@@ -3,15 +3,24 @@
  * -----------------------------------------------------------
  * - Badge số chưa đọc (tự cập nhật mỗi 30 giây).
  * - Bấm chuông: mở danh sách 10 thông báo mới nhất.
- * - Bấm 1 thông báo: đánh dấu đã đọc. Nút "Đọc tất cả": đánh dấu hết.
+ * - Bấm 1 thông báo: đánh dấu đã đọc rồi chuyển tới trang liên quan. Nút "Đọc tất cả": đánh dấu hết.
+ * - Nội dung hiện đầy đủ (không cắt chữ). "Xem tất cả thông báo" → trang /notifications.
  * Logic gọi API nằm ở @/shared/notifications (service + hooks).
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Bell, CheckCheck, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, CheckCheck, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { getErrorMessage } from '@/shared/api/axiosClient';
-import type { AppNotification, NotificationType } from '@/shared/types';
+import type { AppNotification } from '@/shared/types';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import {
+  NOTIFICATION_TYPE_ICON,
+  getNotificationLink,
+  notificationTimeAgo,
+} from '@/shared/notifications/notificationLink';
 import {
   useCanCallNotificationApi,
   useMarkAllNotificationsRead,
@@ -21,31 +30,14 @@ import {
   useUnreadNotificationCount,
 } from '@/shared/notifications/useNotifications';
 
-const TYPE_ICON: Record<NotificationType, string> = {
-  study_reminder: '📚',
-  homework_deadline: '📝',
-  payment: '💳',
-  exam_result: '🎯',
-  mentor_session: '👩‍🏫',
-  general: '🔔',
-};
-
-/** "2 phút trước", "3 giờ trước", "05/10/2026" */
-const timeAgo = (iso: string): string => {
-  const diffSec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diffSec < 60) return 'Vừa xong';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} phút trước`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} giờ trước`;
-  if (diffSec < 7 * 86400) return `${Math.floor(diffSec / 86400)} ngày trước`;
-  return new Date(iso).toLocaleDateString('vi-VN');
-};
-
 export interface NotificationBellProps {
   className?: string;
 }
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({ className }) => {
   const canCallApi = useCanCallNotificationApi();
+  const navigate = useNavigate();
+  const role = useAuthStore((st) => st.role);
 
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -73,6 +65,16 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className })
 
   const handleClickItem = (n: AppNotification) => {
     if (!n.isRead) markOne.mutate(n.notificationId);
+    const link = getNotificationLink(n.type, role);
+    if (link) {
+      setOpen(false);
+      navigate(link);
+    }
+  };
+
+  const handleViewAll = () => {
+    setOpen(false);
+    navigate(CLIENT_ROUTES.notifications);
   };
 
   return (
@@ -96,7 +98,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className })
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-12 w-80 z-40 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden"
+          className="absolute right-0 top-12 w-96 max-w-[calc(100vw-2rem)] z-40 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden"
         >
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <p className="text-sm font-bold text-slate-900">Thông báo</p>
@@ -113,7 +115,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className })
             )}
           </div>
 
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-[420px] overflow-y-auto">
             {!canCallApi && (
               <p className="px-4 py-6 text-sm text-slate-500 text-center">
                 Đăng nhập bằng tài khoản thật để xem thông báo.
@@ -148,14 +150,16 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className })
                     )}
                   >
                     <span className="text-lg leading-none mt-0.5" aria-hidden="true">
-                      {TYPE_ICON[n.type] ?? '🔔'}
+                      {NOTIFICATION_TYPE_ICON[n.type] ?? '🔔'}
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className={cn('text-sm text-slate-900', !n.isRead ? 'font-bold' : 'font-medium')}>
                         {n.title}
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.createdAt)}</p>
+                      <p className="text-xs text-slate-600 mt-0.5 leading-relaxed whitespace-pre-line break-words">
+                        {n.message}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-1">{notificationTimeAgo(n.createdAt)}</p>
                     </div>
                     {!n.isRead && (
                       <span className="w-2 h-2 rounded-full bg-[#0052CC] mt-1.5 shrink-0" aria-label="Chưa đọc" />
@@ -165,6 +169,17 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className })
               </ul>
             )}
           </div>
+
+          {canCallApi && (
+            <button
+              type="button"
+              onClick={handleViewAll}
+              className="w-full px-4 py-2.5 border-t border-slate-100 text-sm font-semibold text-[#0052CC] hover:bg-slate-50 inline-flex items-center justify-center gap-1"
+            >
+              Xem tất cả thông báo
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       )}
     </div>

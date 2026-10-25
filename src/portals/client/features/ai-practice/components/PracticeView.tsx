@@ -3,13 +3,16 @@
  * -----------------------------------------------------------
  * Tab "Kho đề":
  *   1. Chọn đề trong danh sách (lọc Writing/Speaking, tìm theo tên)
- *   2. Viết bài (Speaking: nhập văn bản phiên âm bài nói)
+ *   2. Writing: gõ bài vào ô. Speaking: CHỈ ghi âm — trình duyệt chuyển giọng nói thành chữ
+ *      (Web Speech API), ô phiên âm chỉ đọc, không gõ / dán được. Muốn làm lại thì "Ghi lại từ đầu".
+ *      Trình duyệt không hỗ trợ ghi âm (Firefox, Safari cũ) thì không làm được đề Speaking.
  *   3. Bấm "Nộp bài & AI chấm" → gọi submit rồi ai-evaluate (mất 10 - 60 giây)
  *   4. Hiện kết quả 4 tiêu chí bên phải
  *   Nếu AI chấm lỗi (502/5016) thì bài đã nộp vẫn được giữ → bấm "Chấm lại" không phải nộp lại.
  * Tab "Lịch sử": các bài đã làm, xem lại kết quả hoặc chấm bài chưa chấm.
  *
- * URL hỗ trợ ?examId=... để mở sẵn 1 đề (dùng từ trang Lộ trình học).
+ * URL hỗ trợ ?examId=... để mở sẵn 1 đề (dùng từ trang Lộ trình học),
+ * ?tab=history để mở sẵn tab Lịch sử (dùng khi bấm thông báo kết quả chấm).
  */
 
 import React, { useState } from 'react';
@@ -21,8 +24,10 @@ import {
   Loader2,
   Mic,
   PenLine,
+  RotateCcw,
   Search,
   Sparkles,
+  Square,
   Wand2,
 } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
@@ -44,6 +49,7 @@ import {
   usePracticeExams,
   useSubmitPracticeAnswer,
 } from '../hooks/usePractice';
+import { useSpeechToText } from '../hooks/useSpeechToText';
 import { EvaluationResult } from './EvaluationResult';
 
 /** BE yêu cầu bài làm 50 - 20000 ký tự */
@@ -60,7 +66,7 @@ export const PracticeView: React.FC = () => {
   const role = useRole();
   const isStudent = role === 'STUDENT';
 
-  const [tab, setTab] = useState<Tab>('bank');
+  const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'history' ? 'history' : 'bank');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [keywordInput, setKeywordInput] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -88,6 +94,12 @@ export const PracticeView: React.FC = () => {
 
   const shownEvaluation = evaluation ?? viewedEvaluationQuery.data ?? null;
 
+  // Speaking: mỗi đoạn nói đã nhận dạng xong được nối vào cuối ô bài làm
+  const stt = useSpeechToText((text) => {
+    setContent((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text));
+    setPendingAnswerId(null);
+  });
+
   /* ---------------- Actions ---------------- */
   const resetWorkspace = () => {
     setContent('');
@@ -99,6 +111,7 @@ export const PracticeView: React.FC = () => {
 
   const handleSelectExam = (examId: string) => {
     if (phase !== 'idle') return;
+    stt.stop();
     setSelectedExamId(examId);
     resetWorkspace();
   };
@@ -123,6 +136,7 @@ export const PracticeView: React.FC = () => {
   /** Nộp bài (nếu chưa nộp) rồi gọi AI chấm */
   const handleSubmitAndEvaluate = async () => {
     if (!selectedExam) return;
+    stt.stop();
     if (pendingAnswerId) {
       await runEvaluate(pendingAnswerId);
       return;
@@ -151,11 +165,24 @@ export const PracticeView: React.FC = () => {
     setViewEvaluationId(answer.evaluationId);
   };
 
+  /** Speaking: xóa phiên âm cũ để ghi lại từ đầu */
+  const handleResetRecording = () => {
+    stt.stop();
+    setContent('');
+    setPendingAnswerId(null);
+  };
+
   /* ---------------- Render ---------------- */
+  const isSpeaking = selectedExam?.examType === 'SPEAKING';
   const charCount = content.trim().length;
   const wordCount = content.trim() ? countWords(content) : 0;
   const canSubmit =
-    isStudent && !!selectedExam && phase === 'idle' && charCount >= MIN_CHARS && charCount <= MAX_CHARS;
+    isStudent &&
+    !!selectedExam &&
+    phase === 'idle' &&
+    !stt.isRecording &&
+    charCount >= MIN_CHARS &&
+    charCount <= MAX_CHARS;
 
   return (
     <div className="space-y-6">
@@ -169,7 +196,7 @@ export const PracticeView: React.FC = () => {
           Phòng luyện Writing & Speaking
         </h1>
         <p className="mt-1.5 text-sm text-slate-600 max-w-2xl">
-          Chọn đề, viết bài (hoặc dán phiên âm bài nói) và nhận điểm theo 4 tiêu chí IELTS kèm nhận xét
+          Chọn đề, viết bài (Writing) hoặc ghi âm bài nói (Speaking) và nhận điểm theo 4 tiêu chí IELTS kèm nhận xét
           bằng tiếng Việt.
         </p>
       </header>
@@ -267,6 +294,20 @@ export const PracticeView: React.FC = () => {
                   </div>
 
                   <div className="p-5">
+                    {isSpeaking && isStudent && (
+                      <SpeakingRecorder
+                        isSupported={stt.isSupported}
+                        isRecording={stt.isRecording}
+                        seconds={stt.seconds}
+                        interimText={stt.interimText}
+                        error={stt.error}
+                        disabled={phase !== 'idle'}
+                        hasTranscript={content.trim().length > 0}
+                        onStart={stt.start}
+                        onStop={stt.stop}
+                        onReset={handleResetRecording}
+                      />
+                    )}
                     <textarea
                       value={content}
                       onChange={(e) => {
@@ -274,15 +315,22 @@ export const PracticeView: React.FC = () => {
                         // Sửa bài sau khi nộp lỗi → coi như bài mới
                         setPendingAnswerId(null);
                       }}
-                      disabled={!isStudent || phase !== 'idle'}
+                      disabled={!isStudent || phase !== 'idle' || stt.isRecording}
+                      // Speaking: ô phiên âm chỉ đọc, không gõ / dán / kéo thả chữ vào được
+                      readOnly={isSpeaking}
+                      onPaste={isSpeaking ? (e) => e.preventDefault() : undefined}
+                      onDrop={isSpeaking ? (e) => e.preventDefault() : undefined}
                       rows={12}
                       maxLength={MAX_CHARS}
                       placeholder={
-                        selectedExam.examType === 'SPEAKING'
-                          ? 'Dán văn bản phiên âm bài nói của bạn tại đây…'
+                        isSpeaking
+                          ? 'Bấm "Bắt đầu ghi âm" và nói bằng tiếng Anh — phiên âm bài nói sẽ tự hiện ở đây…'
                           : 'Viết bài của bạn tại đây…'
                       }
-                      className="w-full rounded-input border border-slate-200 p-3.5 text-sm text-slate-800 leading-relaxed resize-y focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 disabled:bg-slate-50"
+                      className={cn(
+                        'w-full rounded-input border border-slate-200 p-3.5 text-sm text-slate-800 leading-relaxed resize-y focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 disabled:bg-slate-50',
+                        isSpeaking && 'bg-slate-50 cursor-default',
+                      )}
                     />
 
                     <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -401,6 +449,85 @@ const TabButton: React.FC<{
     {children}
   </button>
 );
+
+/** Định dạng giây → mm:ss */
+const formatDuration = (sec: number) =>
+  `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+
+/** Thanh ghi âm cho đề Speaking — nhận dạng giọng nói trên trình duyệt */
+const SpeakingRecorder: React.FC<{
+  isSupported: boolean;
+  isRecording: boolean;
+  seconds: number;
+  interimText: string;
+  error: string | null;
+  disabled: boolean;
+  hasTranscript: boolean;
+  onStart: () => void;
+  onStop: () => void;
+  onReset: () => void;
+}> = ({
+  isSupported,
+  isRecording,
+  seconds,
+  interimText,
+  error,
+  disabled,
+  hasTranscript,
+  onStart,
+  onStop,
+  onReset,
+}) => {
+  if (!isSupported) {
+    return (
+      <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+        Trình duyệt này chưa hỗ trợ ghi âm và chuyển giọng nói thành chữ. Hãy mở trang bằng Chrome hoặc Edge
+        để làm đề Speaking.
+      </div>
+    );
+  }
+  return (
+    <div
+      className={cn(
+        'mb-3 p-3 rounded-lg border',
+        isRecording ? 'bg-red-50 border-red-200' : 'bg-violet-50/60 border-violet-200',
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        {isRecording ? (
+          <Button variant="danger" size="sm" leftIcon={Square} onClick={onStop}>
+            Dừng ghi âm
+          </Button>
+        ) : (
+          <>
+            <Button variant="ai" size="sm" leftIcon={Mic} disabled={disabled} onClick={onStart}>
+              {hasTranscript ? 'Ghi âm tiếp' : 'Bắt đầu ghi âm'}
+            </Button>
+            {hasTranscript && (
+              <Button variant="outline" size="sm" leftIcon={RotateCcw} disabled={disabled} onClick={onReset}>
+                Ghi lại từ đầu
+              </Button>
+            )}
+          </>
+        )}
+        {isRecording ? (
+          <span className="inline-flex items-center gap-2 text-sm font-bold text-red-600">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+            Đang ghi · <span className="tabular-nums">{formatDuration(seconds)}</span>
+          </span>
+        ) : (
+          <span className="text-xs text-slate-600">
+            Nói bằng tiếng Anh, hệ thống tự chuyển thành chữ. Phần thi nói chỉ nhận ghi âm, không gõ chữ.
+          </span>
+        )}
+      </div>
+      {isRecording && interimText && (
+        <p className="mt-2 text-sm italic text-slate-500">{interimText}…</p>
+      )}
+      {error && <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>}
+    </div>
+  );
+};
 
 const ExamTypeBadge: React.FC<{ type: PracticeExamType }> = ({ type }) =>
   type === 'SPEAKING' ? (

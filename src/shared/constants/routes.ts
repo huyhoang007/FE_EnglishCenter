@@ -29,6 +29,8 @@ export const CLIENT_ROUTES = {
   practice: '/practice',
   myCourses: '/my-courses',
   payments: '/payments',
+  /** Tất cả thông báo (Dev 5) */
+  notifications: '/notifications',
   myLearning: '/my-learning',
   learnCourse: (slug: string = ':slug') => `/my-courses/${slug}/learn`,
   mentors: '/mentors',
