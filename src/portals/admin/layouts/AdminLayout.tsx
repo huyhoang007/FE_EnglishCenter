@@ -17,6 +17,7 @@ import {
   CalendarDays,
   Route,
   Sparkles,
+  FileCheck2,
   Mail,
   Search,
   LogOut,
@@ -44,6 +45,7 @@ const MANAGEMENT_NAV: NavItem[] = [
   { to: '/admin/certificates', label: 'Certificates', icon: Award },
   { to: '/admin/learning-paths', label: 'Learning Paths', icon: Route },
   { to: '/admin/practice-exams', label: 'AI Practice', icon: Sparkles },
+  { to: '/admin/exams', label: 'Exams', icon: FileCheck2 },
 ];
 
 const OTHER_NAV: NavItem[] = [
