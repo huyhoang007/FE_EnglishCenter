@@ -23,7 +23,10 @@ export const CLIENT_ROUTES = {
   study: (slug: string = ':slug', lessonId?: string) =>
     lessonId ? `/study/${slug}/${lessonId}` : `/study/${slug}`,
   schedule: '/schedule',
+  /** Mentor quản lý khung giờ dạy 1-1 (Dev 5) — trong layout client */
+  teachingSchedule: '/teaching-schedule',
   learningPath: '/learning-path',
+  practice: '/practice',
   myCourses: '/my-courses',
   payments: '/payments',
   myLearning: '/my-learning',
@@ -37,6 +40,7 @@ export const CLIENT_ROUTES = {
 export const MENTOR_ROUTES = {
   dashboard: '/mentor',
   grading: '/mentor/grading',
+  schedule: '/mentor/schedule',
 } as const;
 
 export const ADMIN_ROUTES = {
@@ -46,5 +50,6 @@ export const ADMIN_ROUTES = {
   courses: '/admin/courses',
   accounts: '/admin/accounts',
   payments: '/admin/payments',
+  bookings: '/admin/bookings',
   settings: '/admin/settings',
 } as const;

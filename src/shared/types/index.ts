@@ -11,3 +11,9 @@ export * from './course.types';
 export * from './exam.types';
 export * from './learning.types';
 export * from './sepay.types';
+// Dev 5
+export * from './page.types';
+export * from './notification.types';
+export * from './learningPath.types';
+export * from './practice.types';
+export * from './schedule.types';

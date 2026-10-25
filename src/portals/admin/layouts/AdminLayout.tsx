@@ -14,7 +14,9 @@ import {
   Award,
   ShieldCheck,
   Settings,
-  Bell,
+  CalendarDays,
+  Route,
+  Sparkles,
   Mail,
   Search,
   LogOut,
@@ -24,6 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
+import { NotificationBell } from '@/shared/components/NotificationBell';
 
 interface NavItem {
   to: string;
@@ -34,10 +37,13 @@ interface NavItem {
 
 const MANAGEMENT_NAV: NavItem[] = [
   { to: '/admin/payments', label: 'Payments', icon: Receipt },
+  { to: '/admin/bookings', label: 'Bookings', icon: CalendarDays },
   { to: '/admin/students', label: 'Students', icon: Users },
   { to: '/admin/mentors', label: 'Mentors', icon: GraduationCap },
   { to: '/admin/courses', label: 'Courses', icon: BookOpen },
   { to: '/admin/certificates', label: 'Certificates', icon: Award },
+  { to: '/admin/learning-paths', label: 'Learning Paths', icon: Route },
+  { to: '/admin/practice-exams', label: 'AI Practice', icon: Sparkles },
 ];
 
 const OTHER_NAV: NavItem[] = [
@@ -266,15 +272,8 @@ export const AdminLayout: React.FC = () => {
 
           {/* Right: Notification, Mail, Admin Chip */}
           <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Notifications */}
-            <button
-              type="button"
-              className="relative w-9 h-9 rounded-full hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors"
-              title="Notifications"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
-            </button>
+            {/* Notifications (Dev 5 — API thật) */}
+            <NotificationBell />
 
             {/* Messages */}
             <button

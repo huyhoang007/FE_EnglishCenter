@@ -9,7 +9,9 @@
  *   /exams/:id         → ExamRoomPage
  *   /study/:slug       → StudyRoomPage (phòng học trực tuyến)
  *   /schedule          → SchedulePage
- *   /learning-path     → LearningPathPage (AI luyện viết)
+ *   /learning-path     → LearningPathPage (lộ trình học — Dev 5)
+ *   /practice          → PracticePage (luyện đề Writing/Speaking, AI chấm — Dev 5)
+ *   /teaching-schedule → TeachingSchedulePage (mentor mở khung giờ dạy 1-1 — Dev 5)
  *   /my-courses        → MyCoursesPage
  *
  * Stub pages (placeholder) dùng chung để tránh lộ chữ "Dev X"
@@ -30,6 +32,8 @@ import CoursePlayerPage from '@/portals/client/pages/student/CoursePlayerPage';
 import StudyRoomPage from '@/portals/client/pages/student/StudyRoomPage';
 import SchedulePage from '@/portals/client/pages/student/SchedulePage';
 import LearningPathPage from '@/portals/client/pages/student/LearningPathPage';
+import PracticePage from '@/portals/client/pages/student/PracticePage';
+import TeachingSchedulePage from '@/portals/client/pages/mentors/TeachingSchedulePage';
 import MentorDirectoryPage from '@/portals/client/pages/mentors/MentorDirectoryPage';
 import MentorDetailPage from '@/portals/client/pages/mentors/MentorDetailPage';
 import ProfilePage from '@/portals/client/pages/profile/ProfilePage';
@@ -216,6 +220,15 @@ const ClientRoutesComponent: React.FC = () => {
           />
           <Route path="/payments" element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><PaymentHistoryView /></ProtectedRoute>} />
           <Route path={CLIENT_ROUTES.schedule} element={<SchedulePage />} />
+          <Route
+            path={CLIENT_ROUTES.teachingSchedule}
+            element={
+              <ProtectedRoute allowedRoles={['MENTOR']}>
+                <TeachingSchedulePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path={CLIENT_ROUTES.practice} element={<PracticePage />} />
           <Route
             path={CLIENT_ROUTES.learningPath}
             element={<LearningPathPage />}

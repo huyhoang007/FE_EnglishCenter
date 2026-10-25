@@ -145,15 +145,20 @@ export const MentorDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Informational notice regarding Schedule / Booking */}
+        {/* Đặt lịch 1-1 với giảng viên này (Dev 5) */}
         <div className="mt-2 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-3">
           <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
+          <div className="space-y-1 flex-1">
             <p className="font-bold">Chức năng đặt lịch học 1-kèm-1:</p>
             <p className="text-amber-800 leading-normal">
-              Hiện tại Backend đã kết nối đầy đủ dữ liệu Giảng viên & Chuyên môn. Module đặt lịch học (Booking Schedule) và cổng thanh toán trực tuyến (PayOS) đang nằm trong giai đoạn phát triển tiếp theo của hệ thống.
+              Xem các khung giờ trống của giảng viên và đặt buổi kèm riêng phù hợp với bạn.
             </p>
           </div>
+          <Link to={`/schedule?mentorId=${mentor.userId}`} className="shrink-0">
+            <Button variant="primary" size="sm">
+              Đặt lịch 1-1
+            </Button>
+          </Link>
         </div>
       </Card>
     </div>

@@ -10,6 +10,7 @@ import { MentorLayout } from '@/portals/mentor/layouts/MentorLayout';
 import { ProtectedRoute } from '@/shared/components/ProtectedRoute';
 import { MentorDashboardView } from '@/portals/mentor/features/assignment';
 import { GradingQueueView } from '@/portals/mentor/features/assignment';
+import { MentorScheduleView } from '@/portals/mentor/features/schedule';
 
 const LoadingFallback: React.FC = () => (
   <div className="min-h-[40vh] flex items-center justify-center text-slate-500 text-sm">
@@ -25,6 +26,7 @@ const MentorRoutes: React.FC = () => {
           <Route element={<MentorLayout />}>
             <Route index element={<MentorDashboardView />} />
             <Route path="grading" element={<GradingQueueView />} />
+            <Route path="schedule" element={<MentorScheduleView />} />
             <Route path="*" element={<Navigate to="/mentor" replace />} />
           </Route>
         </Routes>

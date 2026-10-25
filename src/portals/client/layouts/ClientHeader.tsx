@@ -16,13 +16,13 @@ import {
   User,
   Settings,
   Search,
-  Bell,
   LogIn,
   GraduationCap,
 } from 'lucide-react';
 import { cn } from '@/shared/utils';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import type { UserRole } from '@/shared/types';
+import { NotificationBell } from '@/shared/components/NotificationBell';
 
 export interface HeaderProps {
   className?: string;
@@ -54,9 +54,25 @@ const NAV_ITEMS: NavItem[] = [
     hasDropdown: true,
   },
   {
+    label: 'Learning Paths',
+    to: '/learning-path',
+    roles: ['STUDENT', 'MENTOR', 'ADMIN'],
+  },
+  {
+    label: 'AI Practice',
+    to: '/practice',
+    roles: ['STUDENT', 'MENTOR', 'ADMIN'],
+  },
+  {
     label: '1-on-1 Mentorship',
     to: '/schedule',
-    roles: ['STUDENT', 'MENTOR'],
+    roles: ['STUDENT'],
+  },
+  {
+    // Dev 5: mentor mở / quản lý khung giờ dạy ngay trong layout client
+    label: '1-on-1 Mentorship',
+    to: '/teaching-schedule',
+    roles: ['MENTOR'],
   },
   {
     label: 'Mentors',
@@ -84,10 +100,8 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
   const { role, userName, user, logout, isAuthenticated } = useAuthStore();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [keywordInput, setKeywordInput] = useState('');
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
 
   /**
    * Đồng bộ `keyword` của ô tìm kiếm với sàn khóa học.
@@ -109,12 +123,6 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
         !userMenuRef.current.contains(e.target as Node)
       ) {
         setUserMenuOpen(false);
-      }
-      if (
-        notifRef.current &&
-        !notifRef.current.contains(e.target as Node)
-      ) {
-        setNotifOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -250,79 +258,8 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
               5 Days
             </span>
 
-            {/* Notifications */}
-            <div className="relative" ref={notifRef}>
-              <button
-                type="button"
-                onClick={() => setNotifOpen((o) => !o)}
-                className={cn(
-                  'relative w-10 h-10 rounded-full',
-                  'hover:bg-slate-100 transition-colors',
-                  'inline-flex items-center justify-center',
-                )}
-                aria-label="Notifications"
-                aria-haspopup="menu"
-                aria-expanded={notifOpen}
-              >
-                <Bell className="w-5 h-5 text-slate-600" />
-                <span
-                  className="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"
-                  aria-hidden="true"
-                />
-              </button>
-              {notifOpen && (
-                <div
-                  role="menu"
-                  className={cn(
-                    'absolute right-0 top-12 w-80 z-40',
-                    'bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden',
-                  )}
-                >
-                  <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                    <p className="text-sm font-bold text-slate-900">
-                      Notifications
-                    </p>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      3 New
-                    </span>
-                  </div>
-                  <ul className="max-h-80 overflow-y-auto">
-                    {[
-                      {
-                        title: 'New mock test available',
-                        desc: 'IELTS Academic Mock #14 is now unlocked.',
-                        time: '2m ago',
-                      },
-                      {
-                        title: 'Mentor feedback ready',
-                        desc: 'David Smith graded your Writing Task 2.',
-                        time: '1h ago',
-                      },
-                      {
-                        title: 'Weekly study report',
-                        desc: 'You studied 6.5 hours this week. Keep going!',
-                        time: 'Yesterday',
-                      },
-                    ].map((n, i) => (
-                      <li
-                        key={i}
-                        className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
-                      >
-                        <p className="text-sm font-semibold text-slate-900">
-                          {n.title}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                          {n.desc}
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">
-                          {n.time}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            {/* Notifications (Dev 5 — API thật) */}
+            <NotificationBell />
 
             {/* User profile dropdown */}
             <div className="relative" ref={userMenuRef}>

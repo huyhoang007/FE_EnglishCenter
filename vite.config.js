@@ -23,6 +23,13 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // Dev 5: WebSocket STOMP thông báo realtime (BE endpoint /ws-connect)
+      '/ws-connect': {
+        target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8080',
+        ws: true,
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 });

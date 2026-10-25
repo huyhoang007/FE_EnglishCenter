@@ -13,6 +13,9 @@ import { StudentManagementView } from '@/portals/admin/features/student';
 import { SettingsView } from '@/portals/admin/features/settings';
 import { PaymentManagementView } from '@/portals/admin/features/payment/PaymentManagementView';
 import { CertificateManagementView } from '@/portals/admin/features/certificate';
+import { BookingManagementView } from '@/portals/admin/features/booking';
+import { LearningPathManagementView } from '@/portals/admin/features/learning-path';
+import { PracticeExamManagementView } from '@/portals/admin/features/practice-exam';
 
 const LoadingFallback: React.FC = () => (
   <div className="min-h-[40vh] flex items-center justify-center text-slate-500 text-sm">
@@ -31,8 +34,11 @@ const AdminRoutes: React.FC = () => {
             <Route path="mentors" element={<MentorManagementView />} />
             <Route path="courses" element={<CourseManagementView />} />
             <Route path="certificates" element={<CertificateManagementView />} />
+            <Route path="learning-paths" element={<LearningPathManagementView />} />
+            <Route path="practice-exams" element={<PracticeExamManagementView />} />
             <Route path="accounts" element={<AccountManagementView />} />
             <Route path="payments" element={<PaymentManagementView />} />
+            <Route path="bookings" element={<BookingManagementView />} />
             <Route path="settings" element={<SettingsView />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>

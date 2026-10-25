@@ -8,10 +8,11 @@
 
 import React from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NotificationBell } from '@/shared/components/NotificationBell';
 import {
   LayoutDashboard,
   ClipboardList,
-  Bell,
+  CalendarDays,
   Search,
   LogOut,
   ChevronRight,
@@ -22,6 +23,7 @@ import { useAuthStore } from '@/shared/auth/useAuthStore';
 const NAV_ITEMS = [
   { to: '/mentor', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/mentor/grading', label: 'Grading Queue', icon: ClipboardList, end: false },
+  { to: '/mentor/schedule', label: 'Schedule', icon: CalendarDays, end: false },
 ];
 
 export const MentorLayout: React.FC = () => {
@@ -111,13 +113,7 @@ export const MentorLayout: React.FC = () => {
               <Search className="w-3.5 h-3.5" />
               <span>Search submissions, learners…</span>
             </div>
-            <button
-              type="button"
-              className="p-2 rounded-md text-slate-500 hover:bg-slate-100"
-              aria-label="Notifications"
-            >
-              <Bell className="w-4 h-4" />
-            </button>
+            <NotificationBell />
           </div>
         </header>
 
