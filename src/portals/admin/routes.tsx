@@ -16,6 +16,7 @@ import { CertificateManagementView } from '@/portals/admin/features/certificate'
 import { BookingManagementView } from '@/portals/admin/features/booking';
 import { LearningPathManagementView } from '@/portals/admin/features/learning-path';
 import { PracticeExamManagementView } from '@/portals/admin/features/practice-exam';
+import { ExamEditorView, ExamManagementView } from '@/portals/admin/features/exam';
 
 const LoadingFallback: React.FC = () => (
   <div className="min-h-[40vh] flex items-center justify-center text-slate-500 text-sm">
@@ -36,6 +37,9 @@ const AdminRoutes: React.FC = () => {
             <Route path="certificates" element={<CertificateManagementView />} />
             <Route path="learning-paths" element={<LearningPathManagementView />} />
             <Route path="practice-exams" element={<PracticeExamManagementView />} />
+            {/* Quản lý đề thi — Dev 3 */}
+            <Route path="exams" element={<ExamManagementView />} />
+            <Route path="exams/:examId" element={<ExamEditorView />} />
             <Route path="accounts" element={<AccountManagementView />} />
             <Route path="payments" element={<PaymentManagementView />} />
             <Route path="bookings" element={<BookingManagementView />} />

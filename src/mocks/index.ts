@@ -1,9 +1,8 @@
 /**
  * Mocks index — barrel export
  * -----------------------------------------------------------
- * Cho phép: import { MOCK_COURSE, MOCK_EXAM } from '@/mocks';
+ * Cho phép: import { MOCK_COURSE } from '@/mocks';
  */
 
 export * from './courses.mock';
-export * from './exams.mock';
 export * from './learning.mock';
