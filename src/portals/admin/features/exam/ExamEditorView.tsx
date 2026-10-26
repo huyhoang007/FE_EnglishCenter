@@ -206,13 +206,14 @@ export const ExamEditorView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 border-b border-slate-200 pb-3">
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-bold text-slate-900">Phần thi ({data.sections.length})</h2>
-          {isDraft && (
+          {/* Đề trống: nút nằm ở khung trống bên dưới, không lặp lại trên thanh công cụ */}
+          {isDraft && hasContent && (
             <p className="text-xs text-slate-600 mt-0.5">
               Có sẵn đề trong Word? Dùng “Nhập từ Word” để tạo cả bộ đề từ file .docx viết theo mẫu.
             </p>
           )}
         </div>
-        {isDraft && (
+        {isDraft && hasContent && (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" leftIcon={FileUp} className="h-10" onClick={() => setImportOpen(true)}>
               Nhập từ Word
