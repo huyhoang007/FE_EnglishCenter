@@ -100,7 +100,22 @@ export const vi: Record<TranslationKey, string> = {
   'vocab.bank.addWord': 'Thêm một từ',
   'vocab.bank.noWords': 'Chưa có từ vựng nào',
   'vocab.bank.noWordsHint':
-    'Thêm từ đầu tiên bằng biểu mẫu bên trái.',
+    'Tải lên file Excel hoặc CSV để thêm từ vựng vào bộ này.',
+  'vocab.bank.clearAll': 'Xoá tất cả',
+  'vocab.bank.dragDropHint':
+    'Kéo thả file Excel/CSV vào đây hoặc bấm để chọn file',
+  'vocab.bank.uploadFile': 'Upload file',
+  'vocab.bank.uploadHint':
+    'Hỗ trợ .xlsx, .xls, .csv. Cột: Word, IPA, Meaning, Part of Speech, Example, Audio URL.',
+  'vocab.bank.uploadSuccess': 'Đã import {count} từ từ file',
+  'vocab.bank.uploadSkipped': '({skipped} dòng bị bỏ qua vì thiếu dữ liệu)',
+  'vocab.bank.uploadFailed': 'Import file thất bại',
+  'vocab.bank.uploadReplace': 'Thay thế toàn bộ',
+  'vocab.bank.uploadAppend': 'Thêm vào danh sách',
+  'vocab.bank.uploadConfirmTitle': 'Cách import từ vựng?',
+  'vocab.bank.uploadConfirmBody':
+    'Bộ hiện tại đã có {current} từ. Bạn muốn thêm {incoming} từ mới vào cuối, hay thay thế toàn bộ?',
+  'vocab.bank.downloadTemplate': 'Tải file mẫu',
   'vocab.bank.wordsRequired': 'Cần thêm ít nhất một từ vào bộ',
   'vocab.bank.titleRequired': 'Tên bộ từ vựng là bắt buộc',
   'vocab.bank.titleExisted': 'Bộ từ vựng với tên này đã tồn tại',

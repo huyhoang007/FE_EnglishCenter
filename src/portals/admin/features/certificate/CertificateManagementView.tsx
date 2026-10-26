@@ -1,28 +1,37 @@
 /**
  * CertificateManagementView — Quản trị chứng chỉ (route `/admin/certificates`)
  * -----------------------------------------------------------
- * API thật của Dev 2:
- *   GET  /api/v1/certificates                → danh sách chứng chỉ (summary)
- *   GET  /api/v1/certificates/{id}           → chi tiết + các kỹ năng (parts)
- *   POST /api/v1/admin/certificates          → tạo chứng chỉ (kèm parts)
- *   PUT  /api/v1/admin/certificates/{id}     → sửa tên / mô tả
+ * Chuẩn hoá theo Quy định Core điểm chính thức:
  *
- * Lưu ý:
- *   - `properties` của mỗi part gửi lên là JSON **string** (backend normalize
- *     vào cột JSONB), khi đọc về backend đã parse sẵn thành object.
- *   - Endpoint list KHÔNG trả `parts`, chỉ trả `partCount` — nên màn chi tiết
- *     phải gọi thêm `fetchCertificateById`.
- *   - Backend chưa có API xoá chứng chỉ → không render nút xoá.
+ * 1. VSTEP.3–5: 4 kỹ năng (0–10), Overall = TB làm tròn đến 0.5.
+ *    Bậc 3 (4.0–5.5, B1), Bậc 4 (6.0–8.0, B2), Bậc 5 (8.5–10.0, C1).
+ *    Không tự đặt chuẩn riêng từng kỹ năng vì xác định bậc dựa trên điểm trung bình 4 kỹ năng.
  *
- * Layout giữ nguyên AdminLayout: bo góc 16-24px, viền slate-200/80,
- * font Be Vietnam Pro, màu nhấn #0052CC.
+ * 2. IELTS (Academic & General Training): 4 kỹ năng (0–9 band, bước 0.5).
+ *    Overall = TB 4 kỹ năng làm tròn theo quy tắc chính thức IELTS (<.25 xuống, [.25, .75) thành .5, >=.75 lên).
+ *    Mức năng lực tham khảo từ Expert User đến Limited User. Hỗ trợ cấu hình cut-off đầu vào.
+ *
+ * 3. TOEIC Listening & Reading: Listening (5–495) + Reading (5–495) = Tổng điểm (10–990).
+ *    Mốc tham chiếu CEFR tối thiểu theo từng kỹ năng của ETS (A1 -> C1).
+ *
+ * 4. TOEIC Speaking & Writing: Speaking (0–200), Writing (0–200).
+ *    ĐỘC LẬP — Không cộng điểm Speaking & Writing để tạo thành điểm tổng, không gộp với L&R.
+ *
+ * CRUD đầy đủ:
+ *   - Create (Tạo chứng chỉ + nạp kỹ năng Core)
+ *   - Read (Danh sách dạng bảng/lưới + Modal xem chi tiết Core điểm & kỹ năng)
+ *   - Update (Chỉnh sửa thông tin + cập nhật thang điểm & kỹ năng)
+ *   - Delete (Xoá chứng chỉ có hộp thoại xác nhận)
+ *
+ * Layout giữ nguyên AdminLayout: bo góc 16-24px, viền slate-200/80, font Be Vietnam Pro, màu nhấn #0052CC.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatCard } from '@/portals/admin/components/StatCard';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
+import { ConfirmDialog } from '@/shared/components/ConfirmDialog';
 import {
   EmptyState,
   ErrorState,
@@ -30,10 +39,17 @@ import {
 } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import {
+  AlertCircle,
   Award,
   BookMarked,
+  Calculator,
   CalendarClock,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Eye,
+  Gauge,
+  Info,
   Layers3,
   LayoutGrid,
   List,
@@ -41,12 +57,16 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Sparkles,
+  Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { cn } from '@/shared/utils';
 import { formatDate } from '@/shared/utils/format';
 import {
   createCertificate,
+  deleteCertificate,
   fetchCertificateById,
   fetchCertificates,
   updateCertificate,
@@ -57,28 +77,46 @@ import type {
   CreateCertificatePayload,
   UpdateCertificatePayload,
 } from '@/shared/types/catalog.types';
+import {
+  CERTIFICATE_PRESETS,
+  type CertificatePreset,
+  type CertificatePresetId,
+  type CertificateScoringSystem,
+  formatScoringSummary,
+  getCertificateScoring,
+  getDisplayDescription,
+  getPartScoreInfo,
+  parseCertificateMeta,
+  serializeCertificateDescription,
+  validateSkillScores,
+} from './certificateScoring';
 
 /* =========================================================
- * Types nội bộ
+ * Types nội bộ cho Form
  * ========================================================= */
 
-/** Một dòng "kỹ năng" (certificate part) trong form tạo/sửa. */
 interface PartForm {
   key: string;
   partName: string;
   partDescription: string;
-  properties: string;
+  minScore: string;
+  maxScore: string;
+  step: string;
+  weight: string;
 }
 
-const emptyPart = (): PartForm => ({
+const createEmptyPart = (defaultMin = '0', defaultMax = '10', defaultStep = '0.5'): PartForm => ({
   key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   partName: '',
   partDescription: '',
-  properties: '',
+  minScore: defaultMin,
+  maxScore: defaultMax,
+  step: defaultStep,
+  weight: '',
 });
 
 /* =========================================================
- * View
+ * View chính
  * ========================================================= */
 export const CertificateManagementView: React.FC = () => {
   const queryClient = useQueryClient();
@@ -91,6 +129,7 @@ export const CertificateManagementView: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<CertificateDto | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CertificateDto | null>(null);
 
   /* ---------- Query ---------- */
   const {
@@ -108,11 +147,13 @@ export const CertificateManagementView: React.FC = () => {
   /* ---------- Filter client-side ---------- */
   const normalizedKeyword = keyword.trim().toLowerCase();
   const visible = normalizedKeyword
-    ? certificates.filter(
-        (c) =>
+    ? certificates.filter((c) => {
+        const desc = getDisplayDescription(c).toLowerCase();
+        return (
           c.certificateName.toLowerCase().includes(normalizedKeyword) ||
-          (c.description ?? '').toLowerCase().includes(normalizedKeyword),
-      )
+          desc.includes(normalizedKeyword)
+        );
+      })
     : certificates;
 
   const totalParts = certificates.reduce(
@@ -126,11 +167,23 @@ export const CertificateManagementView: React.FC = () => {
   }).length;
 
   const hasFilter = Boolean(normalizedKeyword);
-
   const resetFilters = () => setKeyword('');
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.catalog.certificates });
+
+  /* ---------- Delete Mutation ---------- */
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteCertificate(id),
+    onSuccess: () => {
+      toast.success('Đã xoá chứng chỉ thành công');
+      setDeleteTarget(null);
+      invalidate();
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Xoá chứng chỉ thất bại');
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -147,7 +200,7 @@ export const CertificateManagementView: React.FC = () => {
         <StatCard
           title="Tổng kỹ năng"
           value={totalParts.toLocaleString('vi-VN')}
-          subtext="Tổng các phần"
+          subtext="Tổng các phần thi"
           icon={Layers3}
           colorScheme="emerald"
           trendPoints={[8, 10, 12, 14, 16, 18, 20, totalParts || 20]}
@@ -173,11 +226,12 @@ export const CertificateManagementView: React.FC = () => {
       {/* ============ 2. TITLE BAR ============ */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <Award className="w-7 h-7 text-[#0052CC]" />
             Quản lý chứng chỉ
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Danh mục chứng chỉ và các kỹ năng (IELTS, TOEIC, VSTEP…).
+            Danh mục chứng chỉ tiếng Anh với thang điểm Core chuẩn (VSTEP.3–5, IELTS, TOEIC L&amp;R, TOEIC S&amp;W...).
           </p>
         </div>
 
@@ -237,7 +291,7 @@ export const CertificateManagementView: React.FC = () => {
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="Tìm theo tên hoặc mô tả chứng chỉ…"
+              placeholder="Tìm theo tên hoặc mô tả chứng chỉ (IELTS, VSTEP, TOEIC…)…"
               className="bg-transparent outline-none w-full text-slate-700 text-sm placeholder:text-slate-400"
               aria-label="Tìm chứng chỉ"
             />
@@ -271,7 +325,7 @@ export const CertificateManagementView: React.FC = () => {
       ) : certificates.length === 0 ? (
         <EmptyState
           title="Chưa có chứng chỉ nào"
-          description="Tạo chứng chỉ đầu tiên (IELTS, TOEIC, VSTEP…) để gắn vào khóa học."
+          description="Tạo chứng chỉ đầu tiên (VSTEP, IELTS, TOEIC…) với Core điểm chuẩn để gắn vào khóa học."
           actionLabel="Tạo chứng chỉ"
           onAction={() => {
             setEditing(null);
@@ -293,6 +347,7 @@ export const CertificateManagementView: React.FC = () => {
             setEditing(c);
             setIsFormOpen(true);
           }}
+          onDelete={(c) => setDeleteTarget(c)}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -305,6 +360,7 @@ export const CertificateManagementView: React.FC = () => {
                 setEditing(x);
                 setIsFormOpen(true);
               }}
+              onDelete={(x) => setDeleteTarget(x)}
             />
           ))}
         </div>
@@ -318,7 +374,7 @@ export const CertificateManagementView: React.FC = () => {
         onSaved={() => {
           invalidate();
           toast.success(
-            editing ? 'Đã cập nhật chứng chỉ' : 'Đã tạo chứng chỉ mới',
+            editing ? 'Đã cập nhật chứng chỉ' : 'Đã tạo chứng chỉ mới thành công',
           );
         }}
       />
@@ -326,6 +382,24 @@ export const CertificateManagementView: React.FC = () => {
       <CertificateDetailModal
         certificateId={detailId}
         onClose={() => setDetailId(null)}
+        onSaved={() => invalidate()}
+      />
+
+      {/* ============ CONFIRM DELETE DIALOG ============ */}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xoá chứng chỉ"
+        description={`Bạn có chắc chắn muốn xoá chứng chỉ "${deleteTarget?.certificateName}"? Hành động này sẽ xoá toàn bộ kỹ năng thành phần liên kết.`}
+        confirmLabel="Xác nhận xoá"
+        cancelLabel="Huỷ"
+        variant="danger"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate(deleteTarget.certificateId);
+          }
+        }}
+        onClose={() => setDeleteTarget(null)}
       />
     </div>
   );
@@ -338,68 +412,116 @@ const CertificateTable: React.FC<{
   certificates: CertificateDto[];
   onView: (c: CertificateDto) => void;
   onEdit: (c: CertificateDto) => void;
-}> = ({ certificates, onView, onEdit }) => (
+  onDelete: (c: CertificateDto) => void;
+}> = ({ certificates, onView, onEdit, onDelete }) => (
   <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr className="bg-slate-50/70 border-b border-slate-200/80 text-slate-500 font-extrabold text-[10px] uppercase tracking-wider text-left">
             <th className="py-3.5 px-4 font-bold">Chứng chỉ</th>
+            <th className="py-3.5 px-3 font-bold">Thang điểm Core</th>
+            <th className="py-3.5 px-3 font-bold">Hình thức tính</th>
             <th className="py-3.5 px-3 font-bold">Kỹ năng</th>
             <th className="py-3.5 px-3 font-bold">Ngày tạo</th>
-            <th className="py-3.5 px-3 font-bold">Cập nhật</th>
             <th className="py-3.5 px-4 font-bold text-right">Thao tác</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {certificates.map((c) => (
-            <tr
-              key={c.certificateId}
-              className="hover:bg-slate-50/60 transition-colors"
-            >
-              <td className="py-3 px-4 max-w-[320px]">
-                <span className="font-bold text-slate-900 block truncate">
-                  {c.certificateName}
-                </span>
-                <span className="text-[10px] text-slate-400 block truncate">
-                  {c.description ?? 'Chưa có mô tả'}
-                </span>
-              </td>
-              <td className="py-3 px-3">
-                <Badge variant="primary" size="sm" icon={Layers3}>
-                  {c.partCount ?? 0} phần
-                </Badge>
-              </td>
-              <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                {c.createdAt ? formatDate(c.createdAt) : '—'}
-              </td>
-              <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                {c.lastUpdated ? formatDate(c.lastUpdated) : '—'}
-              </td>
-              <td className="py-3 px-4">
-                <div className="flex items-center justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onView(c)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
-                    title="Xem chi tiết"
-                    aria-label="Xem chi tiết"
+          {certificates.map((c) => {
+            const scoring = getCertificateScoring(c);
+            const displayDesc = getDisplayDescription(c);
+            const isAverage = scoring.scaleType === 'AVERAGE';
+            const isIndependent = scoring.scaleType === 'INDEPENDENT';
+            const hasParts = (c.partCount ?? 0) > 0;
+
+            return (
+              <tr
+                key={c.certificateId}
+                className="hover:bg-slate-50/60 transition-colors"
+              >
+                <td className="py-3 px-4 max-w-[280px]">
+                  <span className="font-bold text-slate-900 block truncate">
+                    {c.certificateName}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block truncate">
+                    {displayDesc || 'Chưa có mô tả'}
+                  </span>
+                </td>
+                <td className="py-3 px-3">
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border',
+                      isAverage
+                        ? 'bg-blue-50/80 text-blue-700 border-blue-200/80'
+                        : isIndependent
+                          ? 'bg-purple-50/80 text-purple-700 border-purple-200/80'
+                          : 'bg-emerald-50/80 text-emerald-700 border-emerald-200/80',
+                    )}
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onEdit(c)}
-                    className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                    title="Sửa chứng chỉ"
-                    aria-label="Sửa chứng chỉ"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                    <Gauge className="w-3.5 h-3.5 shrink-0" />
+                    {scoring.minScore} - {scoring.maxScore} {scoring.unit}
+                  </span>
+                </td>
+                <td className="py-3 px-3">
+                  <span className="text-[11px] font-semibold text-slate-600">
+                    {isAverage
+                      ? scoring.roundingRule === 'IELTS'
+                        ? 'TB cộng (Làm tròn IELTS)'
+                        : 'TB cộng (Làm tròn 0.5)'
+                      : isIndependent
+                        ? 'Từng phần độc lập (Không cộng)'
+                        : 'Tổng điểm các phần'}
+                  </span>
+                </td>
+                <td className="py-3 px-3">
+                  {hasParts ? (
+                    <Badge variant="primary" size="sm" icon={Layers3}>
+                      {c.partCount} phần
+                    </Badge>
+                  ) : (
+                    <Badge variant="warning" size="sm" icon={Layers3}>
+                      0 phần (Bấm xem để nạp)
+                    </Badge>
+                  )}
+                </td>
+                <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                  {c.createdAt ? formatDate(c.createdAt) : '—'}
+                </td>
+                <td className="py-3 px-4">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onView(c)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
+                      title="Xem chi tiết"
+                      aria-label="Xem chi tiết"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onEdit(c)}
+                      className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                      title="Sửa chứng chỉ"
+                      aria-label="Sửa chứng chỉ"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(c)}
+                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                      title="Xoá chứng chỉ"
+                      aria-label="Xoá chứng chỉ"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -413,72 +535,92 @@ const CertificateCard: React.FC<{
   certificate: CertificateDto;
   onView: (c: CertificateDto) => void;
   onEdit: (c: CertificateDto) => void;
-}> = ({ certificate, onView, onEdit }) => (
-  <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col group">
-    <div className="relative h-24 bg-gradient-to-r from-[#0052CC] to-indigo-700 p-4 flex items-start justify-between text-white">
-      <div className="min-w-0">
-        <span className="inline-block px-2.5 py-0.5 rounded-md bg-white/20 backdrop-blur-md font-extrabold text-[10px] uppercase tracking-wider">
-          Certificate
-        </span>
-        <p className="text-[11px] opacity-80 mt-1 font-mono truncate">
-          {certificate.certificateId.slice(0, 8)}
-        </p>
-      </div>
-      <Badge variant="success" size="sm">
-        {certificate.partCount ?? 0} phần
-      </Badge>
-    </div>
+  onDelete: (c: CertificateDto) => void;
+}> = ({ certificate, onView, onEdit, onDelete }) => {
+  const scoring = getCertificateScoring(certificate);
+  const displayDesc = getDisplayDescription(certificate);
+  const hasParts = (certificate.partCount ?? 0) > 0;
 
-    <div className="p-5 flex-1 flex flex-col justify-between gap-4">
-      <div>
-        <h3 className="font-extrabold text-base text-slate-900 group-hover:text-[#0052CC] transition-colors leading-snug line-clamp-2">
-          {certificate.certificateName}
-        </h3>
-        <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">
-          {certificate.description ?? 'Chưa có mô tả'}
-        </p>
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col group">
+      <div className="relative h-24 bg-gradient-to-r from-[#0052CC] via-indigo-600 to-indigo-700 p-4 flex items-start justify-between text-white">
+        <div className="min-w-0">
+          <span className="inline-block px-2.5 py-0.5 rounded-md bg-white/20 backdrop-blur-md font-extrabold text-[10px] uppercase tracking-wider">
+            Certificate
+          </span>
+          <p className="text-[11px] opacity-80 mt-1 font-mono truncate">
+            {certificate.certificateId.slice(0, 8)}
+          </p>
+        </div>
+        <Badge variant={hasParts ? 'success' : 'warning'} size="sm">
+          {hasParts ? `${certificate.partCount} phần` : '0 phần (Cần nạp)'}
+        </Badge>
       </div>
 
-      <div className="flex flex-wrap gap-2 text-[10px] font-bold">
-        <span className="inline-flex items-center gap-1 h-5 px-2 rounded-md bg-slate-100 text-slate-600">
-          <CalendarClock className="w-3 h-3" />
-          {certificate.createdAt
-            ? formatDate(certificate.createdAt)
-            : 'Chưa có ngày tạo'}
-        </span>
-      </div>
+      <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+        <div>
+          <h3 className="font-extrabold text-base text-slate-900 group-hover:text-[#0052CC] transition-colors leading-snug line-clamp-2">
+            {certificate.certificateName}
+          </h3>
+          <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">
+            {displayDesc || 'Chưa có mô tả'}
+          </p>
+        </div>
 
-      <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-        <span className="text-[10px] uppercase font-bold text-slate-400">
-          Cập nhật
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onView(certificate)}
-            className="p-2 rounded-xl text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
-            title="Xem chi tiết"
-            aria-label="Xem chi tiết"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onEdit(certificate)}
-            className="p-2 rounded-xl text-blue-600 hover:bg-blue-50 transition-colors"
-            title="Sửa chứng chỉ"
-            aria-label="Sửa chứng chỉ"
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
+        <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-lg bg-blue-50 text-[#0052CC] border border-blue-200/70">
+            <Gauge className="w-3.5 h-3.5" />
+            {formatScoringSummary(scoring)}
+          </span>
+          <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-lg bg-slate-100 text-slate-600">
+            <CalendarClock className="w-3.5 h-3.5" />
+            {certificate.createdAt
+              ? formatDate(certificate.createdAt)
+              : 'Chưa có ngày tạo'}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+          <span className="text-[10px] uppercase font-bold text-slate-400">
+            Thao tác
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onView(certificate)}
+              className="p-2 rounded-xl text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
+              title="Xem chi tiết"
+              aria-label="Xem chi tiết"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onEdit(certificate)}
+              className="p-2 rounded-xl text-blue-600 hover:bg-blue-50 transition-colors"
+              title="Sửa chứng chỉ"
+              aria-label="Sửa chứng chỉ"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(certificate)}
+              className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors"
+              title="Xoá chứng chỉ"
+              aria-label="Xoá chứng chỉ"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 /* =========================================================
- * Modal: Create / Edit certificate
+ * Modal: Create / Edit certificate with Core Scoring & Skills
  * ========================================================= */
 const CertificateFormModal: React.FC<{
   open: boolean;
@@ -490,10 +632,21 @@ const CertificateFormModal: React.FC<{
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedPresetId, setSelectedPresetId] = useState<CertificatePresetId>('VSTEP');
+  const [scoring, setScoring] = useState<CertificateScoringSystem>(
+    CERTIFICATE_PRESETS[0].scoringSystem,
+  );
   const [parts, setParts] = useState<PartForm[]>([]);
+  const [showBenchmarkGuide, setShowBenchmarkGuide] = useState(true);
   const [touched, setTouched] = useState(false);
 
-  // Nạp dữ liệu chứng chỉ đang sửa (1 lần cho mỗi lần mở)
+  // Lấy preset đang chọn
+  const activePreset = useMemo(
+    () => CERTIFICATE_PRESETS.find((p) => p.id === selectedPresetId) ?? CERTIFICATE_PRESETS[0],
+    [selectedPresetId],
+  );
+
+  // Nạp dữ liệu khi mở modal
   const loadedFor = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!open) {
@@ -504,10 +657,124 @@ const CertificateFormModal: React.FC<{
     if (loadedFor.current === id) return;
     loadedFor.current = id;
     setTouched(false);
-    setName(editing?.certificateName ?? '');
-    setDescription(editing?.description ?? '');
-    setParts([]);
+
+    if (editing) {
+      setName(editing.certificateName ?? '');
+      const meta = parseCertificateMeta(editing.description);
+      setDescription(meta.description);
+      const certScoring = getCertificateScoring(editing);
+      setScoring(certScoring);
+      setSelectedPresetId(certScoring.preset ?? 'CUSTOM');
+
+      // Nếu chứng chỉ đang sửa đã có parts thì nạp parts
+      if (editing.parts && editing.parts.length > 0) {
+        setParts(
+          editing.parts.map((p) => {
+            const info = getPartScoreInfo(p.properties);
+            return {
+              key: p.partId || `${Date.now()}-${Math.random()}`,
+              partName: p.partName,
+              partDescription: p.partDescription ?? '',
+              minScore: String(info.minScore ?? certScoring.minScore),
+              maxScore: String(info.maxScore ?? certScoring.maxScore),
+              step: String(info.step ?? certScoring.step),
+              weight: info.weight ? String(info.weight) : '',
+            };
+          }),
+        );
+      } else {
+        // Nếu chứng chỉ chưa có parts trong DB, tự động nạp từ preset mẫu
+        const matched = CERTIFICATE_PRESETS.find(
+          (p) => p.id === certScoring.preset || editing.certificateName.toUpperCase().includes(p.id),
+        ) ?? CERTIFICATE_PRESETS[0];
+
+        if (matched.defaultParts.length > 0) {
+          setParts(
+            matched.defaultParts.map((p) => ({
+              key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              partName: p.partName,
+              partDescription: p.partDescription,
+              minScore: String(p.minScore),
+              maxScore: String(p.maxScore),
+              step: String(p.step ?? matched.scoringSystem.step),
+              weight: p.weight ? String(p.weight) : '',
+            })),
+          );
+        } else {
+          setParts([
+            createEmptyPart(
+              String(certScoring.minScore),
+              String(certScoring.maxScore),
+              String(certScoring.step),
+            ),
+          ]);
+        }
+      }
+    } else {
+      // Mặc định chọn VSTEP khi tạo mới
+      const defaultPreset = CERTIFICATE_PRESETS[0];
+      setSelectedPresetId('VSTEP');
+      setName(defaultPreset.defaultName);
+      setDescription(defaultPreset.description);
+      setScoring({ ...defaultPreset.scoringSystem });
+      setParts(
+        defaultPreset.defaultParts.map((p) => ({
+          key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          partName: p.partName,
+          partDescription: p.partDescription,
+          minScore: String(p.minScore),
+          maxScore: String(p.maxScore),
+          step: String(p.step ?? defaultPreset.scoringSystem.step),
+          weight: p.weight ? String(p.weight) : '',
+        })),
+      );
+    }
   }, [open, editing]);
+
+  const handleSelectPreset = (presetId: CertificatePresetId) => {
+    const preset = CERTIFICATE_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+
+    setSelectedPresetId(presetId);
+    setScoring({ ...preset.scoringSystem });
+
+    // Chỉ tự điền tên/mô tả nếu tên rỗng hoặc là tên của một preset cũ
+    const isDefaultOrEmptyName =
+      !name.trim() || CERTIFICATE_PRESETS.some((p) => p.defaultName === name.trim());
+    if (isDefaultOrEmptyName && preset.defaultName) {
+      setName(preset.defaultName);
+    }
+
+    const isDefaultOrEmptyDesc =
+      !description.trim() ||
+      CERTIFICATE_PRESETS.some((p) => p.description === description.trim());
+    if (isDefaultOrEmptyDesc && preset.description) {
+      setDescription(preset.description);
+    }
+
+    // Tự động điền các kỹ năng chuẩn của preset
+    if (preset.defaultParts.length > 0) {
+      setParts(
+        preset.defaultParts.map((p) => ({
+          key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          partName: p.partName,
+          partDescription: p.partDescription,
+          minScore: String(p.minScore),
+          maxScore: String(p.maxScore),
+          step: String(p.step ?? preset.scoringSystem.step),
+          weight: p.weight ? String(p.weight) : '',
+        })),
+      );
+    } else if (parts.length === 0) {
+      setParts([
+        createEmptyPart(
+          String(preset.scoringSystem.minScore),
+          String(preset.scoringSystem.maxScore),
+          String(preset.scoringSystem.step),
+        ),
+      ]);
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: (payload: CreateCertificatePayload) => createCertificate(payload),
@@ -516,7 +783,7 @@ const CertificateFormModal: React.FC<{
       onClose();
     },
     onError: (err) =>
-      toast.error(err instanceof Error ? err.message : 'Tạo thất bại'),
+      toast.error(err instanceof Error ? err.message : 'Tạo chứng chỉ thất bại'),
   });
 
   const updateMutation = useMutation({
@@ -535,40 +802,81 @@ const CertificateFormModal: React.FC<{
       toast.error(err instanceof Error ? err.message : 'Cập nhật thất bại'),
   });
 
-  /* ---------- Validate ---------- */
+  /* ---------- Validation ---------- */
   const nameError = !name.trim()
     ? 'Tên chứng chỉ là bắt buộc'
     : name.trim().length > 255
       ? 'Tối đa 255 ký tự'
       : '';
 
-  const partErrors = parts.map((p) => {
-    if (!p.partName.trim()) return 'Tên phần là bắt buộc';
+  const scoringScaleError =
+    scoring.maxScore <= scoring.minScore
+      ? 'Điểm tối đa phải lớn hơn điểm tối thiểu'
+      : scoring.maxScore <= 0
+        ? 'Điểm tối đa phải là số dương'
+        : '';
+
+  // Validate toàn bộ kỹ năng so với thang điểm core của chứng chỉ
+  const skillValidation = validateSkillScores(scoring, parts);
+
+  const partNameErrors = parts.map((p) => {
+    if (!p.partName.trim()) return 'Tên kỹ năng là bắt buộc';
     if (p.partName.trim().length > 255) return 'Tối đa 255 ký tự';
-    if (p.properties.trim()) {
-      try {
-        JSON.parse(p.properties);
-      } catch {
-        return 'Properties phải là JSON hợp lệ';
-      }
-    }
     return '';
   });
 
-  const hasError = Boolean(nameError) || partErrors.some(Boolean);
+  const partsEmptyError =
+    parts.length === 0 ? 'Cần thêm ít nhất một kỹ năng cho chứng chỉ' : '';
+
+  const hasFormError =
+    Boolean(nameError) ||
+    Boolean(scoringScaleError) ||
+    Boolean(partsEmptyError) ||
+    partNameErrors.some(Boolean) ||
+    !skillValidation.isValid;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setTouched(true);
-    if (hasError) return;
+    if (hasFormError) {
+      toast.error('Vui lòng kiểm tra lại thông tin thang điểm và kỹ năng');
+      return;
+    }
+
+    const serializedDesc = serializeCertificateDescription(description, {
+      ...scoring,
+      preset: selectedPresetId,
+    });
+
+    const mappedParts = parts.map((p) => {
+      const minVal = parseFloat(p.minScore) || scoring.minScore;
+      const maxVal = parseFloat(p.maxScore) || scoring.maxScore;
+      const stepVal = parseFloat(p.step) || scoring.step;
+      const weightVal = p.weight ? parseFloat(p.weight) : undefined;
+
+      const propertiesObj = {
+        minScore: minVal,
+        maxScore: maxVal,
+        step: stepVal,
+        weight: weightVal,
+        scaleType: scoring.scaleType,
+        unit: scoring.unit,
+      };
+
+      return {
+        partName: p.partName.trim(),
+        partDescription: p.partDescription.trim() || undefined,
+        properties: JSON.stringify(propertiesObj),
+      };
+    });
 
     if (editing) {
-      // UpdateCertificateRequest chỉ có certificateName + description
       updateMutation.mutate({
         id: editing.certificateId,
         payload: {
           certificateName: name.trim(),
-          description: description.trim() || undefined,
+          description: serializedDesc,
+          parts: mappedParts,
         },
       });
       return;
@@ -576,124 +884,566 @@ const CertificateFormModal: React.FC<{
 
     const payload: CreateCertificatePayload = {
       certificateName: name.trim(),
-      description: description.trim() || undefined,
-      parts: parts
-        .filter((p) => p.partName.trim())
-        .map((p) => ({
-          partName: p.partName.trim(),
-          partDescription: p.partDescription.trim() || undefined,
-          properties: p.properties.trim() || undefined,
-        })),
+      description: serializedDesc,
+      parts: mappedParts,
     };
+
     createMutation.mutate(payload);
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const isSumMode = scoring.scaleType === 'SUM';
+  const isAverageMode = scoring.scaleType === 'AVERAGE';
+  const isIndependentMode = scoring.scaleType === 'INDEPENDENT';
 
   if (!open) return null;
 
   return (
-    <ModalShell onClose={onClose} maxWidth="max-w-2xl">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+    <ModalShell onClose={onClose} maxWidth="max-w-3xl">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
-          <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl">
+          <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl shadow-2xs">
             <Award className="w-5 h-5" />
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-900">
-              {editing ? 'Cập nhật chứng chỉ' : 'Tạo chứng chỉ mới'}
+              {editing ? 'Cập nhật chứng chỉ & Kỹ năng' : 'Tạo chứng chỉ mới'}
             </h3>
             <p className="text-xs text-slate-500">
               {editing
                 ? editing.certificateName
-                : 'Thiết lập thông tin chứng chỉ và các kỹ năng'}
+                : 'Thiết lập Core điểm chuẩn và cấu hình các kỹ năng thành phần'}
             </p>
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors"
           aria-label="Đóng"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-        <Field
-          label="Tên chứng chỉ"
-          required
-          error={touched ? nameError : ''}
-        >
-          <input
-            type="text"
+      <form onSubmit={handleSubmit} className="space-y-5 pt-3">
+        {/* ============ PRESET SELECTOR ============ */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              Mẫu Core điểm chuẩn chính thức
+            </label>
+            <span className="text-[11px] text-slate-400">
+              Bấm để nạp sẵn cấu hình chuẩn quốc tế &amp; Bộ GD&amp;ĐT
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {CERTIFICATE_PRESETS.map((preset) => {
+              const isActive = selectedPresetId === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleSelectPreset(preset.id)}
+                  className={cn(
+                    'p-2.5 rounded-xl border text-left transition-all text-xs flex flex-col justify-between gap-1.5',
+                    isActive
+                      ? 'bg-[#0052CC] border-[#0052CC] text-white shadow-xs font-bold'
+                      : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/40 font-medium',
+                  )}
+                >
+                  <div>
+                    <span
+                      className={cn(
+                        'text-[9px] uppercase tracking-wider block font-black',
+                        isActive ? 'text-blue-200' : 'text-[#0052CC]',
+                      )}
+                    >
+                      {preset.category}
+                    </span>
+                    <span className="font-bold text-xs truncate block mt-0.5">
+                      {preset.label}
+                    </span>
+                  </div>
+                  <span
+                    className={cn(
+                      'text-[10px] line-clamp-1',
+                      isActive ? 'text-blue-100' : 'text-slate-400',
+                    )}
+                  >
+                    {preset.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ============ THÔNG TIN CHỨNG CHỈ ============ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field
+            label="Tên chứng chỉ"
             required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="VD: IELTS, TOEIC, VSTEP"
-            className={inputCls(Boolean(touched && nameError))}
-          />
-        </Field>
+            error={touched ? nameError : ''}
+          >
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="VD: VSTEP.3–5, IELTS Academic, TOEIC Listening & Reading"
+              className={inputCls(Boolean(touched && nameError))}
+            />
+          </Field>
 
-        <Field label="Mô tả">
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Mô tả ngắn về chứng chỉ…"
-            className={cn(inputCls(false), 'h-auto py-2 resize-none')}
-          />
-        </Field>
+          <Field label="Mô tả chứng chỉ">
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Mô tả tóm tắt về chứng chỉ…"
+              className={inputCls(false)}
+            />
+          </Field>
+        </div>
 
-        {/* ---------- Kỹ năng (chỉ khi tạo mới) ---------- */}
-        {!editing && (
-          <div className="pt-1">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Kỹ năng / phần của chứng chỉ
-              </p>
-              <button
-                type="button"
-                onClick={() => setParts((p) => [...p, emptyPart()])}
-                className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-slate-200 text-[11px] font-bold text-[#0052CC] hover:bg-blue-50 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Thêm kỹ năng
-              </button>
+        {/* ============ CORE ĐIỂM CHỨNG CHỈ (SCORING SCALE) ============ */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/70 via-slate-50 to-indigo-50/50 border border-blue-100/80 space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-blue-100/80 text-[#0052CC]">
+                <Gauge className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                  Thang điểm Core của chứng chỉ
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Quy định khung điểm tổng thể và phương thức tính toán cho toàn bộ chứng chỉ.
+                </p>
+              </div>
             </div>
 
-            {parts.length === 0 ? (
-              <p className="text-[11px] text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-xl py-4 text-center">
-                Chưa có kỹ năng nào. Bấm “Thêm kỹ năng” để tạo (VD: Listening,
-                Reading, Writing, Speaking).
+            <Badge
+              variant={isAverageMode ? 'primary' : isIndependentMode ? 'warning' : 'success'}
+              size="sm"
+              icon={Calculator}
+            >
+              {isAverageMode
+                ? scoring.roundingRule === 'IELTS'
+                  ? 'TB (Làm tròn IELTS)'
+                  : 'TB (Làm tròn 0.5)'
+                : isIndependentMode
+                  ? 'Độc lập (Không cộng)'
+                  : 'Tổng điểm các phần'}
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            {/* Hình thức tính điểm */}
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                Phương thức tính điểm <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={scoring.scaleType}
+                onChange={(e) => {
+                  const newType = e.target.value as 'AVERAGE' | 'SUM' | 'INDEPENDENT';
+                  setScoring((prev) => ({ ...prev, scaleType: newType }));
+                  setSelectedPresetId('CUSTOM');
+                }}
+                className={cn(inputCls(false), 'bg-white cursor-pointer')}
+              >
+                <option value="AVERAGE">
+                  Trung bình cộng các kỹ năng (Ví dụ: VSTEP.3–5, IELTS)
+                </option>
+                <option value="SUM">
+                  Tổng điểm các kỹ năng (Ví dụ: TOEIC L&amp;R, TOEFL iBT)
+                </option>
+                <option value="INDEPENDENT">
+                  Từng kỹ năng độc lập, không cộng tổng (Ví dụ: TOEIC S&amp;W)
+                </option>
+              </select>
+            </div>
+
+            {/* Đơn vị tính */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                Đơn vị điểm <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={scoring.unit}
+                onChange={(e) => {
+                  setScoring((prev) => ({ ...prev, unit: e.target.value }));
+                  setSelectedPresetId('CUSTOM');
+                }}
+                placeholder="VD: Band, Điểm, %"
+                className={inputCls(false)}
+              />
+            </div>
+
+            {/* Bước nhảy */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                Bước nhảy (Step)
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0.01"
+                value={scoring.step}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0.5;
+                  setScoring((prev) => ({ ...prev, step: val }));
+                  setSelectedPresetId('CUSTOM');
+                }}
+                className={inputCls(false)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* Điểm tối thiểu */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                Điểm tối thiểu chứng chỉ
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={scoring.minScore}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  setScoring((prev) => ({ ...prev, minScore: val }));
+                  setSelectedPresetId('CUSTOM');
+                }}
+                className={inputCls(false)}
+              />
+            </div>
+
+            {/* Điểm tối đa (Thang điểm) */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                Điểm tối đa chứng chỉ (Thang điểm) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="1"
+                value={scoring.maxScore}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 10;
+                  setScoring((prev) => ({ ...prev, maxScore: val }));
+                  setSelectedPresetId('CUSTOM');
+                }}
+                className={inputCls(Boolean(touched && scoringScaleError))}
+              />
+              {touched && scoringScaleError && (
+                <p className="text-[11px] text-rose-500 mt-1">{scoringScaleError}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Giải thích quy tắc tính điểm chuẩn */}
+          <div className="p-3 rounded-xl bg-white/90 border border-blue-200/70 text-slate-600 text-[11px] space-y-1.5">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#0052CC] shrink-0 mt-0.5" />
+              <div>
+                {isAverageMode ? (
+                  <span>
+                    <strong>Quy tắc Trung bình cộng:</strong> Thang điểm từ{' '}
+                    <span className="font-bold text-[#0052CC]">{scoring.minScore}</span> đến{' '}
+                    <span className="font-bold text-[#0052CC]">
+                      {scoring.maxScore} {scoring.unit}
+                    </span>
+                    .{' '}
+                    {scoring.roundingRule === 'VSTEP'
+                      ? 'Làm tròn theo quy định Bộ GD&ĐT (đến 0.5 điểm gần nhất: <.25 về .0, [.25, .75) thành .5, >=.75 lên 1.0). Xác định bậc dựa trên điểm TB 4 kỹ năng.'
+                      : scoring.roundingRule === 'IELTS'
+                        ? 'Làm tròn theo quy định chính thức IELTS (<.25 xuống số nguyên, [.25, .75) thành .5, >=.75 lên số nguyên tiếp theo).'
+                        : 'Mỗi kỹ năng thành phần bắt buộc phải có thang điểm tối đa bằng thang điểm chứng chỉ.'}
+                  </span>
+                ) : isSumMode ? (
+                  <span>
+                    <strong>Quy tắc Tổng điểm:</strong> Thang điểm từ{' '}
+                    <span className="font-bold text-emerald-700">{scoring.minScore}</span> đến{' '}
+                    <span className="font-bold text-emerald-700">
+                      {scoring.maxScore} {scoring.unit}
+                    </span>
+                    . <strong>Tổng điểm tối đa của tất cả các kỹ năng</strong> phải bằng đúng{' '}
+                    <span className="font-bold text-emerald-700">
+                      {scoring.maxScore} {scoring.unit}
+                    </span>
+                    .
+                  </span>
+                ) : (
+                  <span>
+                    <strong>Quy tắc Độc lập (Không cộng tổng):</strong> Mỗi kỹ năng được đánh giá
+                    độc lập từ{' '}
+                    <span className="font-bold text-purple-700">{scoring.minScore}</span> đến{' '}
+                    <span className="font-bold text-purple-700">
+                      {scoring.maxScore} {scoring.unit}
+                    </span>
+                    . <strong>Không cộng điểm các kỹ năng để tạo thành điểm tổng</strong>.
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Collapsible: Quy tắc chính thức & Bảng tham chiếu năng lực CEFR */}
+          {activePreset.benchmarks.length > 0 && (
+            <div className="border border-blue-200/60 rounded-xl overflow-hidden bg-white/60">
+              <button
+                type="button"
+                onClick={() => setShowBenchmarkGuide((prev) => !prev)}
+                className="w-full px-3 py-2 text-left text-xs font-bold text-slate-700 flex items-center justify-between hover:bg-blue-50/50 transition-colors"
+              >
+                <span className="flex items-center gap-1.5 text-[#0052CC]">
+                  <Info className="w-3.5 h-3.5" />
+                  Bảng tham chiếu mức năng lực &amp; Quy định chính thức ({activePreset.label})
+                </span>
+                {showBenchmarkGuide ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
+
+              {showBenchmarkGuide && (
+                <div className="p-3 border-t border-blue-100 space-y-3 text-xs">
+                  {/* Bảng mốc năng lực */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px]">
+                      <thead>
+                        <tr className="bg-slate-100/80 text-slate-600 text-left font-bold border-b border-slate-200">
+                          <th className="py-1.5 px-2.5">Mốc điểm</th>
+                          <th className="py-1.5 px-2.5">Quy chiếu / CEFR</th>
+                          <th className="py-1.5 px-2.5">Mô tả năng lực theo chuẩn</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {activePreset.benchmarks.map((bm, i) => (
+                          <tr key={i} className="hover:bg-blue-50/30">
+                            <td className="py-1.5 px-2.5 font-bold font-mono text-slate-800">
+                              {bm.scoreRange}
+                            </td>
+                            <td className="py-1.5 px-2.5">
+                              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#0052CC] font-bold text-[10px]">
+                                {bm.cefr}
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-2.5 text-slate-600">
+                              <span className="font-semibold text-slate-800">{bm.label}</span>
+                              {bm.note && <span className="text-slate-500"> — {bm.note}</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Danh sách quy tắc chính thức */}
+                  {activePreset.officialRules.length > 0 && (
+                    <div className="pt-2 border-t border-slate-100 space-y-1">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Lưu ý chính thức từ cơ quan chủ quản / đơn vị khảo thí:
+                      </p>
+                      <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-600">
+                        {activePreset.officialRules.map((rule, idx) => (
+                          <li key={idx}>{rule}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ============ CẤU HÌNH KỸ NĂNG (PARTS) ============ */}
+        <div className="pt-2 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers3 className="w-4 h-4 text-[#0052CC]" />
+                Kỹ năng thành phần ({parts.length})
               </p>
-            ) : (
-              <ul className="space-y-2.5">
-                {parts.map((part, idx) => (
+              <p className="text-[11px] text-slate-400">
+                Thiết lập từng kỹ năng và điểm số tương ứng với core điểm chứng chỉ.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setParts((prev) => [
+                  ...prev,
+                  createEmptyPart(
+                    String(scoring.minScore),
+                    isAverageMode || isIndependentMode
+                      ? String(scoring.maxScore)
+                      : parts.length > 0
+                        ? String(Math.max(0, scoring.maxScore - skillValidation.currentTotal))
+                        : String(scoring.maxScore),
+                    String(scoring.step),
+                  ),
+                ])
+              }
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 text-xs font-bold text-[#0052CC] bg-blue-50/50 hover:bg-blue-100/60 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Thêm kỹ năng
+            </button>
+          </div>
+
+          {/* Thanh đối soát tổng điểm (Nếu là SUM mode) */}
+          {isSumMode && parts.length > 0 && (
+            <div
+              className={cn(
+                'p-3 rounded-xl border transition-colors flex flex-col gap-1.5',
+                skillValidation.isValid
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                  : 'bg-amber-50/70 border-amber-200 text-amber-900',
+              )}
+            >
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="flex items-center gap-1.5">
+                  {skillValidation.isValid ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  )}
+                  Tổng điểm kỹ năng hiện tại:
+                </span>
+                <span className="font-mono text-sm">
+                  {skillValidation.currentTotal} / {scoring.maxScore} {scoring.unit}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-slate-200/80 rounded-full h-2 overflow-hidden">
+                <div
+                  className={cn(
+                    'h-full transition-all duration-300',
+                    skillValidation.isValid
+                      ? 'bg-emerald-500'
+                      : skillValidation.currentTotal > scoring.maxScore
+                        ? 'bg-rose-500'
+                        : 'bg-amber-500',
+                  )}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      (skillValidation.currentTotal / (scoring.maxScore || 1)) * 100,
+                    )}%`,
+                  }}
+                />
+              </div>
+
+              {/* Ghi chú tình trạng */}
+              <div className="flex items-center justify-between text-[11px]">
+                <span>
+                  {skillValidation.isValid ? (
+                    <span className="text-emerald-700 font-semibold">
+                      ✓ Tổng điểm các kỹ năng đã khớp chính xác với core điểm chứng chỉ ({scoring.maxScore} {scoring.unit}).
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 font-medium">
+                      {skillValidation.globalError}
+                    </span>
+                  )}
+                </span>
+                <span className="font-bold shrink-0 ml-2">
+                  {((skillValidation.currentTotal / (scoring.maxScore || 1)) * 100).toFixed(0)}%
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Thông báo độc lập cho TOEIC S&W */}
+          {isIndependentMode && (
+            <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs flex items-start gap-2">
+              <Info className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Lưu ý:</strong> Điểm của Speaking và Writing hoàn toàn độc lập, thang 0–200 điểm/kỹ năng.
+                Hệ thống <strong>không cộng tổng điểm 2 kỹ năng này</strong> theo đúng quy định khảo thí của ETS.
+              </span>
+            </div>
+          )}
+
+          {/* Cảnh báo lỗi chung nếu có */}
+          {touched && skillValidation.globalError && !isSumMode && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{skillValidation.globalError}</span>
+            </div>
+          )}
+
+          {parts.length === 0 ? (
+            <div className="p-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 text-center space-y-2">
+              <Layers3 className="w-8 h-8 text-slate-300 mx-auto" />
+              <p className="text-xs text-slate-500 font-medium">
+                Chưa có kỹ năng nào cho chứng chỉ.
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Bấm &ldquo;Thêm kỹ năng&rdquo; hoặc chọn mẫu ở trên để nạp danh sách kỹ năng chuẩn.
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {parts.map((part, idx) => {
+                const partError = skillValidation.partErrors[idx];
+                const nameErr = partNameErrors[idx];
+                const maxVal = parseFloat(part.maxScore) || 0;
+                const ratio =
+                  isSumMode && scoring.maxScore > 0
+                    ? ((maxVal / scoring.maxScore) * 100).toFixed(0)
+                    : null;
+
+                return (
                   <li
                     key={part.key}
-                    className="p-3 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2.5"
+                    className={cn(
+                      'p-4 rounded-2xl border transition-all space-y-3',
+                      touched && (partError || nameErr)
+                        ? 'border-rose-300 bg-rose-50/30'
+                        : 'border-slate-200/90 bg-white shadow-2xs hover:border-slate-300',
+                    )}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-md bg-[#0052CC] text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                    {/* Dòng 1: STT, Tên kỹ năng, Nút xoá */}
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-7 h-7 rounded-lg bg-[#0052CC] text-white text-xs font-black flex items-center justify-center shrink-0">
                         {idx + 1}
                       </span>
-                      <input
-                        type="text"
-                        value={part.partName}
-                        onChange={(e) =>
-                          setParts((prev) =>
-                            prev.map((p) =>
-                              p.key === part.key
-                                ? { ...p, partName: e.target.value }
-                                : p,
-                            ),
-                          )
-                        }
-                        placeholder="Tên kỹ năng (VD: Listening)"
-                        className={inputCls(Boolean(touched && partErrors[idx]))}
-                      />
+
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          value={part.partName}
+                          onChange={(e) =>
+                            setParts((prev) =>
+                              prev.map((p) =>
+                                p.key === part.key
+                                  ? { ...p, partName: e.target.value }
+                                  : p,
+                              ),
+                            )
+                          }
+                          placeholder="Tên kỹ năng (VD: Listening, Reading, Writing, Speaking...)"
+                          className={cn(
+                            inputCls(Boolean(touched && nameErr)),
+                            'font-bold text-slate-900',
+                          )}
+                        />
+                      </div>
+
                       <button
                         type="button"
                         onClick={() =>
@@ -701,69 +1451,109 @@ const CertificateFormModal: React.FC<{
                             prev.filter((p) => p.key !== part.key),
                           )
                         }
-                        className="p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors shrink-0"
+                        className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
                         title="Xoá kỹ năng"
                         aria-label="Xoá kỹ năng"
                       >
-                        <X className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
 
-                    <input
-                      type="text"
-                      value={part.partDescription}
-                      onChange={(e) =>
-                        setParts((prev) =>
-                          prev.map((p) =>
-                            p.key === part.key
-                              ? { ...p, partDescription: e.target.value }
-                              : p,
-                          ),
-                        )
-                      }
-                      placeholder="Mô tả ngắn (không bắt buộc)"
-                      className={inputCls(false)}
-                    />
+                    {/* Dòng 2: Mô tả kỹ năng */}
+                    <div>
+                      <input
+                        type="text"
+                        value={part.partDescription}
+                        onChange={(e) =>
+                          setParts((prev) =>
+                            prev.map((p) =>
+                              p.key === part.key
+                                ? { ...p, partDescription: e.target.value }
+                                : p,
+                            ),
+                          )
+                        }
+                        placeholder="Mô tả kỹ năng (VD: 40 câu trắc nghiệm nghe hiểu, thời gian 45 phút...)"
+                        className={cn(inputCls(false), 'text-xs text-slate-600')}
+                      />
+                    </div>
 
-                    <textarea
-                      rows={2}
-                      value={part.properties}
-                      onChange={(e) =>
-                        setParts((prev) =>
-                          prev.map((p) =>
-                            p.key === part.key
-                              ? { ...p, properties: e.target.value }
-                              : p,
-                          ),
-                        )
-                      }
-                      placeholder='{"band": "7.0"} — JSON tuỳ chọn'
-                      className={cn(
-                        inputCls(Boolean(touched && partErrors[idx])),
-                        'h-auto py-2 resize-none font-mono text-[11px]',
-                      )}
-                    />
+                    {/* Dòng 3: Điểm Min, Điểm Max, Đóng góp */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Điểm tối thiểu
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={part.minScore}
+                          onChange={(e) =>
+                            setParts((prev) =>
+                              prev.map((p) =>
+                                p.key === part.key
+                                  ? { ...p, minScore: e.target.value }
+                                  : p,
+                              ),
+                            )
+                          }
+                          className={inputCls(false)}
+                        />
+                      </div>
 
-                    {touched && partErrors[idx] && (
-                      <p className="text-[11px] text-rose-500">
-                        {partErrors[idx]}
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Điểm tối đa kỹ năng <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={part.maxScore}
+                          onChange={(e) =>
+                            setParts((prev) =>
+                              prev.map((p) =>
+                                p.key === part.key
+                                  ? { ...p, maxScore: e.target.value }
+                                  : p,
+                              ),
+                            )
+                          }
+                          className={inputCls(Boolean(touched && partError))}
+                        />
+                      </div>
+
+                      <div className="flex flex-col justify-end">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          {isSumMode ? 'Chiếm tổng số' : 'Thang chuẩn'}
+                        </label>
+                        <div className="h-10 px-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+                          <span className="text-slate-500">
+                            {isSumMode ? 'Tỷ lệ:' : 'Chuẩn:'}
+                          </span>
+                          <span className="font-bold text-[#0052CC]">
+                            {isSumMode
+                              ? `${ratio}%`
+                              : `${part.maxScore || scoring.maxScore} ${scoring.unit}`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Thông báo lỗi nếu có */}
+                    {touched && (nameErr || partError) && (
+                      <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1.5 pt-0.5">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        {nameErr || partError}
                       </p>
                     )}
                   </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+                );
+              })}
+            </ul>
+          )}
+        </div>
 
-        {editing && (
-          <p className="text-[11px] text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-            Backend hiện chỉ hỗ trợ cập nhật <strong>tên</strong> và{' '}
-            <strong>mô tả</strong> của chứng chỉ. Muốn đổi danh sách kỹ năng,
-            hãy tạo chứng chỉ mới.
-          </p>
-        )}
-
+        {/* Footer actions */}
         <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
           <Button variant="secondary" size="sm" onClick={onClose}>
             Huỷ
@@ -773,7 +1563,7 @@ const CertificateFormModal: React.FC<{
             variant="primary"
             size="sm"
             isLoading={isPending}
-            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
+            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold shadow-xs"
           >
             {editing ? 'Lưu thay đổi' : 'Tạo chứng chỉ'}
           </Button>
@@ -784,32 +1574,137 @@ const CertificateFormModal: React.FC<{
 };
 
 /* =========================================================
- * Modal: Certificate detail (danh sách kỹ năng)
+ * Modal: Certificate detail (chi tiết Core điểm & kỹ năng chuẩn)
+ * KHÔNG CÒN PHẦN MÔ PHỎNG ĐIỂM
  * ========================================================= */
+interface EffectivePart {
+  id: string;
+  name: string;
+  description: string;
+  order: number;
+  minScore: number;
+  maxScore: number;
+  step: number;
+  unit: string;
+  isDefaultFallback: boolean;
+}
+
 const CertificateDetailModal: React.FC<{
   certificateId: string | null;
   onClose: () => void;
-}> = ({ certificateId, onClose }) => {
+  onSaved?: () => void;
+}> = ({ certificateId, onClose, onSaved }) => {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: QUERY_KEYS.catalog.certificate(certificateId ?? ''),
     queryFn: () => fetchCertificateById(certificateId!),
     enabled: Boolean(certificateId),
   });
 
-  if (!certificateId) return null;
-
   const parts = data?.parts ?? [];
+  const scoring = data ? getCertificateScoring(data) : null;
+  const displayDesc = data ? getDisplayDescription(data) : '';
+  const isAverage = scoring?.scaleType === 'AVERAGE';
+  const isIndependent = scoring?.scaleType === 'INDEPENDENT';
+  const certNameUpper = (data?.certificateName || '').toUpperCase();
+  const isIelts = scoring?.preset === 'IELTS' || certNameUpper.includes('IELTS');
+  const isVstep = scoring?.preset === 'VSTEP' || certNameUpper.includes('VSTEP');
+  const isToeicLr = scoring?.preset === 'TOEIC_LR' || (certNameUpper.includes('TOEIC') && !isIndependent);
+  const isToeicSw = scoring?.preset === 'TOEIC_SW' || isIndependent;
+
+  // Tìm preset tương ứng
+  const matchedPreset: CertificatePreset | undefined = useMemo(() => {
+    if (!scoring) return undefined;
+    if (isVstep) return CERTIFICATE_PRESETS.find((p) => p.id === 'VSTEP');
+    if (isIelts) return CERTIFICATE_PRESETS.find((p) => p.id === 'IELTS');
+    if (isToeicSw) return CERTIFICATE_PRESETS.find((p) => p.id === 'TOEIC_SW');
+    if (isToeicLr) return CERTIFICATE_PRESETS.find((p) => p.id === 'TOEIC_LR');
+    return CERTIFICATE_PRESETS.find((p) => p.id === scoring.preset);
+  }, [scoring, isVstep, isIelts, isToeicSw, isToeicLr]);
+
+  // Tính danh sách kỹ năng hiệu dụng (nếu DB chưa có thì lấy từ Preset chuẩn)
+  const effectiveParts = useMemo<EffectivePart[]>(() => {
+    if (parts.length > 0) {
+      return parts.map((p) => {
+        const info = getPartScoreInfo(p.properties);
+        return {
+          id: p.partId,
+          name: p.partName,
+          description: p.partDescription ?? '',
+          order: p.partOrder,
+          minScore: info.minScore ?? scoring?.minScore ?? 0,
+          maxScore: info.maxScore ?? scoring?.maxScore ?? 10,
+          step: info.step ?? scoring?.step ?? 0.5,
+          unit: info.unit ?? scoring?.unit ?? 'Điểm',
+          isDefaultFallback: false,
+        };
+      });
+    }
+
+    if (matchedPreset && matchedPreset.defaultParts.length > 0) {
+      return matchedPreset.defaultParts.map((dp, idx) => ({
+        id: `default-${idx}`,
+        name: dp.partName,
+        description: dp.partDescription,
+        order: idx + 1,
+        minScore: dp.minScore,
+        maxScore: dp.maxScore,
+        step: dp.step ?? matchedPreset.scoringSystem.step,
+        unit: matchedPreset.scoringSystem.unit,
+        isDefaultFallback: true,
+      }));
+    }
+
+    return [];
+  }, [parts, matchedPreset, scoring]);
+
+  // Mutation nạp nhanh kỹ năng chuẩn vào CSDL khi chứng chỉ chưa có kỹ năng
+  const initPartsMutation = useMutation({
+    mutationFn: async () => {
+      if (!data || !matchedPreset || matchedPreset.defaultParts.length === 0) return;
+      const payload: UpdateCertificatePayload = {
+        certificateName: data.certificateName,
+        description: data.description ?? undefined,
+        parts: matchedPreset.defaultParts.map((p) => ({
+          partName: p.partName,
+          partDescription: p.partDescription,
+          properties: JSON.stringify({
+            minScore: p.minScore,
+            maxScore: p.maxScore,
+            step: p.step ?? matchedPreset.scoringSystem.step,
+            weight: p.weight,
+            scaleType: matchedPreset.scoringSystem.scaleType,
+            unit: matchedPreset.scoringSystem.unit,
+          }),
+        })),
+      };
+      return updateCertificate(data.certificateId, payload);
+    },
+    onSuccess: () => {
+      toast.success('Đã nạp và lưu thành công các kỹ năng chuẩn vào CSDL');
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.catalog.certificates });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.catalog.certificate(certificateId ?? '') });
+      onSaved?.();
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Nạp kỹ năng thất bại');
+    },
+  });
+
+  if (!certificateId) return null;
 
   return (
     <ModalShell onClose={onClose} maxWidth="max-w-2xl">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
-          <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl">
+          <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl shadow-2xs">
             <Award className="w-5 h-5" />
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-900">
-              Chi tiết chứng chỉ
+              Chi tiết chứng chỉ &amp; Core điểm
             </h3>
             <p className="text-xs text-slate-500 truncate">
               {data?.certificateName ?? 'Đang tải…'}
@@ -819,7 +1714,7 @@ const CertificateDetailModal: React.FC<{
         <button
           type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors"
           aria-label="Đóng"
         >
           <X className="w-5 h-5" />
@@ -827,88 +1722,236 @@ const CertificateDetailModal: React.FC<{
       </div>
 
       {isLoading ? (
-        <div className="space-y-2 pt-2">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="space-y-2 pt-3">
+          {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
       ) : isError ? (
         <ErrorState
           message={error instanceof Error ? error.message : undefined}
-          className="mt-2"
+          className="mt-3"
         />
       ) : (
-        <>
-          <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-1 mt-2">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#0052CC]">
-              Certificate
-            </span>
-            <h4 className="font-extrabold text-slate-900 text-base">
+        <div className="space-y-4 pt-3">
+          {/* Card thông tin chứng chỉ */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 to-indigo-50/60 border border-blue-100 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#0052CC]">
+                Certificate
+              </span>
+              {scoring && (
+                <span
+                  className={cn(
+                    'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border',
+                    isAverage
+                      ? 'bg-blue-100/70 text-blue-800 border-blue-200'
+                      : isIndependent
+                        ? 'bg-purple-100/70 text-purple-800 border-purple-200'
+                        : 'bg-emerald-100/70 text-emerald-800 border-emerald-200',
+                  )}
+                >
+                  {isAverage
+                    ? scoring.roundingRule === 'IELTS'
+                      ? 'TB (Quy tắc IELTS)'
+                      : 'TB (Làm tròn 0.5 VSTEP)'
+                    : isIndependent
+                      ? 'Từng phần độc lập (Không cộng)'
+                      : 'Tổng điểm các phần'}
+                </span>
+              )}
+            </div>
+
+            <h4 className="font-extrabold text-slate-900 text-lg">
               {data?.certificateName}
             </h4>
-            {data?.description && (
-              <p className="text-xs text-slate-600">{data.description}</p>
+            {displayDesc && (
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {displayDesc}
+              </p>
             )}
           </div>
 
-          <dl className="grid grid-cols-2 gap-3 text-xs mt-2">
-            <DetailCell
-              label="Mã chứng chỉ"
-              value={data?.certificateId ?? '—'}
-              mono
-            />
-            <DetailCell
-              label="Số kỹ năng"
-              value={`${data?.partCount ?? parts.length}`}
-              accent
-            />
-            <DetailCell
-              label="Ngày tạo"
-              value={data?.createdAt ? formatDate(data.createdAt) : '—'}
-            />
-            <DetailCell
-              label="Cập nhật"
-              value={data?.lastUpdated ? formatDate(data.lastUpdated) : '—'}
-            />
-          </dl>
-
-          <div className="mt-4">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Kỹ năng ({parts.length})
-            </p>
-            {parts.length === 0 ? (
-              <p className="text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-xl py-6 text-center">
-                Chứng chỉ này chưa có kỹ năng nào.
+          {/* Khung Core điểm chứng chỉ */}
+          {scoring && (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Gauge className="w-3.5 h-3.5 text-[#0052CC]" />
+                Thang điểm Core chuẩn của chứng chỉ
               </p>
-            ) : (
-              <ul className="space-y-2">
-                {parts.map((part) => (
-                  <li
-                    key={part.partId}
-                    className="p-3 rounded-xl border border-slate-200 bg-slate-50/60"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-6 h-6 rounded-md bg-[#0052CC] text-white text-[10px] font-black flex items-center justify-center shrink-0">
-                        {part.partOrder ?? '·'}
-                      </span>
-                      <span className="text-xs font-bold text-slate-800 truncate">
-                        {part.partName}
-                      </span>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/60">
+                  <span className="text-[10px] text-slate-400 block font-semibold">
+                    Thang điểm
+                  </span>
+                  <span className="font-bold text-slate-800 text-sm">
+                    {scoring.minScore} - {scoring.maxScore} {scoring.unit}
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/60">
+                  <span className="text-[10px] text-slate-400 block font-semibold">
+                    Hình thức tính
+                  </span>
+                  <span className="font-bold text-slate-800">
+                    {isAverage ? 'Trung bình cộng' : isIndependent ? 'Độc lập từng phần' : 'Tổng điểm'}
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/60">
+                  <span className="text-[10px] text-slate-400 block font-semibold">
+                    Bước nhảy
+                  </span>
+                  <span className="font-bold text-slate-800">
+                    {scoring.step} {scoring.unit}
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/60">
+                  <span className="text-[10px] text-slate-400 block font-semibold">
+                    Kỹ năng áp dụng
+                  </span>
+                  <span className="font-bold text-[#0052CC]">
+                    {effectiveParts.length} kỹ năng
+                  </span>
+                </div>
+              </div>
+
+              {/* Bảng mốc CEFR / Bậc quy chiếu chính thức */}
+              {matchedPreset && matchedPreset.benchmarks.length > 0 && (
+                <div className="pt-2 border-t border-slate-200/80 space-y-2">
+                  <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    <BookMarked className="w-3.5 h-3.5 text-[#0052CC]" />
+                    Mốc điểm quy chiếu năng lực chính thức:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    {matchedPreset.benchmarks.map((bm, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2 rounded-xl bg-white border border-slate-200/70 flex items-center justify-between"
+                      >
+                        <div>
+                          <span className="font-bold text-slate-800">{bm.label}</span>
+                          <span className="text-[10px] text-slate-400 block font-mono">
+                            Thang: {bm.scoreRange}
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-blue-50 text-[#0052CC] font-bold text-[10px] border border-blue-200/60">
+                          {bm.cefr}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {matchedPreset.officialRules.length > 0 && (
+                    <div className="p-2.5 rounded-xl bg-blue-50/50 border border-blue-100 text-[11px] text-slate-600 space-y-1">
+                      <p className="font-bold text-[#0052CC]">Quy định khảo thí chính thức:</p>
+                      <ul className="list-disc pl-4 space-y-0.5 text-[10px]">
+                        {matchedPreset.officialRules.map((rule, idx) => (
+                          <li key={idx}>{rule}</li>
+                        ))}
+                      </ul>
                     </div>
-                    {part.partDescription && (
-                      <p className="text-[11px] text-slate-500 mt-1.5 pl-8">
-                        {part.partDescription}
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Banner khi chứng chỉ chưa lưu kỹ năng trong CSDL */}
+          {parts.length === 0 && matchedPreset && (
+            <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-800">
+                    Chứng chỉ chưa lưu danh sách kỹ năng vào CSDL
+                  </p>
+                  <p className="text-[11px] text-amber-700">
+                    Hệ thống đang hiển thị {effectiveParts.length} kỹ năng chuẩn theo bài thi {matchedPreset.label}. Bấm nút bên cạnh để lưu trực tiếp vào CSDL.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                size="xs"
+                variant="primary"
+                leftIcon={Upload}
+                onClick={() => initPartsMutation.mutate()}
+                isLoading={initPartsMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold shrink-0 shadow-2xs"
+              >
+                Lưu {effectiveParts.length} kỹ năng vào CSDL
+              </Button>
+            </div>
+          )}
+
+          {/* Danh sách kỹ năng */}
+          <div className="pt-2">
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Layers3 className="w-4 h-4 text-[#0052CC]" />
+                Kỹ năng thành phần ({effectiveParts.length})
+              </p>
+              {parts.length === 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-[#0052CC] font-bold border border-blue-200">
+                  Mẫu chuẩn Preset
+                </span>
+              )}
+            </div>
+
+            <ul className="space-y-2.5">
+              {effectiveParts.map((part) => {
+                const certMax = scoring?.maxScore || 1;
+                const contribution =
+                  !isAverage && !isIndependent && certMax > 0
+                    ? ((part.maxScore / certMax) * 100).toFixed(0)
+                    : null;
+
+                return (
+                  <li
+                    key={part.id}
+                    className="p-3.5 rounded-2xl border border-slate-200 bg-white shadow-2xs hover:border-blue-200 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-6 h-6 rounded-md bg-[#0052CC] text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                          {part.order ?? '·'}
+                        </span>
+                        <span className="text-xs font-bold text-slate-800 truncate">
+                          {part.name}
+                        </span>
+                      </div>
+
+                      {/* Điểm của kỹ năng */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-[#0052CC] font-bold text-xs border border-blue-200/70">
+                          Thang điểm: {part.minScore} - {part.maxScore} {part.unit}
+                        </span>
+                        {contribution && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold text-[10px] border border-emerald-200">
+                            {contribution}% tổng điểm
+                          </span>
+                        )}
+                        {isIndependent && (
+                          <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-semibold text-[10px] border border-purple-200">
+                            Độc lập
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {part.description && (
+                      <p className="text-[11px] text-slate-500 mt-2 pl-8">
+                        {part.description}
                       </p>
                     )}
-                    {part.properties && (
-                      <pre className="mt-2 ml-8 p-2 rounded-lg bg-slate-900 text-emerald-300 text-[10px] overflow-x-auto">
-                        {JSON.stringify(part.properties, null, 2)}
-                      </pre>
-                    )}
                   </li>
-                ))}
-              </ul>
-            )}
+                );
+              })}
+            </ul>
           </div>
 
           <Button
@@ -916,11 +1959,11 @@ const CertificateDetailModal: React.FC<{
             size="sm"
             fullWidth
             onClick={onClose}
-            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold mt-5"
+            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold mt-4"
           >
             Đóng
           </Button>
-        </>
+        </div>
       )}
     </ModalShell>
   );
@@ -950,26 +1993,6 @@ const Field: React.FC<{
     </label>
     {children}
     {error && <p className="text-[11px] text-rose-500 mt-1">{error}</p>}
-  </div>
-);
-
-const DetailCell: React.FC<{
-  label: string;
-  value: string;
-  mono?: boolean;
-  accent?: boolean;
-}> = ({ label, value, mono, accent }) => (
-  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-    <dt className="text-slate-400 font-semibold uppercase text-[10px]">{label}</dt>
-    <dd
-      className={cn(
-        'font-bold mt-1 truncate',
-        mono && 'font-mono',
-        accent ? 'text-[#0052CC]' : 'text-slate-800',
-      )}
-    >
-      {value}
-    </dd>
   </div>
 );
 

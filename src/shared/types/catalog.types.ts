@@ -20,6 +20,27 @@
  * Certificate
  * ========================================================= */
 
+export type ScoreCalculationType = 'AVERAGE' | 'SUM' | 'INDEPENDENT';
+
+export interface CertificateScoringSystem {
+  scaleType: ScoreCalculationType;
+  minScore: number;
+  maxScore: number;
+  step: number;
+  unit: string;
+  preset?: string;
+}
+
+export interface CertificatePartProperties {
+  minScore?: number;
+  maxScore?: number;
+  step?: number;
+  weight?: number;
+  scaleType?: ScoreCalculationType;
+  unit?: string;
+  [key: string]: unknown;
+}
+
 export interface CertificatePartDto {
   partId: string;
   certificateId: string;
@@ -27,7 +48,7 @@ export interface CertificatePartDto {
   partDescription: string | null;
   partOrder: number;
   /** JSONB — backend đã parse thành object, frontend dùng trực tiếp. */
-  properties: Record<string, unknown> | null;
+  properties: (CertificatePartProperties & Record<string, unknown>) | null;
 }
 
 export interface CertificateDto {
@@ -396,4 +417,5 @@ export interface CreateCertificatePayload {
 export interface UpdateCertificatePayload {
   certificateName?: string;
   description?: string;
+  parts?: CertificatePartPayload[];
 }
