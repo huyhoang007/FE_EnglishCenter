@@ -194,17 +194,11 @@ export const ExamEditorView: React.FC = () => {
           />
           <Card className="flex flex-col items-center justify-center text-center gap-3">
             <p className="text-sm text-slate-500">
-              Thêm câu hỏi không gắn section, hoặc dùng nút “Câu hỏi” ở từng section.
+              Thêm câu hỏi bằng nút “Câu hỏi” ở từng section, hoặc nhập cả bộ đề từ file Word theo mẫu.
             </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button leftIcon={Plus} onClick={() => setQuestionTarget('')}>
-                Thêm câu hỏi
-              </Button>
-              <Button variant="secondary" leftIcon={FileUp} onClick={() => setImportOpen(true)}>
-                Nhập từ Word
-              </Button>
-            </div>
-            <p className="text-xs text-slate-400">Có sẵn đề trong file Word? Nhập một lần cả bộ đề theo mẫu.</p>
+            <Button variant="secondary" leftIcon={FileUp} onClick={() => setImportOpen(true)}>
+              Nhập từ Word
+            </Button>
           </Card>
         </div>
       )}
