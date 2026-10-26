@@ -12,7 +12,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { QUESTION_TYPE_LABEL, type ExamSection, type QuestionType } from '@/shared/types';
 import type { CreateQuestionRequest, QuestionOptionInput } from '../services/adminExamService';
-import { ExamModal, FIELD_CLASS, Field } from './ExamFormParts';
+import { AutoGrowTextarea, ExamModal, FIELD_CLASS, Field } from './ExamFormParts';
 
 interface AddQuestionModalProps {
   sections: ExamSection[];
@@ -136,7 +136,7 @@ export const AddQuestionModal: React.FC<AddQuestionModalProps> = ({
           </Field>
         </div>
         <Field label="Nội dung câu hỏi *">
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} className={FIELD_CLASS} />
+          <AutoGrowTextarea value={text} onChange={(e) => setText(e.target.value)} rows={3} className={FIELD_CLASS} />
         </Field>
 
         {type !== 'essay' && (
@@ -200,7 +200,7 @@ export const AddQuestionModal: React.FC<AddQuestionModalProps> = ({
         )}
 
         <Field label="Giải thích đáp án">
-          <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={2} className={FIELD_CLASS} />
+          <AutoGrowTextarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={2} className={FIELD_CLASS} />
         </Field>
         {(fieldError || serverError) && (
           <p className="text-sm text-status-danger font-semibold">{fieldError ?? serverError}</p>

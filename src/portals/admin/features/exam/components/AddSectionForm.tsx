@@ -7,7 +7,7 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
 import type { CreateSectionRequest } from '../services/adminExamService';
-import { FIELD_CLASS, Field } from './ExamFormParts';
+import { AutoGrowTextarea, FIELD_CLASS, Field } from './ExamFormParts';
 
 const SECTION_TYPES = ['LISTENING', 'READING', 'WRITING', 'SPEAKING', 'GENERAL'];
 
@@ -75,7 +75,7 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({ isSubmitting, se
           <input value={instructions} onChange={(e) => setInstructions(e.target.value)} className={FIELD_CLASS} />
         </Field>
         <Field label="Đoạn đọc (Reading)">
-          <textarea value={passageText} onChange={(e) => setPassageText(e.target.value)} rows={3} className={FIELD_CLASS} />
+          <AutoGrowTextarea value={passageText} onChange={(e) => setPassageText(e.target.value)} rows={3} className={FIELD_CLASS} />
         </Field>
         <Field label="Link file nghe (Listening)">
           <input

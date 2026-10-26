@@ -36,6 +36,22 @@ export const Checkbox: React.FC<{ label: string; checked: boolean; onChange: (v:
   </label>
 );
 
+/** Textarea tự cao lên theo nội dung để người soạn thấy hết đoạn đang viết. */
+export const AutoGrowTextarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = ({
+  className,
+  value,
+  ...props
+}) => {
+  const ref = React.useRef<HTMLTextAreaElement>(null);
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return <textarea ref={ref} value={value} className={cn(className, 'resize-none overflow-hidden')} {...props} />;
+};
+
 interface ExamModalProps {
   title: string;
   onClose: () => void;
