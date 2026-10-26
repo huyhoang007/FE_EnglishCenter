@@ -6,7 +6,7 @@
  * API: GET /api/v1/attempts/{id}, PUT .../answers (autosave), POST .../submit
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Cloud, CloudOff, FileText, Loader2, Send, Target } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
@@ -79,10 +79,17 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
       />
     ));
 
+  const progressText = `${room.answeredCount}/${room.questions.length} câu`;
+  const submitButton = (fullWidth?: boolean) => (
+    <Button leftIcon={Send} fullWidth={fullWidth} onClick={() => setConfirmOpen(true)} disabled={room.isSubmitting}>
+      Nộp bài thi
+    </Button>
+  );
+
   return (
-    <div className="space-y-4">
-      <div className="sticky top-4 z-30 bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2 min-w-0">
+    <div className="space-y-4 pb-24 lg:pb-0">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-white shrink-0">
             <FileText className="w-4 h-4" />
           </div>
@@ -90,36 +97,56 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-primary">
               {exam.exam.certificateName ?? 'Đề thi'} · Lượt #{room.attempt.attemptNumber}
             </p>
-            <p className="font-bold text-sm text-slate-900 truncate max-w-[280px]">{exam.exam.examTitle}</p>
+            <p className="font-bold text-sm text-slate-900 truncate">{exam.exam.examTitle}</p>
           </div>
         </div>
         {scale.kind !== 'raw' && <Badge variant={scale.badge}>{scale.label}</Badge>}
-        <Badge variant="primary" icon={Target}>
-          Đã làm {room.answeredCount}/{room.questions.length}
-        </Badge>
         <SaveIndicator state={room.saveState} />
-        <div className="flex-1" />
-        <ExamTimer secondsLeft={room.secondsLeft} />
-        <Button leftIcon={Send} onClick={() => setConfirmOpen(true)} disabled={room.isSubmitting}>
-          Nộp bài thi
-        </Button>
       </div>
 
-      {exam.sections.map((section) => (
-        <SectionBlock key={section.sectionId} section={section}>
-          {renderQuestions(section.questions ?? [])}
-        </SectionBlock>
-      ))}
-      {(exam.unsectionedQuestions ?? []).length > 0 && (
-        <Card className="space-y-4">{renderQuestions(exam.unsectionedQuestions ?? [])}</Card>
-      )}
+      {/* Màn rộng: cột phải (đồng hồ, nộp bài, bảng số câu) luôn bám theo màn hình; màn hẹp: bảng số câu dưới nội dung */}
+      <div className="grid lg:grid-cols-[minmax(0,1fr),260px] gap-4 items-start">
+        <div className="space-y-4 min-w-0">
+          {exam.sections.map((section) => (
+            <SectionBlock key={section.sectionId} section={section}>
+              {renderQuestions(section.questions ?? [])}
+            </SectionBlock>
+          ))}
+          {(exam.unsectionedQuestions ?? []).length > 0 && (
+            <Card className="space-y-4">{renderQuestions(exam.unsectionedQuestions ?? [])}</Card>
+          )}
+        </div>
+        <FollowingPanel ariaLabel="Bảng điều khiển bài thi">
+          <div className="hidden lg:block bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3">
+            <ExamTimer secondsLeft={room.secondsLeft} />
+            <div className="flex items-center justify-between text-sm">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                <Target className="w-4 h-4 text-primary" /> Đã làm {progressText}
+              </span>
+              <SaveIndicator state={room.saveState} />
+            </div>
+            {submitButton(true)}
+          </div>
+          <QuestionPalette
+            questions={room.questions}
+            answers={room.answers}
+            activeQuestionId={activeQuestionId}
+            onJump={jumpTo}
+          />
+        </FollowingPanel>
+      </div>
 
-      <QuestionPalette
-        questions={room.questions}
-        answers={room.answers}
-        activeQuestionId={activeQuestionId}
-        onJump={jumpTo}
-      />
+      {/* Màn hẹp: đồng hồ + nộp bài cố định ở đáy màn hình */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-3 flex items-center gap-3">
+        <ExamTimer secondsLeft={room.secondsLeft} />
+        <span className="text-xs text-slate-600 flex-1 min-w-0 leading-tight">
+          <span className="block text-sm font-bold text-slate-900 tabular-nums">
+            {room.answeredCount}/{room.questions.length}
+          </span>
+          câu đã làm
+        </span>
+        {submitButton()}
+      </div>
 
       {isConfirmOpen && (
         <div
@@ -158,6 +185,44 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
         </div>
       )}
     </div>
+  );
+};
+
+/**
+ * FollowingPanel — cột phải bám theo màn hình khi cuộn (chỉ màn rộng).
+ * Layout chung đặt overflow-x-hidden ở body nên position: sticky không hoạt động;
+ * ở đây dùng fixed và tự tính top = max(24px, vị trí gốc của cột) để không đè lên header.
+ */
+const FollowingPanel: React.FC<{ ariaLabel: string; children: React.ReactNode }> = ({ ariaLabel, children }) => {
+  const slotRef = useRef<HTMLElement>(null);
+  const [top, setTop] = useState<number | null>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const update = () => {
+      if (!media.matches || !slotRef.current) return setTop(null);
+      setTop(Math.max(24, slotRef.current.getBoundingClientRect().top));
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true, capture: true });
+    window.addEventListener('resize', update);
+    media.addEventListener('change', update);
+    return () => {
+      window.removeEventListener('scroll', update, { capture: true });
+      window.removeEventListener('resize', update);
+      media.removeEventListener('change', update);
+    };
+  }, []);
+
+  return (
+    <aside ref={slotRef} aria-label={ariaLabel} className="lg:self-stretch">
+      <div
+        className="space-y-3 lg:fixed lg:w-[260px] lg:overflow-y-auto"
+        style={top !== null ? { top, maxHeight: `calc(100vh - ${top + 16}px)` } : undefined}
+      >
+        {children}
+      </div>
+    </aside>
   );
 };
 
