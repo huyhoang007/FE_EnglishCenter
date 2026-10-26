@@ -82,7 +82,7 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
         <span className="w-7 h-7 rounded-full text-xs font-extrabold flex items-center justify-center shrink-0 bg-slate-900 text-white">
           {answer.displayNumber}
         </span>
-        <p className="flex-1 text-sm font-semibold text-slate-800 whitespace-pre-line">{answer.questionText}</p>
+        <p className="flex-1 text-sm font-semibold text-slate-800 whitespace-pre-line [overflow-wrap:anywhere]">{answer.questionText}</p>
         {answer.pendingManualGrading ? (
           <Badge variant="warning" size="sm">Chờ chấm</Badge>
         ) : (
@@ -99,7 +99,7 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
           <audio controls src={answer.answerText?.trim()} className="w-full" />
         ) : (
           <>
-            <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-line">{answer.answerText}</p>
+            <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-line [overflow-wrap:anywhere]">{answer.answerText}</p>
             <p className="text-[11px] text-slate-400 text-right mt-1">{countWords(answer.answerText ?? '')} từ</p>
           </>
         )}

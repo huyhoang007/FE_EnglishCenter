@@ -30,7 +30,7 @@ export const AnswerReviewItem: React.FC<AnswerReviewItemProps> = ({ answer, isSc
           {answer.displayNumber}
         </span>
         <div className="flex-1">
-          <p className="text-sm font-semibold text-slate-800 whitespace-pre-line">{answer.questionText}</p>
+          <p className="text-sm font-semibold text-slate-800 whitespace-pre-line [overflow-wrap:anywhere]">{answer.questionText}</p>
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <Badge size="sm">{QUESTION_TYPE_LABEL[answer.questionType]}</Badge>
             {isScoreVisible && answer.earnedScore !== undefined && answer.earnedScore !== null && (
@@ -81,7 +81,7 @@ const StudentAnswer: React.FC<{ answer: AnswerResult }> = ({ answer }) => {
       </>
     );
   }
-  return <span className="whitespace-pre-line">{answer.answerText}</span>;
+  return <span className="whitespace-pre-line [overflow-wrap:anywhere]">{answer.answerText}</span>;
 };
 
 export default AnswerReviewItem;

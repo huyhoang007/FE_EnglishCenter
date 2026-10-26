@@ -167,9 +167,9 @@ const SectionBlock: React.FC<{ section: ExamSection; children: React.ReactNode }
     <Card noPadding className="rounded-3xl overflow-hidden">
       <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/60 flex items-center gap-2">
         <Badge variant="ai" size="sm">{section.sectionType}</Badge>
-        <span className="font-bold text-sm text-slate-800">{section.title}</span>
+        <span className="font-bold text-sm text-slate-800 min-w-0 [overflow-wrap:anywhere]">{section.title}</span>
         {section.instructions && (
-          <span className="text-xs text-slate-500 hidden md:inline">· {section.instructions}</span>
+          <span className="text-xs text-slate-500 hidden md:inline min-w-0 [overflow-wrap:anywhere]">· {section.instructions}</span>
         )}
       </div>
       <div className={hasMaterial ? 'grid lg:grid-cols-2' : ''}>
@@ -177,7 +177,7 @@ const SectionBlock: React.FC<{ section: ExamSection; children: React.ReactNode }
           <div className="p-5 lg:border-r border-slate-200 lg:max-h-[70vh] lg:overflow-y-auto space-y-4">
             {section.audioUrl && <audio controls src={section.audioUrl} className="w-full" />}
             {section.passageText && (
-              <p className="text-[14px] leading-[1.75] text-slate-700 whitespace-pre-line">{section.passageText}</p>
+              <p className="text-[14px] leading-[1.75] text-slate-700 whitespace-pre-line [overflow-wrap:anywhere]">{section.passageText}</p>
             )}
           </div>
         )}

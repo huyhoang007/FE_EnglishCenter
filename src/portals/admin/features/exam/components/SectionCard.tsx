@@ -46,7 +46,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 id={`section-${section.sectionId}`} className="text-base font-bold text-slate-900 break-words">
+            <h3 id={`section-${section.sectionId}`} className="text-base font-bold text-slate-900 min-w-0 [overflow-wrap:anywhere]">
               {section.title}
             </h3>
             <Badge variant="ai" size="sm">{section.sectionType}</Badge>
@@ -76,8 +76,8 @@ export const SectionCard: React.FC<SectionCardProps> = ({
 
       <div className="px-5 py-4 space-y-4">
         {(section.instructions || section.audioUrl || passage) && (
-          <div className="space-y-2 max-w-prose">
-            {section.instructions && <p className="text-sm text-slate-700">{section.instructions}</p>}
+          <div className="space-y-2 max-w-prose min-w-0">
+            {section.instructions && <p className="text-sm text-slate-700 [overflow-wrap:anywhere]">{section.instructions}</p>}
             {section.audioUrl && (
               <p className="text-xs text-slate-600 flex items-center gap-1.5 min-w-0">
                 <Headphones className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
@@ -86,7 +86,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             )}
             {passage && (
               <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
-                <p className={cn('text-sm leading-relaxed text-slate-700 whitespace-pre-line', !isPassageOpen && isLongPassage && 'line-clamp-4')}>
+                <p className={cn('text-sm leading-relaxed text-slate-700 whitespace-pre-line [overflow-wrap:anywhere]', !isPassageOpen && isLongPassage && 'line-clamp-4')}>
                   {passage}
                 </p>
                 {isLongPassage && (

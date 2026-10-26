@@ -20,8 +20,8 @@ export const QuestionRow: React.FC<QuestionRowProps> = ({ question, isEditable, 
     <span className="w-7 h-7 rounded-full text-xs font-extrabold flex items-center justify-center shrink-0 bg-slate-900 text-white">
       {question.displayNumber}
     </span>
-    <div className="flex-1 space-y-1.5">
-      <p className="text-sm font-semibold text-slate-800 whitespace-pre-line">{question.questionText}</p>
+    <div className="flex-1 min-w-0 space-y-1.5">
+      <p className="text-sm font-semibold text-slate-800 whitespace-pre-line [overflow-wrap:anywhere]">{question.questionText}</p>
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge size="sm">{QUESTION_TYPE_LABEL[question.questionType]}</Badge>
         <span className="text-[11px] text-slate-400">{question.points} điểm</span>
@@ -32,7 +32,7 @@ export const QuestionRow: React.FC<QuestionRowProps> = ({ question, isEditable, 
             <li
               key={o.optionId}
               className={cn(
-                'text-xs px-2 py-1 rounded-md border inline-flex items-center gap-1',
+                'text-xs px-2 py-1 rounded-md border inline-flex items-center gap-1 max-w-full [overflow-wrap:anywhere]',
                 o.isCorrect
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold'
                   : 'border-slate-200 text-slate-600',

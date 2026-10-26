@@ -32,8 +32,8 @@ export const QuestionItem = React.forwardRef<HTMLDivElement, QuestionItemProps>(
         <span className="w-7 h-7 rounded-full text-xs font-extrabold flex items-center justify-center shrink-0 bg-slate-900 text-white">
           {question.displayNumber}
         </span>
-        <div className="flex-1 space-y-1.5">
-          <p className="text-sm font-semibold text-slate-800 leading-relaxed whitespace-pre-line">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <p className="text-sm font-semibold text-slate-800 leading-relaxed whitespace-pre-line [overflow-wrap:anywhere]">
             {question.questionText}
           </p>
           <div className="flex items-center gap-2">
@@ -83,7 +83,7 @@ const AnswerInput: React.FC<Omit<QuestionItemProps, 'isActive'>> = ({ question, 
                 >
                   {String.fromCharCode(65 + idx)}
                 </span>
-                <span>{opt.optionText}</span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">{opt.optionText}</span>
                 {isSelected && <CheckCircle2 className="w-4 h-4 text-primary ml-auto shrink-0" />}
               </button>
             );
