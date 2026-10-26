@@ -12,16 +12,9 @@ import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
-import type { ScaleKind } from '@/shared/constants/examScales';
+import { SECTION_TYPES_BY_SCALE, type ScaleKind } from '@/shared/constants/examScales';
 import type { CreateSectionRequest } from '../services/adminExamService';
 import { AutoGrowTextarea, FIELD_CLASS, Field } from './ExamFormParts';
-
-const SECTION_TYPES: Record<ScaleKind, string[]> = {
-  ielts: ['LISTENING', 'READING', 'WRITING', 'SPEAKING'],
-  vstep: ['LISTENING', 'READING', 'WRITING', 'SPEAKING'],
-  toeic: ['LISTENING', 'READING'],
-  raw: ['LISTENING', 'READING', 'WRITING', 'SPEAKING', 'GENERAL'],
-};
 
 interface AddSectionFormProps {
   /** Loại thang của chứng chỉ của đề — quyết định các loại section được chọn */
@@ -32,7 +25,7 @@ interface AddSectionFormProps {
 }
 
 export const AddSectionForm: React.FC<AddSectionFormProps> = ({ scaleKind, isSubmitting, serverError, onSubmit }) => {
-  const sectionTypes = SECTION_TYPES[scaleKind];
+  const sectionTypes = SECTION_TYPES_BY_SCALE[scaleKind];
   const [title, setTitle] = useState('');
   const [sectionType, setSectionType] = useState(sectionTypes.includes('READING') ? 'READING' : sectionTypes[0]);
   const [instructions, setInstructions] = useState('');

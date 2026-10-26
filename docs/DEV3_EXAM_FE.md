@@ -52,3 +52,22 @@ Không thêm component / helper dùng chung mới: modal, format ngày giờ, de
 - Server trả `5013` (đã nộp) hoặc `5014` (hết giờ) thì FE chuyển thẳng sang trang kết quả.
 - Không bao giờ nhận đáp án đúng: backend ẩn `isCorrect`, đáp án điền từ và cặp nối.
 - Đề `course` chỉ làm được khi đã ghi danh khóa học (backend kiểm tra qua EnrollmentService của Dev 4).
+
+## Nhập đề từ file Word
+
+Trang soạn đề (`/admin/exams/:examId`, đề nháp) có nút **Nhập từ Word**: thả file `.docx` (hoặc `.txt`) viết theo mẫu,
+FE đọc ngay trên trình duyệt (thư viện `mammoth`), hiện bản xem trước + lỗi kèm dòng, bấm **Tạo** thì tạo lần lượt
+section và câu hỏi qua API sẵn có — không cần sửa backend. File mẫu: `public/templates/mau-de-thi.docx`.
+
+| Viết trong file | Ý nghĩa |
+|---|---|
+| `[SECTION] READING \| Part 2 - Reading` | Mở phần thi: LOẠI \| Tiêu đề (TOEIC chỉ LISTENING / READING) |
+| `[INSTRUCTIONS] …` / `[PASSAGE] …` / `[AUDIO] url` | Hướng dẫn / đoạn đọc (nhiều dòng) / file nghe (chỉ LISTENING) |
+| `1. Câu hỏi … {2}` + `A. …` `*B. …` | Trắc nghiệm, `*` = đáp án đúng, `{2}` = 2 điểm (mặc định 1) |
+| `2. [TF] …` + `= False` | Đúng / sai |
+| `3. [FILL] …` + `= moved \| move` | Điền từ, nhiều đáp án ngăn bằng `\|` |
+| `4. [MATCH] …` + `- bakery = tiệm bánh` | Nối cặp, mỗi cặp một dòng |
+| `5. [ESSAY] …` | Tự luận, mentor chấm |
+| `[EXPLAIN] …` / `# …` | Giải thích cho câu ngay trên / ghi chú bị bỏ qua |
+
+File `.doc` đời cũ không đọc được: mở bằng Word rồi "Lưu thành" `.docx`.

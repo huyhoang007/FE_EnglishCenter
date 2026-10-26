@@ -8,19 +8,20 @@
 
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, EyeOff, Plus, Rocket, Trash2 } from 'lucide-react';
+import { ArrowLeft, EyeOff, FileUp, Plus, Rocket, Trash2 } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
-import { detectScale } from '@/shared/constants/examScales';
+import { SECTION_TYPES_BY_SCALE, detectScale } from '@/shared/constants/examScales';
 import { EXAM_STATUS_LABEL, EXAM_TYPE_LABEL } from '@/shared/types';
 import { useAdminExam, useExamActions } from './hooks/useAdminExams';
 import { AddQuestionModal } from './components/AddQuestionModal';
 import { AddSectionForm } from './components/AddSectionForm';
 import { QuestionRow } from './components/QuestionRow';
+import { ImportExamModal } from './components/ImportExamModal';
 
 export const ExamEditorView: React.FC = () => {
   const { examId = '' } = useParams<{ examId: string }>();
@@ -30,6 +31,7 @@ export const ExamEditorView: React.FC = () => {
   const actions = useExamActions(examId);
   /** null = đóng modal; '' = câu không thuộc section; còn lại = sectionId */
   const [questionTarget, setQuestionTarget] = useState<string | null>(null);
+  const [isImportOpen, setImportOpen] = useState(false);
 
   const backButton = (
     <Button variant="ghost" size="sm" leftIcon={ArrowLeft} onClick={() => navigate(ADMIN_ROUTES.exams)}>
@@ -194,11 +196,26 @@ export const ExamEditorView: React.FC = () => {
             <p className="text-sm text-slate-500">
               Thêm câu hỏi không gắn section, hoặc dùng nút “Câu hỏi” ở từng section.
             </p>
-            <Button leftIcon={Plus} onClick={() => setQuestionTarget('')}>
-              Thêm câu hỏi
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button leftIcon={Plus} onClick={() => setQuestionTarget('')}>
+                Thêm câu hỏi
+              </Button>
+              <Button variant="secondary" leftIcon={FileUp} onClick={() => setImportOpen(true)}>
+                Nhập từ Word
+              </Button>
+            </div>
+            <p className="text-xs text-slate-400">Có sẵn đề trong file Word? Nhập một lần cả bộ đề theo mẫu.</p>
           </Card>
         </div>
+      )}
+
+      {isImportOpen && (
+        <ImportExamModal
+          examId={examId}
+          certificateLabel={exam.certificateName ?? 'đề không thuộc chứng chỉ'}
+          allowedSectionTypes={SECTION_TYPES_BY_SCALE[detectScale(exam.certificateName).kind]}
+          onClose={() => setImportOpen(false)}
+        />
       )}
 
       {questionTarget !== null && (

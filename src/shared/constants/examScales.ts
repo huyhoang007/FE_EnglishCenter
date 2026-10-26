@@ -84,6 +84,14 @@ export const SCALE_INFO: Record<ScaleKind, ScaleInfo> = {
   },
 };
 
+/** Loại section được dùng theo chứng chỉ (TOEIC chỉ có Listening / Reading). */
+export const SECTION_TYPES_BY_SCALE: Record<ScaleKind, string[]> = {
+  ielts: ['LISTENING', 'READING', 'WRITING', 'SPEAKING'],
+  vstep: ['LISTENING', 'READING', 'WRITING', 'SPEAKING'],
+  toeic: ['LISTENING', 'READING'],
+  raw: ['LISTENING', 'READING', 'WRITING', 'SPEAKING', 'GENERAL'],
+};
+
 export function detectScale(certificateName?: string | null): ScaleInfo {
   const name = (certificateName ?? '').toUpperCase();
   if (name.includes('IELTS')) return SCALE_INFO.ielts;
