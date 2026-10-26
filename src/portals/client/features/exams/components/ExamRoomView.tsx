@@ -14,6 +14,7 @@ import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import { detectScale } from '@/shared/constants/examScales';
 import type { ExamQuestion, ExamSection } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { useExamRoom, type SaveState } from '../hooks/useExamRoom';
@@ -56,6 +57,7 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
   }
 
   const exam = room.attempt.exam;
+  const scale = detectScale(exam.exam.certificateName);
   const jumpTo = (questionId: string) => {
     setActiveQuestionId(questionId);
     questionRefs.current[questionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -91,6 +93,7 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
             <p className="font-bold text-sm text-slate-900 truncate max-w-[280px]">{exam.exam.examTitle}</p>
           </div>
         </div>
+        {scale.kind !== 'raw' && <Badge variant={scale.badge}>{scale.label}</Badge>}
         <Badge variant="primary" icon={Target}>
           Đã làm {room.answeredCount}/{room.questions.length}
         </Badge>

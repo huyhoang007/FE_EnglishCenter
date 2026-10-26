@@ -6,6 +6,7 @@ import React from 'react';
 import { Clock, FileQuestion, Layers, Lock } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Card } from '@/shared/components/Card';
+import { detectScale } from '@/shared/constants/examScales';
 import { EXAM_TYPE_LABEL, type ExamSummary } from '@/shared/types';
 import { formatVND } from '@/shared/utils';
 
@@ -16,6 +17,7 @@ interface ExamCardProps {
 
 export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
   const isPaid = exam.examScope === 'trial' && exam.isFree === false;
+  const scale = detectScale(exam.certificateName);
   return (
     <Card
       hoverable
@@ -25,7 +27,7 @@ export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
       aria-label={`Xem đề ${exam.examTitle}`}
     >
       <div className="flex flex-wrap items-center gap-1.5">
-        {exam.certificateName && <Badge variant="ielts" size="sm">{exam.certificateName}</Badge>}
+        {exam.certificateName && <Badge variant={scale.badge} size="sm">{exam.certificateName}</Badge>}
         {exam.examType && <Badge variant="primary" size="sm">{EXAM_TYPE_LABEL[exam.examType]}</Badge>}
         {exam.recommendedLevel && <Badge variant="neutral" size="sm">Level {exam.recommendedLevel}</Badge>}
         {exam.requiresEnrollment && (

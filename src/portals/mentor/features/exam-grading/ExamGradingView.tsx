@@ -13,7 +13,8 @@ import { Card } from '@/shared/components/Card';
 import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { ATTEMPT_STATUS_LABEL } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
-import { useAttemptForGrading, usePendingAttempts } from './hooks/useExamGrading';
+import { detectScale, toSkill } from '@/shared/constants/examScales';
+import { useAttemptForGrading, useGradingExamInfo, usePendingAttempts } from './hooks/useExamGrading';
 import { EssayGradeForm } from './EssayGradeForm';
 
 const formatDateTime = (iso: string) =>
@@ -31,6 +32,11 @@ export const ExamGradingView: React.FC = () => {
   const queue = usePendingAttempts(page);
   const detail = useAttemptForGrading(selectedId);
   const essays = (detail.data?.answers ?? []).filter((a) => a.questionType === 'essay');
+  const examInfo = useGradingExamInfo(detail.data?.attempt.examId);
+  const scale = detectScale(examInfo.data?.exam.certificateName);
+  /** Kỹ năng của câu theo section (Writing / Speaking) để chọn thang chấm */
+  const skillOf = (sectionId?: string) =>
+    toSkill((detail.data?.sectionScores ?? []).find((s) => s.sectionId === sectionId)?.sectionType);
 
   return (
     <div className="space-y-5">
@@ -110,6 +116,7 @@ export const ExamGradingView: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-extrabold text-slate-900">{detail.data.attempt.studentName}</h2>
                 <Badge variant="primary">{detail.data.attempt.examTitle}</Badge>
+                {scale.kind !== 'raw' && <Badge variant={scale.badge}>{scale.label}</Badge>}
                 <Badge variant={detail.data.attempt.status === 'graded' ? 'success' : 'warning'}>
                   {ATTEMPT_STATUS_LABEL[detail.data.attempt.status]}
                 </Badge>
@@ -119,7 +126,13 @@ export const ExamGradingView: React.FC = () => {
               </div>
               {essays.length === 0 && <p className="text-sm text-slate-500">Bài này không có câu tự luận.</p>}
               {essays.map((answer) => (
-                <EssayGradeForm key={`${selectedId}-${answer.questionId}`} attemptId={selectedId} answer={answer} />
+                <EssayGradeForm
+                  key={`${selectedId}-${answer.questionId}-${scale.kind}`}
+                  attemptId={selectedId}
+                  answer={answer}
+                  scale={scale}
+                  skill={skillOf(answer.sectionId)}
+                />
               ))}
             </>
           )}

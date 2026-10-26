@@ -15,6 +15,7 @@ import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import { detectScale, formatScaleScore, percentToPass, type ScaleInfo } from '@/shared/constants/examScales';
 import { EXAM_TYPE_LABEL } from '@/shared/types';
 import { useExamDetail, useStartAttempt } from '../hooks/useExams';
 
@@ -53,6 +54,7 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
 
   const { exam } = data;
   const canStart = isAuthenticated && data.accessible !== false;
+  const scale = detectScale(exam.certificateName);
 
   return (
     <div className="space-y-5">
@@ -60,7 +62,7 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
 
       <Card className="space-y-4">
         <div className="flex flex-wrap gap-1.5">
-          {exam.certificateName && <Badge variant="ielts">{exam.certificateName}</Badge>}
+          {exam.certificateName && <Badge variant={scale.badge}>{exam.certificateName}</Badge>}
           {exam.examType && <Badge variant="primary">{EXAM_TYPE_LABEL[exam.examType]}</Badge>}
           {exam.recommendedLevel && <Badge>Level {exam.recommendedLevel}</Badge>}
           {exam.courseTitle && <Badge variant="warning">{exam.courseTitle}</Badge>}
@@ -72,7 +74,7 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Stat icon={Clock} label="Thời gian" value={`${exam.durationMinutes} phút`} />
           <Stat icon={FileQuestion} label="Số câu" value={`${exam.totalQuestions} câu`} />
-          <Stat icon={Target} label="Điểm đạt" value={`${exam.passingScore ?? 0}%`} />
+          <Stat icon={Target} label="Điểm đạt" value={passText(scale, exam.passingScore ?? 0)} />
           <Stat
             icon={RotateCcw}
             label="Số lượt"
@@ -136,6 +138,10 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
     </div>
   );
 };
+
+/** Điểm đạt theo thang chứng chỉ: "IELTS 5.5", "TOEIC 450"; đề thường giữ %. */
+const passText = (scale: ScaleInfo, percent: number) =>
+  scale.kind === 'raw' ? `${percent}%` : `${scale.label} ${formatScaleScore(scale, percentToPass(scale, percent))}`;
 
 const Stat: React.FC<{ icon: React.ElementType; label: string; value: string }> = ({ icon: Icon, label, value }) => (
   <div className="rounded-xl border border-slate-200 p-3">

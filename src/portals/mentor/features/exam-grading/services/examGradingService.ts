@@ -4,10 +4,11 @@
  *   GET /api/v1/mentor/exam-attempts/pending?page=&size=                       → PageResponse<AttemptSummary>
  *   GET /api/v1/mentor/exam-attempts/{attemptId}                               → AttemptResult (đủ đáp án)
  *   PUT /api/v1/mentor/exam-attempts/{attemptId}/answers/{questionId}/grade    → AttemptResult
+ *   GET /api/v1/exams/{examId}                                                 → ExamDetail (lấy chứng chỉ để chọn thang chấm)
  */
 
 import { apiGet, apiPut } from '@/shared/api/axiosClient';
-import type { ApiResponse, AttemptResult, AttemptSummary, PageResponse } from '@/shared/types';
+import type { ApiResponse, AttemptResult, AttemptSummary, ExamDetail, PageResponse } from '@/shared/types';
 
 const BASE = '/api/v1/mentor/exam-attempts';
 
@@ -31,3 +32,6 @@ export const gradeAnswerApi = ({
   feedback,
 }: GradeAnswerPayload): Promise<ApiResponse<AttemptResult>> =>
   apiPut<AttemptResult>(`${BASE}/${attemptId}/answers/${questionId}/grade`, { score, feedback });
+
+export const getExamInfoApi = (examId: string): Promise<ApiResponse<ExamDetail>> =>
+  apiGet<ExamDetail>(`/api/v1/exams/${examId}`);

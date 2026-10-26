@@ -15,9 +15,11 @@ import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
 import { ATTEMPT_STATUS_LABEL } from '@/shared/types';
-import { useAttemptResult } from '../hooks/useExams';
+import { detectScale } from '@/shared/constants/examScales';
+import { useAttemptResult, useExamDetail } from '../hooks/useExams';
 import { formatDuration } from '../utils/examRoom';
 import { AnswerReviewItem } from './AnswerReviewItem';
+import { CertificateScoreCard } from './CertificateScoreCard';
 
 interface AttemptResultViewProps {
   attemptId: string;
@@ -26,6 +28,9 @@ interface AttemptResultViewProps {
 export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId }) => {
   const navigate = useNavigate();
   const { data, isLoading, isError, error, refetch } = useAttemptResult(attemptId);
+  // Kết quả không kèm tên chứng chỉ → lấy từ thông tin đề để chọn thang điểm
+  const examDetail = useExamDetail(data?.attempt.examId ?? '');
+  const scale = detectScale(examDetail.data?.exam.certificateName);
 
   const backButton = (
     <Button variant="ghost" size="sm" leftIcon={ArrowLeft} onClick={() => navigate(CLIENT_ROUTES.examHistory)}>
@@ -95,6 +100,10 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
           </div>
         </div>
       </Card>
+
+      {data.scoreVisible && scale.kind !== 'raw' && (data.sectionScores ?? []).length > 0 && (
+        <CertificateScoreCard scale={scale} sections={data.sectionScores ?? []} />
+      )}
 
       {data.sectionScores && data.sectionScores.length > 0 && (
         <Card>

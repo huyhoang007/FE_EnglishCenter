@@ -7,6 +7,7 @@ import { unwrapOrThrow } from '@/shared/api/axiosClient';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import {
   getAttemptForGradingApi,
+  getExamInfoApi,
   getPendingAttemptsApi,
   gradeAnswerApi,
   type GradeAnswerPayload,
@@ -25,6 +26,16 @@ export function useAttemptForGrading(attemptId: string | null) {
     queryKey: QUERY_KEYS.exam.gradingAttempt(attemptId ?? ''),
     queryFn: async () => unwrapOrThrow(await getAttemptForGradingApi(attemptId ?? '')),
     enabled: Boolean(attemptId),
+  });
+}
+
+/** Thông tin đề của bài đang chấm (để biết chứng chỉ → thang chấm). */
+export function useGradingExamInfo(examId: string | undefined) {
+  return useQuery({
+    queryKey: QUERY_KEYS.exam.detail(examId ?? ''),
+    queryFn: async () => unwrapOrThrow(await getExamInfoApi(examId ?? '')),
+    enabled: Boolean(examId),
+    staleTime: 5 * 60 * 1000,
   });
 }
 
