@@ -6,6 +6,7 @@
  *   POST   /api/v1/admin/exams                                  → ExamDetail (luôn ở trạng thái nháp)
  *   DELETE /api/v1/admin/exams/{examId}
  *   POST   /api/v1/admin/exams/{examId}/publish | /unpublish    → ExamDetail
+ *   POST   /api/v1/admin/exams/{examId}/archive | /restore      → ExamDetail (lưu trữ / khôi phục về nháp, 5024)
  *   POST   /api/v1/admin/exams/{examId}/sections                → ExamSection
  *   DELETE /api/v1/admin/exams/{examId}/sections/{sectionId}
  *   POST   /api/v1/admin/exams/{examId}/questions               → ExamQuestion
@@ -104,6 +105,12 @@ export const publishExamApi = (examId: string): Promise<ApiResponse<ExamDetail>>
 
 export const unpublishExamApi = (examId: string): Promise<ApiResponse<ExamDetail>> =>
   apiPost<ExamDetail>(`${BASE}/${examId}/unpublish`);
+
+export const archiveExamApi = (examId: string): Promise<ApiResponse<ExamDetail>> =>
+  apiPost<ExamDetail>(`${BASE}/${examId}/archive`);
+
+export const restoreExamApi = (examId: string): Promise<ApiResponse<ExamDetail>> =>
+  apiPost<ExamDetail>(`${BASE}/${examId}/restore`);
 
 export const createSectionApi = (examId: string, payload: CreateSectionRequest): Promise<ApiResponse<ExamSection>> =>
   apiPost<ExamSection>(`${BASE}/${examId}/sections`, payload);

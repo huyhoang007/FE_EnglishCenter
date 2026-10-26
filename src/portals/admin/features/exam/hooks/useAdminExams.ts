@@ -9,6 +9,7 @@ import { unwrapOrThrow } from '@/shared/api/axiosClient';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import {
   addQuestionApi,
+  archiveExamApi,
   createExamApi,
   createSectionApi,
   deleteExamApi,
@@ -17,6 +18,7 @@ import {
   getAdminExamsApi,
   publishExamApi,
   removeQuestionApi,
+  restoreExamApi,
   unpublishExamApi,
   type AdminExamFilter,
   type CreateExamRequest,
@@ -81,6 +83,14 @@ export function useExamActions(examId: string) {
     }),
     unpublish: useMutation({
       mutationFn: async () => unwrapOrThrow(await unpublishExamApi(examId)),
+      onSuccess,
+    }),
+    archive: useMutation({
+      mutationFn: async () => unwrapOrThrow(await archiveExamApi(examId)),
+      onSuccess,
+    }),
+    restore: useMutation({
+      mutationFn: async () => unwrapOrThrow(await restoreExamApi(examId)),
       onSuccess,
     }),
     remove: useMutation({
