@@ -32,6 +32,8 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({ isSubmitting, se
     setAudioUrl('');
   };
 
+  const isListening = sectionType === 'LISTENING';
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return setFieldError('Nhập tiêu đề section');
@@ -42,7 +44,8 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({ isSubmitting, se
         sectionType,
         instructions: instructions.trim() || undefined,
         passageText: passageText.trim() || undefined,
-        audioUrl: audioUrl.trim() || undefined,
+        // Chỉ section Listening mới có file nghe
+        audioUrl: isListening ? audioUrl.trim() || undefined : undefined,
       },
       reset,
     );
@@ -77,14 +80,16 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({ isSubmitting, se
         <Field label="Đoạn đọc (Reading)">
           <AutoGrowTextarea value={passageText} onChange={(e) => setPassageText(e.target.value)} rows={3} className={FIELD_CLASS} />
         </Field>
-        <Field label="Link file nghe (Listening)">
-          <input
-            value={audioUrl}
-            onChange={(e) => setAudioUrl(e.target.value)}
-            className={FIELD_CLASS}
-            placeholder="https://…/audio.mp3"
-          />
-        </Field>
+        {isListening && (
+          <Field label="Link file nghe (Listening)">
+            <input
+              value={audioUrl}
+              onChange={(e) => setAudioUrl(e.target.value)}
+              className={FIELD_CLASS}
+              placeholder="https://…/audio.mp3"
+            />
+          </Field>
+        )}
         {(fieldError || serverError) && (
           <p className="text-sm text-status-danger font-semibold">{fieldError ?? serverError}</p>
         )}
