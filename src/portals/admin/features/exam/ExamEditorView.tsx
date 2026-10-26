@@ -154,21 +154,12 @@ export const ExamEditorView: React.FC = () => {
       {backLink}
 
       {/* ---------- Header đề ---------- */}
+      <div className="space-y-2">
       <div className="flex flex-col md:flex-row md:items-start gap-4">
-        <div className="min-w-0 flex-1 space-y-2">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight break-words min-w-0">{exam.examTitle}</h1>
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight min-w-0 [overflow-wrap:anywhere]">{exam.examTitle}</h1>
             <ExamStatusPill status={exam.status} />
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
-            {exam.certificateName && <Badge variant={scale.badge} size="sm">{exam.certificateName}</Badge>}
-            {exam.courseTitle && <span className="font-medium text-slate-700">{exam.courseTitle}</span>}
-            {meta.map((m, i) => (
-              <span key={m} className="inline-flex items-center gap-2">
-                {(i > 0 || exam.certificateName || exam.courseTitle) && <span className="text-slate-300" aria-hidden="true">•</span>}
-                {m}
-              </span>
-            ))}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -182,6 +173,18 @@ export const ExamEditorView: React.FC = () => {
             ]}
           />
         </div>
+      </div>
+      {/* Thông tin tổng quan: một hàng chạy hết chiều rộng, màn hẹp thì kéo ngang */}
+      <div className="flex items-center gap-x-1.5 text-[13px] text-slate-600 whitespace-nowrap overflow-x-auto pb-1">
+        {exam.certificateName && <Badge variant={scale.badge} size="sm">{exam.certificateName}</Badge>}
+        {exam.courseTitle && <span className="font-medium text-slate-700">{exam.courseTitle}</span>}
+        {meta.map((m, i) => (
+          <span key={m} className="inline-flex items-center gap-1.5">
+            {(i > 0 || exam.certificateName || exam.courseTitle) && <span className="text-slate-300" aria-hidden="true">•</span>}
+            {m}
+          </span>
+        ))}
+      </div>
       </div>
 
       {/* ---------- Thông báo trạng thái ---------- */}
