@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatCard } from '@/portals/admin/components/StatCard';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
+import { ConfirmDialog } from '@/shared/components/ConfirmDialog';
 import {
   EmptyState,
   ErrorState,
@@ -31,16 +32,19 @@ import { useToast } from '@/shared/components/Toast';
 import {
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   Clock,
   DollarSign,
   Eye,
   Layers3,
   LayoutGrid,
   List,
+  Pencil,
   Plus,
   RotateCcw,
   Search,
   Target,
+  Trash2,
   Users,
   Video,
   X,
@@ -84,6 +88,36 @@ const CONTENT_TYPE_LABEL: Record<ContentType, string> = {
   vocabulary: 'Từ vựng',
   homework: 'Bài tập',
 };
+
+/** Component dropdown chọn trạng thái khóa học trực tiếp */
+export const StatusSelect: React.FC<{
+  status: CourseStatus;
+  disabled?: boolean;
+  onChange: (next: CourseStatus) => void;
+}> = ({ status, disabled, onChange }) => (
+  <div className="relative inline-flex items-center">
+    <select
+      value={status}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value as CourseStatus)}
+      className={cn(
+        'h-7 pl-2.5 pr-6 rounded-lg text-[11px] font-bold border outline-none cursor-pointer appearance-none transition-all shadow-2xs',
+        status === 'active' &&
+          'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100/70 focus:border-emerald-500',
+        status === 'draft' &&
+          'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100/70 focus:border-amber-500',
+        status === 'archived' &&
+          'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200/70 focus:border-slate-500',
+        disabled && 'opacity-60 cursor-not-allowed',
+      )}
+    >
+      <option value="active">Đang mở</option>
+      <option value="draft">Bản nháp</option>
+      <option value="archived">Lưu trữ</option>
+    </select>
+    <ChevronDown className="w-3.5 h-3.5 absolute right-1.5 pointer-events-none opacity-60 text-current" />
+  </div>
+);
 
 /* =========================================================
  * View
@@ -157,28 +191,32 @@ export const CourseManagementView: React.FC = () => {
   const invalidateCourses = () =>
     queryClient.invalidateQueries({ queryKey: ['catalog', 'courses'] });
 
-  const toggleStatus = useMutation({
-    mutationFn: ({ course, next }: { course: CourseDto; next: CourseStatus }) =>
-      updateCourse(course.courseId, { status: next }),
+  const [busyCourseId, setBusyCourseId] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<CourseDto | null>(null);
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({
+      courseId,
+      status,
+    }: {
+      courseId: string;
+      status: CourseStatus;
+    }) => {
+      setBusyCourseId(courseId);
+      return updateCourse(courseId, { status });
+    },
     onSuccess: (updated) => {
       toast.success(
-        `Đã chuyển "${updated.title}" sang ${STATUS_META[updated.status].label.toLowerCase()}`,
+        `Đã chuyển trạng thái "${updated.title}" sang ${STATUS_META[updated.status].label.toLowerCase()}`,
       );
       invalidateCourses();
+      setArchiveTarget(null);
     },
     onError: (err) =>
-      toast.error(err instanceof Error ? err.message : 'Cập nhật thất bại'),
-  });
-
-  const archiveCourse = useMutation({
-    mutationFn: ({ course }: { course: CourseDto }) =>
-      updateCourse(course.courseId, { status: 'archived' }),
-    onSuccess: () => {
-      toast.success('Đã lưu trữ khóa học');
-      invalidateCourses();
+      toast.error(err instanceof Error ? err.message : 'Cập nhật trạng thái thất bại'),
+    onSettled: () => {
+      setBusyCourseId(null);
     },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : 'Không lưu trữ được'),
   });
 
   /* ---------- Stats (chỉ tính trên trang hiện tại + tổng) ---------- */
@@ -390,14 +428,11 @@ export const CourseManagementView: React.FC = () => {
             setIsCreateOpen(true);
           }}
           onManageContents={setContentCourse}
-          onToggle={(c) =>
-            toggleStatus.mutate({
-              course: c,
-              next: c.status === 'active' ? 'draft' : 'active',
-            })
+          onStatusChange={(c, next) =>
+            updateStatusMutation.mutate({ courseId: c.courseId, status: next })
           }
-          onArchive={(c) => archiveCourse.mutate({ course: c })}
-          busy={toggleStatus.isPending}
+          onArchive={(c) => setArchiveTarget(c)}
+          busyCourseId={busyCourseId}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -411,6 +446,11 @@ export const CourseManagementView: React.FC = () => {
                 setIsCreateOpen(true);
               }}
               onManageContents={setContentCourse}
+              onStatusChange={(next) =>
+                updateStatusMutation.mutate({ courseId: c.courseId, status: next })
+              }
+              onArchive={() => setArchiveTarget(c)}
+              disabled={busyCourseId === c.courseId}
             />
           ))}
         </div>
@@ -440,6 +480,25 @@ export const CourseManagementView: React.FC = () => {
       />
 
       <ContentModal course={contentCourse} onClose={() => setContentCourse(null)} />
+
+      <ConfirmDialog
+        open={Boolean(archiveTarget)}
+        title="Lưu trữ khóa học"
+        description={`Bạn có chắc chắn muốn chuyển khóa học "${archiveTarget?.title}" sang trạng thái Lưu trữ?`}
+        confirmLabel="Lưu trữ khóa học"
+        cancelLabel="Huỷ"
+        variant="danger"
+        isLoading={updateStatusMutation.isPending}
+        onConfirm={() => {
+          if (archiveTarget) {
+            updateStatusMutation.mutate({
+              courseId: archiveTarget.courseId,
+              status: 'archived',
+            });
+          }
+        }}
+        onClose={() => setArchiveTarget(null)}
+      />
     </div>
   );
 };
@@ -452,17 +511,17 @@ const CourseTable: React.FC<{
   onView: (c: CourseDto) => void;
   onEdit: (c: CourseDto) => void;
   onManageContents: (c: CourseDto) => void;
-  onToggle: (c: CourseDto) => void;
+  onStatusChange: (c: CourseDto, next: CourseStatus) => void;
   onArchive: (c: CourseDto) => void;
-  busy: boolean;
+  busyCourseId: string | null;
 }> = ({
   courses,
   onView,
   onEdit,
   onManageContents,
-  onToggle,
+  onStatusChange,
   onArchive,
-  busy,
+  busyCourseId,
 }) => (
   <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
     <div className="overflow-x-auto">
@@ -479,120 +538,91 @@ const CourseTable: React.FC<{
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {courses.map((c) => {
-            const meta = STATUS_META[c.status] ?? {
-              label: c.status,
-              variant: 'neutral' as const,
-            };
-            return (
-              <tr
-                key={c.courseId}
-                className="hover:bg-slate-50/60 transition-colors"
-              >
-                <td className="py-3 px-4 max-w-[280px]">
-                  <Link
-                    to={`/admin/courses/${c.courseId}`}
-                    className="font-bold text-slate-900 block truncate hover:text-[#0052CC] transition-colors"
-                  >
-                    {c.title}
-                  </Link>
-                  <span className="font-mono text-[10px] text-slate-400">
-                    {c.code}
+          {courses.map((c) => (
+            <tr
+              key={c.courseId}
+              className="hover:bg-slate-50/60 transition-colors"
+            >
+              <td className="py-3 px-4 max-w-[280px]">
+                <Link
+                  to={`/admin/courses/${c.courseId}`}
+                  className="font-bold text-slate-900 block truncate hover:text-[#0052CC] transition-colors"
+                >
+                  {c.title}
+                </Link>
+                <span className="font-mono text-[10px] text-slate-400">
+                  {c.code}
+                </span>
+              </td>
+              <td className="py-3 px-3">
+                {c.certificateName ? (
+                  <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#0052CC] font-bold text-[10px] border border-blue-100 whitespace-nowrap">
+                    {c.certificateName}
                   </span>
-                </td>
-                <td className="py-3 px-3">
-                  {c.certificateName ? (
-                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#0052CC] font-bold text-[10px] border border-blue-100 whitespace-nowrap">
-                      {c.certificateName}
-                    </span>
-                  ) : (
-                    <span className="text-slate-300">—</span>
+                ) : (
+                  <span className="text-slate-300">—</span>
+                )}
+              </td>
+              <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                {c.level ?? '—'}
+              </td>
+              <td className="py-3 px-3 text-slate-700 max-w-[150px] truncate">
+                {c.mentorName ?? <span className="text-slate-300">VOD</span>}
+              </td>
+              <td className="py-3 px-3 font-bold text-[#0052CC] whitespace-nowrap">
+                {formatVND(c.price ?? 0)}
+              </td>
+              <td className="py-3 px-3">
+                <StatusSelect
+                  status={c.status}
+                  disabled={busyCourseId === c.courseId}
+                  onChange={(next) => onStatusChange(c, next)}
+                />
+              </td>
+              <td className="py-3 px-4">
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onManageContents(c)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
+                    title="Quản lý bài học"
+                    aria-label="Quản lý bài học"
+                  >
+                    <Layers3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onView(c)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
+                    title="Xem chi tiết"
+                    aria-label="Xem chi tiết"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(c)}
+                    className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                    title="Sửa khóa học"
+                    aria-label="Sửa khóa học"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  {c.status !== 'archived' && (
+                    <button
+                      type="button"
+                      onClick={() => onArchive(c)}
+                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                      title="Lưu trữ khóa học"
+                      aria-label="Lưu trữ khóa học"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   )}
-                </td>
-                <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                  {c.level ?? '—'}
-                </td>
-                <td className="py-3 px-3 text-slate-700 max-w-[150px] truncate">
-                  {c.mentorName ?? <span className="text-slate-300">VOD</span>}
-                </td>
-                <td className="py-3 px-3 font-bold text-[#0052CC] whitespace-nowrap">
-                  {formatVND(c.price ?? 0)}
-                </td>
-                <td className="py-3 px-3">
-                  <Badge variant={meta.variant} size="sm">
-                    {meta.label}
-                  </Badge>
-                </td>
-                <td className="py-3 px-4">
-                  <div className="flex items-center justify-end gap-1">
-                    {/* Toggle trạng thái nhanh */}
-                    <button
-                      type="button"
-                      onClick={() => onToggle(c)}
-                      disabled={busy || c.status === 'archived'}
-                      title={
-                        c.status === 'active'
-                          ? 'Chuyển về nháp'
-                          : 'Mở bán khóa học'
-                      }
-                      aria-label="Đổi trạng thái"
-                      className={cn(
-                        'relative w-9 h-5 rounded-full transition-colors shrink-0',
-                        'disabled:opacity-50 disabled:cursor-not-allowed',
-                        c.status === 'active' ? 'bg-emerald-500' : 'bg-slate-300',
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
-                          c.status === 'active' ? 'left-[18px]' : 'left-0.5',
-                        )}
-                      />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onManageContents(c)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
-                      title="Quản lý bài học"
-                      aria-label="Quản lý bài học"
-                    >
-                      <Layers3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onView(c)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
-                      title="Xem chi tiết"
-                      aria-label="Xem chi tiết"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onEdit(c)}
-                      className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                      title="Sửa khóa học"
-                      aria-label="Sửa khóa học"
-                    >
-                      <Plus className="w-3.5 h-3.5 rotate-45" />
-                    </button>
-                    {c.status !== 'archived' && (
-                      <button
-                        type="button"
-                        onClick={() => onArchive(c)}
-                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
-                        title="Lưu trữ"
-                        aria-label="Lưu trữ"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+                </div>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -607,12 +637,18 @@ const AdminCourseCard: React.FC<{
   onView: (c: CourseDto) => void;
   onEdit: (c: CourseDto) => void;
   onManageContents: (c: CourseDto) => void;
-}> = ({ course, onView, onEdit, onManageContents }) => {
-  const meta = STATUS_META[course.status] ?? {
-    label: course.status,
-    variant: 'neutral' as const,
-  };
-
+  onStatusChange: (next: CourseStatus) => void;
+  onArchive: () => void;
+  disabled?: boolean;
+}> = ({
+  course,
+  onView,
+  onEdit,
+  onManageContents,
+  onStatusChange,
+  onArchive,
+  disabled,
+}) => {
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col group">
       <div className="relative h-24 bg-gradient-to-r from-[#0052CC] to-indigo-700 p-4 flex items-start justify-between text-white">
@@ -624,9 +660,11 @@ const AdminCourseCard: React.FC<{
             {course.code}
           </p>
         </div>
-        <Badge variant={meta.variant} size="sm">
-          {meta.label}
-        </Badge>
+        <StatusSelect
+          status={course.status}
+          disabled={disabled}
+          onChange={onStatusChange}
+        />
       </div>
 
       <div className="p-5 flex-1 flex flex-col justify-between gap-4">
@@ -693,8 +731,19 @@ const AdminCourseCard: React.FC<{
               title="Sửa khóa học"
               aria-label="Sửa khóa học"
             >
-              <Plus className="w-4 h-4 rotate-45" />
+              <Pencil className="w-4 h-4" />
             </button>
+            {course.status !== 'archived' && (
+              <button
+                type="button"
+                onClick={onArchive}
+                className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors"
+                title="Lưu trữ khóa học"
+                aria-label="Lưu trữ khóa học"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -723,6 +772,7 @@ const CourseFormModal: React.FC<{
     targetScore: '',
     thumbnailUrl: '',
     certificateId: '',
+    status: 'draft' as CourseStatus,
   };
 
   const [form, setForm] = useState(emptyForm);
@@ -751,6 +801,7 @@ const CourseFormModal: React.FC<{
               editing.targetScore != null ? String(editing.targetScore) : '',
             thumbnailUrl: editing.thumbnailUrl ?? '',
             certificateId: editing.certificateId ?? '',
+            status: editing.status ?? 'draft',
           }
         : emptyForm,
     );
@@ -821,7 +872,10 @@ const CourseFormModal: React.FC<{
 
     if (editing) {
       // UpdateCourseRequest không có `code` (mã là khoá tĩnh)
-      updateMutation.mutate({ id: editing.courseId, payload: shared });
+      updateMutation.mutate({
+        id: editing.courseId,
+        payload: { ...shared, status: form.status },
+      });
     } else {
       createMutation.mutate({ code: form.code.trim(), ...shared });
     }
@@ -893,7 +947,7 @@ const CourseFormModal: React.FC<{
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Chứng chỉ">
             <select
               value={form.certificateId}
@@ -918,6 +972,31 @@ const CourseFormModal: React.FC<{
               className={inputCls(false)}
             />
           </Field>
+
+          {editing ? (
+            <Field label="Trạng thái">
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  setForm({ ...form, status: e.target.value as CourseStatus })
+                }
+                className={cn(inputCls(false), 'bg-white font-medium')}
+              >
+                <option value="draft">Bản nháp</option>
+                <option value="active">Đang mở</option>
+                <option value="archived">Lưu trữ</option>
+              </select>
+            </Field>
+          ) : (
+            <Field label="Trạng thái ban đầu">
+              <input
+                type="text"
+                disabled
+                value="Bản nháp"
+                className={inputCls(true)}
+              />
+            </Field>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">

@@ -80,3 +80,12 @@ export async function updateCertificate(
     throw toApiError(err, 'Cập nhật chứng chỉ thất bại');
   }
 }
+
+/** DELETE /api/v1/admin/certificates/{certificateId} */
+export async function deleteCertificate(certificateId: string): Promise<void> {
+  try {
+    await axiosClient.delete(`${BASE}/admin/certificates/${certificateId}`);
+  } catch (err) {
+    throw toApiError(err, 'Xoá chứng chỉ thất bại');
+  }
+}

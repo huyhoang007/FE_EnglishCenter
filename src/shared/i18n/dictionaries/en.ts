@@ -103,7 +103,22 @@ export const en = {
   'vocab.bank.addWord': 'Add a word',
   'vocab.bank.noWords': 'No words yet',
   'vocab.bank.noWordsHint':
-    'Add the first word using the form on the left.',
+    'Upload an Excel or CSV file to add vocabulary to this set.',
+  'vocab.bank.clearAll': 'Clear all',
+  'vocab.bank.dragDropHint':
+    'Drag & drop Excel/CSV file here or click to browse',
+  'vocab.bank.uploadFile': 'Upload file',
+  'vocab.bank.uploadHint':
+    'Supports .xlsx, .xls, .csv. Columns: Word, IPA, Meaning, Part of Speech, Example, Audio URL.',
+  'vocab.bank.uploadSuccess': 'Imported {count} words from file',
+  'vocab.bank.uploadSkipped': '({skipped} rows skipped due to missing data)',
+  'vocab.bank.uploadFailed': 'Failed to import file',
+  'vocab.bank.uploadReplace': 'Replace all',
+  'vocab.bank.uploadAppend': 'Append to list',
+  'vocab.bank.uploadConfirmTitle': 'How to import vocabulary?',
+  'vocab.bank.uploadConfirmBody':
+    'This set already has {current} words. Do you want to append {incoming} new words or replace the entire list?',
+  'vocab.bank.downloadTemplate': 'Download template',
   'vocab.bank.wordsRequired': 'Add at least one word to the set',
   'vocab.bank.titleRequired': 'Set name is required',
   'vocab.bank.titleExisted': 'A set with this name already exists',

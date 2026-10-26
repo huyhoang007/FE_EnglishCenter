@@ -15,7 +15,7 @@
 
 import React, { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   BookOpen,
@@ -25,14 +25,21 @@ import {
   Plus,
   Sparkles,
   Target,
+  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
+import { ConfirmDialog } from '@/shared/components/ConfirmDialog';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
+import { useToast } from '@/shared/components/Toast';
 import { cn } from '@/shared/utils/cn';
 import { formatVND } from '@/shared/utils/format';
 import { useTranslation } from '@/shared/i18n/I18nProvider';
-import { fetchCourseById, fetchCourseContents } from '@/shared/api/courseService';
+import {
+  deleteCourseContent,
+  fetchCourseById,
+  fetchCourseContents,
+} from '@/shared/api/courseService';
 import { fetchCourseVocabularies } from '@/shared/api/vocabularyService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import type {
@@ -62,6 +69,8 @@ export const AdminCourseDetailView: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [vocabOpen, setVocabOpen] = useState(false);
   /** Modal quản lý nội dung (bài học / từ vựng / bài tập). */
@@ -70,6 +79,25 @@ export const AdminCourseDetailView: React.FC = () => {
   /** Nội dung đang sửa — `null` nghĩa là thêm mới. */
   const [editingContent, setEditingContent] =
     useState<CourseContentDto | null>(null);
+  /** Nội dung đang chọn để xoá. */
+  const [deleteTargetContent, setDeleteTargetContent] =
+    useState<CourseContentDto | null>(null);
+
+  const deleteContentMutation = useMutation({
+    mutationFn: (contentId: string) => deleteCourseContent(contentId),
+    onSuccess: () => {
+      toast.success('Đã xoá nội dung thành công');
+      setDeleteTargetContent(null);
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.catalog.contents(id),
+      });
+    },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error ? err.message : 'Xoá nội dung khóa học thất bại',
+      );
+    },
+  });
 
   const {
     data: course,
@@ -395,7 +423,7 @@ export const AdminCourseDetailView: React.FC = () => {
                       {item.contentOrder ?? 0}
                     </td>
                     <td className="py-3 px-5">
-                      <div className="flex items-center justify-end">
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -408,6 +436,15 @@ export const AdminCourseDetailView: React.FC = () => {
                         >
                           {t('common.edit')}
                         </Button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTargetContent(item)}
+                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                          title="Xoá nội dung"
+                          aria-label="Xoá nội dung"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -437,6 +474,22 @@ export const AdminCourseDetailView: React.FC = () => {
         defaultContentType={contentType}
         editing={editingContent}
         nextContentOrder={contents.length + 1}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTargetContent)}
+        title="Xoá nội dung bài học"
+        description={`Bạn có chắc chắn muốn xoá nội dung "${deleteTargetContent?.title}" khỏi khóa học?`}
+        confirmLabel="Xác nhận xoá"
+        cancelLabel="Huỷ"
+        variant="danger"
+        isLoading={deleteContentMutation.isPending}
+        onConfirm={() => {
+          if (deleteTargetContent) {
+            deleteContentMutation.mutate(deleteTargetContent.contentId);
+          }
+        }}
+        onClose={() => setDeleteTargetContent(null)}
       />
     </div>
   );

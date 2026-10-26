@@ -197,6 +197,15 @@ export async function updateCourseContent(
   }
 }
 
+/** DELETE /api/v1/admin/course-contents/{contentId} */
+export async function deleteCourseContent(contentId: string): Promise<void> {
+  try {
+    await axiosClient.delete(`${BASE}/admin/course-contents/${contentId}`);
+  } catch (err) {
+    throw toApiError(err, 'Xoá nội dung khóa học thất bại');
+  }
+}
+
 /* =========================================================
  * Helpers — tiện ích xử lý cây nội dung phía UI
  * ========================================================= */
