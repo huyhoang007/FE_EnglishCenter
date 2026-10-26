@@ -15,6 +15,7 @@ import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
+import { detectScale } from '@/shared/constants/examScales';
 import { EXAM_STATUS_LABEL, EXAM_TYPE_LABEL } from '@/shared/types';
 import { useAdminExam, useExamActions } from './hooks/useAdminExams';
 import { AddQuestionModal } from './components/AddQuestionModal';
@@ -183,6 +184,8 @@ export const ExamEditorView: React.FC = () => {
       {isDraft && (
         <div className="grid lg:grid-cols-2 gap-4">
           <AddSectionForm
+            key={exam.examId}
+            scaleKind={detectScale(exam.certificateName).kind}
             isSubmitting={actions.addSection.isPending}
             serverError={actions.addSection.error?.message}
             onSubmit={(payload, reset) => actions.addSection.mutate(payload, { onSuccess: reset })}

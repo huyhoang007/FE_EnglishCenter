@@ -1,29 +1,45 @@
 /**
- * AddSectionForm — thêm section Listening / Reading / Writing / Speaking (Dev 3)
+ * AddSectionForm — thêm section theo kỹ năng của chứng chỉ (Dev 3)
+ * -----------------------------------------------------------
+ * Loại section đổi theo chứng chỉ của đề:
+ *   IELTS / VSTEP : Listening, Reading, Writing, Speaking
+ *   TOEIC         : Listening, Reading
+ *   khác          : thêm GENERAL
+ * Link file nghe chỉ hiện với section Listening.
  */
 
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
+import type { ScaleKind } from '@/shared/constants/examScales';
 import type { CreateSectionRequest } from '../services/adminExamService';
 import { AutoGrowTextarea, FIELD_CLASS, Field } from './ExamFormParts';
 
-const SECTION_TYPES = ['LISTENING', 'READING', 'WRITING', 'SPEAKING', 'GENERAL'];
+const SECTION_TYPES: Record<ScaleKind, string[]> = {
+  ielts: ['LISTENING', 'READING', 'WRITING', 'SPEAKING'],
+  vstep: ['LISTENING', 'READING', 'WRITING', 'SPEAKING'],
+  toeic: ['LISTENING', 'READING'],
+  raw: ['LISTENING', 'READING', 'WRITING', 'SPEAKING', 'GENERAL'],
+};
 
 interface AddSectionFormProps {
+  /** Loại thang của chứng chỉ của đề — quyết định các loại section được chọn */
+  scaleKind: ScaleKind;
   isSubmitting: boolean;
   serverError?: string;
   onSubmit: (payload: CreateSectionRequest, reset: () => void) => void;
 }
 
-export const AddSectionForm: React.FC<AddSectionFormProps> = ({ isSubmitting, serverError, onSubmit }) => {
+export const AddSectionForm: React.FC<AddSectionFormProps> = ({ scaleKind, isSubmitting, serverError, onSubmit }) => {
+  const sectionTypes = SECTION_TYPES[scaleKind];
   const [title, setTitle] = useState('');
-  const [sectionType, setSectionType] = useState('READING');
+  const [sectionType, setSectionType] = useState(sectionTypes.includes('READING') ? 'READING' : sectionTypes[0]);
   const [instructions, setInstructions] = useState('');
   const [passageText, setPassageText] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const isListening = sectionType === 'LISTENING';
 
   const reset = () => {
     setTitle('');
@@ -31,8 +47,6 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({ isSubmitting, se
     setPassageText('');
     setAudioUrl('');
   };
-
-  const isListening = sectionType === 'LISTENING';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +80,7 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({ isSubmitting, se
           </Field>
           <Field label="Loại">
             <select value={sectionType} onChange={(e) => setSectionType(e.target.value)} className={FIELD_CLASS}>
-              {SECTION_TYPES.map((t) => (
+              {sectionTypes.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -78,7 +92,12 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({ isSubmitting, se
           <input value={instructions} onChange={(e) => setInstructions(e.target.value)} className={FIELD_CLASS} />
         </Field>
         <Field label="Đoạn đọc (Reading)">
-          <AutoGrowTextarea value={passageText} onChange={(e) => setPassageText(e.target.value)} rows={3} className={FIELD_CLASS} />
+          <AutoGrowTextarea
+            value={passageText}
+            onChange={(e) => setPassageText(e.target.value)}
+            rows={3}
+            className={FIELD_CLASS}
+          />
         </Field>
         {isListening && (
           <Field label="Link file nghe (Listening)">
