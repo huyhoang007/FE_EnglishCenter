@@ -176,9 +176,9 @@ export const ExamEditorView: React.FC = () => {
           <MoreActions
             items={[
               ...(!isArchived
-                ? [{ label: 'Lưu trữ đề', icon: Archive, onSelect: handleArchive }]
+                ? [{ label: 'Lưu trữ', icon: Archive, onSelect: handleArchive }]
                 : []),
-              { label: 'Xóa đề', icon: Trash2, onSelect: handleDelete, danger: true },
+              { label: 'Xóa', icon: Trash2, onSelect: handleDelete, danger: true },
             ]}
           />
         </div>
