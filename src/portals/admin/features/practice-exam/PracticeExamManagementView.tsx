@@ -35,6 +35,7 @@ import {
   useDeletePracticeExam,
   useSavePracticeExam,
 } from './hooks/useAdminPracticeExams';
+import { PracticeAiImportModal } from './components/PracticeAiImportModal';
 
 const PAGE_SIZE = 10;
 /** Chiều cao tối thiểu ô "Đề bài" (px) — đề Writing/Speaking thường dài */
@@ -59,6 +60,8 @@ export const PracticeExamManagementView: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editing, setEditing] = useState<PracticeExam | null>(null);
   const [deleting, setDeleting] = useState<PracticeExam | null>(null);
+  // Dev 3: tạo đề từ file PDF / Word bằng AI
+  const [isAiImportOpen, setAiImportOpen] = useState(false);
 
   const listQuery = useAdminPracticeExams({ type, keyword, page, size: PAGE_SIZE });
   // Thống kê theo kỹ năng: chỉ cần totalElements
@@ -151,15 +154,20 @@ export const PracticeExamManagementView: React.FC = () => {
             Kho đề Writing / Speaking để học viên tự luyện, AI chấm theo 4 tiêu chí IELTS.
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="md"
-          leftIcon={Plus}
-          onClick={openCreate}
-          className="bg-[#0052CC] hover:bg-[#0040A8] font-bold shadow-xs"
-        >
-          Tạo đề luyện tập
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="md" leftIcon={Sparkles} onClick={() => setAiImportOpen(true)} className="font-bold">
+            Tạo từ file
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            leftIcon={Plus}
+            onClick={openCreate}
+            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold shadow-xs"
+          >
+            Tạo đề luyện tập
+          </Button>
+        </div>
       </div>
 
       {/* ============ 3. FILTER BAR ============ */}
@@ -335,6 +343,8 @@ export const PracticeExamManagementView: React.FC = () => {
           </div>
         </ModalShell>
       )}
+
+      {isAiImportOpen && <PracticeAiImportModal onClose={() => setAiImportOpen(false)} />}
     </div>
   );
 };

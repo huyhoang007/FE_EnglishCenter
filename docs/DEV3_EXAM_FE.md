@@ -53,15 +53,27 @@ Không thêm component / helper dùng chung mới: modal, format ngày giờ, de
 - Không bao giờ nhận đáp án đúng: backend ẩn `isCorrect`, đáp án điền từ và cặp nối.
 - Đề `course` chỉ làm được khi đã ghi danh khóa học (backend kiểm tra qua EnrollmentService của Dev 4).
 
-## Nhập đề từ file Word
+## Nhập đề từ file (PDF / Word / text, có AI)
 
-Trang soạn đề (`/admin/exams/:examId`, đề nháp) có nút **Nhập từ Word**: thả file `.docx` (hoặc `.txt`) viết theo mẫu,
-FE đọc ngay trên trình duyệt (thư viện `mammoth`), hiện bản xem trước + lỗi kèm dòng, bấm **Tạo** thì tạo lần lượt
-section và câu hỏi qua API sẵn có — không cần sửa backend. File mẫu: `public/templates/mau-de-thi.docx`.
+Trang soạn đề (`/admin/exams/:examId`, đề nháp) có nút **Nhập từ file**, hoặc kéo thả file thẳng vào ô
+"Đề chưa có phần thi nào":
+
+- **Word / `.txt` viết theo mẫu** (bảng dưới): FE đọc ngay trên trình duyệt (`mammoth`), không gọi AI.
+  Kéo thả vào ô trống thì tạo luôn nếu file không lỗi.
+- **PDF, hoặc Word / `.txt` viết tự do**: gửi `POST /api/v1/admin/ai-import` (target `EXAM`). AI (Gemini) chuyển đề sang
+  mẫu, giữ nguyên câu hỏi, lấy đáp án từ answer key (không có thì tự xác định theo đoạn đọc), map phần thi theo
+  các phần của chứng chỉ. Kết quả luôn dừng ở bước **xem trước**; câu AI đọc chưa chắc (VD thiếu đáp án) bị bỏ qua khi tạo.
+- Listening / Reading có đáp án nên hệ thống tự chấm; Writing / Speaking thành câu tự luận cho mentor chấm.
+  Phần Listening cần link file nghe nếu file gốc không có.
+
+Bấm **Tạo** thì tạo lần lượt section và câu hỏi qua API sẵn có. File mẫu: `public/templates/mau-de-thi.docx`.
+
+Trang **Đề luyện tập AI** (`/admin/practice-exams`, Dev 5) có nút **Tạo từ file**: cùng API với target `PRACTICE`,
+AI tách từng đề Writing / Speaking trong file, admin bỏ chọn đề không muốn rồi tạo.
 
 | Viết trong file | Ý nghĩa |
 |---|---|
-| `[SECTION] READING | Part 2 - Reading` | Mở phần thi: TÊN PHẦN THI của chứng chỉ (hoặc kỹ năng) | Tiêu đề. Section được gắn vào phần thi đó || Part 2 - Reading` | Mở phần thi: LOẠI \| Tiêu đề (TOEIC chỉ LISTENING / READING) |
+| `[SECTION] READING \| Part 2 - Reading` | Mở phần thi: TÊN PHẦN THI của chứng chỉ (hoặc kỹ năng) \| Tiêu đề. Section được gắn vào phần thi đó |
 | `[INSTRUCTIONS] …` / `[PASSAGE] …` / `[AUDIO] url` | Hướng dẫn / đoạn đọc (nhiều dòng) / file nghe (chỉ LISTENING) |
 | `1. Câu hỏi … {2}` + `A. …` `*B. …` | Trắc nghiệm, `*` = đáp án đúng, `{2}` = 2 điểm (mặc định 1) |
 | `2. [TF] …` + `= False` | Đúng / sai |

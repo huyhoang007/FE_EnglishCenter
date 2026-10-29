@@ -78,6 +78,25 @@ interface DraftQuestion {
   explanation: string;
 }
 
+export const isPdfFile = (file: File) => file.name.toLowerCase().endsWith('.pdf');
+
+/** PDF gửi AI: tối đa 15MB (giới hạn của backend) */
+export const MAX_PDF_BYTES = 15 * 1024 * 1024;
+
+/** Nội dung file dạng base64 (không kèm tiền tố data:) để gửi AI */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
+    reader.onerror = () => reject(new Error('Không đọc được file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** File đã viết theo mẫu (có [SECTION] / [PASSAGE] hoặc đáp án đánh dấu *) → đọc thẳng, không cần AI */
+export const isTemplateText = (text: string) =>
+  /^\s*\[(SECTION|PASSAGE|INSTRUCTIONS)\]/im.test(text) || /^\s*\*\s*[A-H]\s*[.)]/m.test(text);
+
 /** Đọc nội dung chữ của file: .docx qua mammoth, .txt đọc thẳng. */
 export async function readExamFile(file: File): Promise<string> {
   const name = file.name.toLowerCase();
@@ -156,11 +175,12 @@ export function parseExamText(text: string, parts: PartScale[] = []): ImportResu
         errors.push({ line: lineNo, message: `[${name}] phải nằm trong một [SECTION]` });
         return;
       }
+      // Nhiều [INSTRUCTIONS] / [PASSAGE] trong một section (VD "Questions 1-2…", "Questions 3-4…") → nối tiếp
       if (name === 'INSTRUCTIONS') {
-        section.request.instructions = value;
+        section.request.instructions = section.request.instructions ? `${section.request.instructions}\n${value}` : value;
         continuing = 'instructions';
       } else if (name === 'PASSAGE') {
-        section.request.passageText = value;
+        section.request.passageText = section.request.passageText ? `${section.request.passageText}\n\n${value}` : value;
         continuing = 'passage';
       } else if (name === 'AUDIO') {
         if (section.request.sectionType !== 'LISTENING') {

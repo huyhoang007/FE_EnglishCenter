@@ -1,14 +1,17 @@
 /**
- * ImportExamModal — nhập section + câu hỏi từ file Word (.docx) / .txt viết theo mẫu (Dev 3)
+ * ImportExamModal — nhập section + câu hỏi từ file PDF / Word (.docx) / .txt (Dev 3)
  * -----------------------------------------------------------
- * 1. Kéo thả / chọn file → đọc và kiểm tra ngay trên trình duyệt
+ * 1. Kéo thả / chọn file:
+ *    - Word / .txt viết theo mẫu ([SECTION], *đáp án…) → đọc thẳng trên trình duyệt
+ *    - PDF, hoặc Word / .txt viết tự do → AI (Gemini) đọc và chuyển sang mẫu (POST /admin/ai-import)
  * 2. Xem trước bộ đề (lỗi hiện kèm nội dung dòng) → bấm Tạo: tạo lần lượt section rồi câu hỏi qua API sẵn có
- * Kéo thả file thẳng vào trang soạn đề (initialFile): đọc xong nếu không lỗi thì tạo luôn, có lỗi thì giữ cửa sổ để xem.
+ * Kéo thả file thẳng vào trang soạn đề (initialFile): file theo mẫu không lỗi thì tạo luôn;
+ * bản AI đọc luôn dừng ở bước xem trước để admin kiểm tra đáp án.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, FileText, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileText, Sparkles, Upload } from 'lucide-react';
 import { unwrapOrThrow } from '@/shared/api/axiosClient';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
@@ -16,9 +19,19 @@ import { useToast } from '@/shared/components/Toast';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { QUESTION_TYPE_LABEL } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
-import { addQuestionApi, createSectionApi } from '../services/adminExamService';
+import { addQuestionApi, aiImportApi, createSectionApi } from '../services/adminExamService';
 import type { ScaleInfo } from '@/shared/constants/examScales';
-import { parseExamText, readExamFile, type ImportQuestion, type ImportResult } from '../utils/examImport';
+import {
+  MAX_PDF_BYTES,
+  fileToBase64,
+  isPdfFile,
+  isTemplateText,
+  parseExamText,
+  readExamFile,
+  sectionTokens,
+  type ImportQuestion,
+  type ImportResult,
+} from '../utils/examImport';
 import { ExamModal } from './ExamFormParts';
 
 interface ImportExamModalProps {
@@ -50,6 +63,29 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
   const [result, setResult] = useState<ImportResult | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
   const [isReading, setReading] = useState(false);
+  /** Bộ đề đang xem do AI đọc (nhắc admin kiểm tra đáp án) */
+  const [isAiResult, setAiResult] = useState(false);
+  const [isAiReading, setAiReading] = useState(false);
+
+  /** Nhờ AI chuyển PDF / văn bản tự do sang mẫu nhập đề */
+  const readWithAi = async (file: File, text?: string) => {
+    setAiReading(true);
+    try {
+      const res = unwrapOrThrow(
+        await aiImportApi({
+          target: 'EXAM',
+          certificateName: scale.kind === 'raw' ? undefined : scale.label,
+          sections: sectionTokens(scale.parts),
+          fileName: file.name,
+          fileBase64: text === undefined ? await fileToBase64(file) : undefined,
+          text,
+        }),
+      );
+      return res.content ?? '';
+    } finally {
+      setAiReading(false);
+    }
+  };
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const isCreating = progress !== null && createError === null;
@@ -61,12 +97,28 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
     setResult(null);
     setReadError(null);
     setCreateError(null);
+    setAiResult(false);
     setReading(true);
     try {
-      const text = await readExamFile(file);
+      let text: string;
+      let fromAi = false;
+      if (isPdfFile(file)) {
+        if (file.size > MAX_PDF_BYTES) throw new Error('File PDF tối đa 15MB');
+        text = await readWithAi(file);
+        fromAi = true;
+      } else {
+        text = await readExamFile(file);
+        // Word / .txt viết tự do (không theo mẫu) → nhờ AI chuyển sang mẫu
+        if (!isTemplateText(text)) {
+          text = await readWithAi(file, text);
+          fromAi = true;
+        }
+      }
       const parsed = parseExamText(text, scale.parts);
       setResult(parsed);
-      if (autoCreate && parsed.errors.length === 0 && parsed.sections.length + parsed.questionCount > 0) {
+      setAiResult(fromAi);
+      // Bản AI đọc luôn dừng ở xem trước để kiểm tra đáp án
+      if (autoCreate && !fromAi && parsed.errors.length === 0 && parsed.sections.length + parsed.questionCount > 0) {
         await handleCreate(parsed);
       }
     } catch (err) {
@@ -121,7 +173,7 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
   const hasErrors = (result?.errors.length ?? 0) > 0;
 
   return (
-    <ExamModal title="Nhập đề từ file Word" onClose={onClose} isDismissDisabled={isCreating}>
+    <ExamModal title="Nhập đề từ file" onClose={onClose} isDismissDisabled={isCreating}>
       <div className="p-6 pt-2 space-y-4">
         {/* ---------- Chọn file ---------- */}
         <div
@@ -143,7 +195,14 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
         >
           <Upload className="w-7 h-7 mx-auto text-slate-400" />
           <p className="mt-2 text-sm font-semibold text-slate-700">
-            {isReading ? 'Đang đọc file…' : 'Kéo thả file .docx vào đây hoặc bấm để chọn'}
+            {isAiReading
+              ? 'AI đang đọc file và tạo đề… (có thể mất vài phút)'
+              : isReading
+                ? 'Đang đọc file…'
+                : 'Kéo thả file PDF, Word (.docx) hoặc .txt vào đây, hoặc bấm để chọn'}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            File viết tự do hoặc PDF sẽ được AI đọc và tạo đề, kèm đáp án trắc nghiệm để hệ thống tự chấm.
           </p>
           {fileName && (
             <p className="mt-1 text-xs text-slate-500 inline-flex items-center gap-1">
@@ -153,7 +212,7 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
           <input
             ref={inputRef}
             type="file"
-            accept=".docx,.txt"
+            accept=".pdf,.docx,.txt"
             className="hidden"
             onChange={(e) => {
               handleFile(e.target.files?.[0]);
@@ -173,8 +232,20 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
                 <CheckCircle2 className="w-4 h-4 text-status-success" />
               )}
               Đọc được {result.sections.length} section, {result.questionCount} câu hỏi
-              {hasErrors && ` — ${result.errors.length} lỗi cần sửa trong file`}
+              {hasErrors &&
+                (isAiResult
+                  ? ` — ${result.errors.length} mục AI đọc chưa chắc, sẽ bỏ qua khi tạo`
+                  : ` — ${result.errors.length} lỗi cần sửa trong file`)}
             </p>
+            {isAiResult && (
+              <p className="rounded-xl border border-ai/30 bg-ai/5 p-3 text-sm text-slate-700 flex gap-2">
+                <Sparkles className="w-4 h-4 text-ai shrink-0 mt-0.5" />
+                <span>
+                  Bộ đề do AI đọc từ file. Kiểm tra lại đáp án đúng (✓) trước khi tạo; sau khi tạo vẫn sửa được từng câu.
+                  Phần Listening cần link file nghe nếu file gốc không có.
+                </span>
+              </p>
+            )}
 
             {hasErrors && (
               <ul className="rounded-xl border border-rose-200 bg-rose-50/60 p-3 space-y-1.5 text-sm">
@@ -218,7 +289,9 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
           <Button
             onClick={() => handleCreate()}
             isLoading={isCreating}
-            disabled={!result || hasErrors || result.questionCount + result.sections.length === 0}
+            disabled={
+              !result || isAiReading || (hasErrors && !isAiResult) || result.questionCount + result.sections.length === 0
+            }
           >
             Tạo {result ? `${result.sections.length} section, ${result.questionCount} câu` : 'bộ đề'}
           </Button>

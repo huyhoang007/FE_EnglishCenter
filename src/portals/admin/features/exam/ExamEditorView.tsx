@@ -209,14 +209,14 @@ export const ExamEditorView: React.FC = () => {
           {/* Đề trống: nút nằm ở khung trống bên dưới, không lặp lại trên thanh công cụ */}
           {isDraft && hasContent && (
             <p className="text-xs text-slate-600 mt-0.5">
-              Có sẵn đề trong Word? Dùng “Nhập từ Word” để tạo cả bộ đề từ file .docx viết theo mẫu.
+              Có sẵn đề trong file? Dùng “Nhập từ file” để AI đọc PDF / Word và tạo cả bộ đề.
             </p>
           )}
         </div>
         {isDraft && hasContent && (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" leftIcon={FileUp} className="h-10" onClick={() => setImportOpen(true)}>
-              Nhập từ Word
+              Nhập từ file
             </Button>
             <Button
               variant="secondary"
@@ -313,11 +313,11 @@ export const ExamEditorView: React.FC = () => {
             )}
           >
             <p className="text-base font-bold text-slate-900">
-              {isDropping ? 'Thả file Word để tạo bộ đề' : 'Đề chưa có phần thi nào'}
+              {isDropping ? 'Thả file PDF / Word để tạo bộ đề' : 'Đề chưa có phần thi nào'}
             </p>
             <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
               {isDraft
-                ? 'Thêm phần thi (Listening, Reading…) rồi thêm câu hỏi vào từng phần, hoặc kéo thả file Word (.docx) vào đây để tạo cả bộ đề.'
+                ? 'Thêm phần thi (Listening, Reading…) rồi thêm câu hỏi vào từng phần, hoặc kéo thả file PDF, Word (.docx) hoặc .txt vào đây để tạo cả bộ đề (AI đọc file tự do).'
                 : 'Chuyển đề về nháp để thêm phần thi và câu hỏi.'}
             </p>
             {isDraft && (
@@ -326,7 +326,7 @@ export const ExamEditorView: React.FC = () => {
                   Thêm phần thi
                 </Button>
                 <Button variant="outline" leftIcon={FileUp} className="h-10" onClick={() => setImportOpen(true)}>
-                  Nhập từ Word
+                  Nhập từ file
                 </Button>
               </div>
             )}

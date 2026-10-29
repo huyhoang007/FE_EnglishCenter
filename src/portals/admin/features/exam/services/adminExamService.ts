@@ -125,3 +125,36 @@ export const addQuestionApi = (examId: string, payload: CreateQuestionRequest): 
 
 export const removeQuestionApi = (examId: string, questionId: string): Promise<ApiResponse<void>> =>
   apiDelete<void>(`${BASE}/${examId}/questions/${questionId}`);
+
+/* ---------- AI đọc file đề (PDF / Word / text) — POST /api/v1/admin/ai-import ---------- */
+
+export interface AiImportRequest {
+  /** EXAM: đề thi; PRACTICE: đề luyện Writing / Speaking (AI Practice) */
+  target: 'EXAM' | 'PRACTICE';
+  certificateName?: string;
+  /** Tên các phần thi được dùng sau [SECTION] */
+  sections?: string[];
+  fileName?: string;
+  /** PDF mã hoá base64 */
+  fileBase64?: string;
+  /** Nội dung chữ đã trích từ .docx / .txt */
+  text?: string;
+}
+
+export interface AiPracticeDraft {
+  title: string;
+  description: string;
+  examType: 'WRITING' | 'SPEAKING';
+  bankName?: string;
+}
+
+export interface AiImportResponse {
+  /** EXAM: nội dung theo mẫu nhập đề */
+  content?: string;
+  /** PRACTICE: các đề luyện */
+  prompts?: AiPracticeDraft[];
+}
+
+/** AI đọc cả bộ đề có thể mất vài phút khi Gemini chậm */
+export const aiImportApi = (payload: AiImportRequest): Promise<ApiResponse<AiImportResponse>> =>
+  apiPost<AiImportResponse>('/api/v1/admin/ai-import', payload, { timeout: 300_000 });
