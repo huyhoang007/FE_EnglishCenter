@@ -7,6 +7,8 @@
  *  - Truly generic — does NOT contain page-specific content
  *  - Menu theo role: MENTOR chỉ có Teaching Schedule, Exam Grading, Learning Paths
  *    (không có khóa học, thi thử, luyện đề AI, ô tìm khóa học)
+ *  - Learner (USER) / khách: Courses | Free Level Test
+ *  - Student: My Courses | Learning Paths | AI Practice | Final Exams | Mentor 1-1
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -53,23 +55,17 @@ const NAV_ITEMS: NavItem[] = [
     to: CLIENT_ROUTES.examGrading,
     roles: ['MENTOR'],
   },
-  /* ---------- Người học + chung ---------- */
+  /* ---------- Learner (USER, chưa mua khóa) + khách: chỉ khóa học + test trình độ miễn phí ---------- */
+  /* ---------- Student (đã mua khóa): học, luyện tập AI, thi đầu ra, mentor 1-1 ---------- */
+  {
+    label: 'Courses',
+    to: '/courses',
+    roles: ['GUEST', 'USER', 'ADMIN'],
+  },
   {
     label: 'My Courses',
     to: CLIENT_ROUTES.myCourses,
-    roles: ['USER', 'STUDENT'],
-  },
-  {
-    label: 'Programs & Paths',
-    to: '/courses',
-    roles: ['GUEST', 'USER', 'STUDENT', 'ADMIN'],
-    hasDropdown: true,
-  },
-  {
-    label: 'Practice & Mock Tests',
-    to: CLIENT_ROUTES.exams,
-    roles: ['GUEST', 'USER', 'STUDENT', 'ADMIN'],
-    hasDropdown: true,
+    roles: ['STUDENT'],
   },
   {
     label: 'Learning Paths',
@@ -77,13 +73,25 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['STUDENT', 'MENTOR', 'ADMIN'],
   },
   {
+    // Cùng một tính năng (AI chấm theo chứng chỉ mục tiêu), chỉ khác tên theo role
+    label: 'Free Level Test',
+    to: CLIENT_ROUTES.practice,
+    roles: ['GUEST', 'USER'],
+  },
+  {
     label: 'AI Practice',
     to: CLIENT_ROUTES.practice,
     roles: ['STUDENT', 'ADMIN'],
   },
   {
-    // Học viên đặt lịch kèm 1-1 với mentor (Dev 5)
-    label: 'Mentor Schedule',
+    // Exam: chỉ Student dùng để kiểm tra đầu ra khi kết thúc khóa
+    label: 'Final Exams',
+    to: CLIENT_ROUTES.exams,
+    roles: ['STUDENT', 'ADMIN'],
+  },
+  {
+    // Học viên đặt lịch kèm 1-1 với mentor (Dev 5) — Learner không thấy
+    label: 'Mentor 1-1',
     to: CLIENT_ROUTES.schedule,
     roles: ['STUDENT'],
   },

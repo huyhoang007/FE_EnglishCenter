@@ -6,6 +6,7 @@ import { Badge } from '@/shared/components/Badge';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { getProfile, updateProfile, changePasswordRequest } from '@/shared/api/domainApi';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import { TargetGoalFields, type TargetGoal } from '@/shared/components/TargetGoalFields';
 import {
   User,
   Lock,
@@ -17,7 +18,6 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Sparkles,
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
@@ -39,13 +39,17 @@ export const ProfilePage: React.FC = () => {
   // Profile Form state
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [targetScore, setTargetScore] = useState<number | ''>('');
+  const [goal, setGoal] = useState<TargetGoal>({ certificateId: '', score: '' });
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (profile) {
       setFullName(profile.fullName || '');
       setPhone(profile.phone || '');
+      setGoal({
+        certificateId: profile.targetCertificateId ?? '',
+        score: profile.targetScore != null ? Number(profile.targetScore) : '',
+      });
     }
   }, [profile]);
 
@@ -55,7 +59,8 @@ export const ProfilePage: React.FC = () => {
       updateProfile({
         fullName: fullName.trim(),
         phone: phone.trim() || undefined,
-        targetScore: targetScore !== '' ? Number(targetScore) : undefined,
+        targetCertificateId: goal.certificateId || undefined,
+        targetScore: goal.score !== '' ? Number(goal.score) : undefined,
       }),
     onSuccess: (updated) => {
       setProfileMessage({ type: 'success', text: 'Cập nhật thông tin thành công!' });
@@ -286,23 +291,8 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 </div>
 
-                {role === 'STUDENT' && (
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                      Mục tiêu điểm số (Target Score)
-                    </label>
-                    <div className="relative">
-                      <Sparkles className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={targetScore}
-                        onChange={(e) => setTargetScore(e.target.value === '' ? '' : Number(e.target.value))}
-                        placeholder="7.5"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC] transition-colors"
-                      />
-                    </div>
-                  </div>
+                {(role === 'STUDENT' || role === 'USER') && (
+                  <TargetGoalFields value={goal} onChange={setGoal} disabled={updateProfileMutation.isPending} />
                 )}
 
                 <div className="pt-2">

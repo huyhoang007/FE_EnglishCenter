@@ -11,6 +11,11 @@ export interface UserDto {
   role: string;
   isActive?: boolean;
   createdAt?: string;
+  /** Hồ sơ người học (USER / STUDENT) */
+  targetCertificateId?: string | null;
+  targetScore?: number | null;
+  currentLevel?: string | null;
+  currentScore?: number | null;
 }
 
 export interface AuthDto {
@@ -54,6 +59,8 @@ export function toUser(dto: UserDto): AuthUser {
     id: String(dto.userId), email: dto.email, fullName: dto.fullName,
     phone: dto.phone, role: ['USER', 'STUDENT', 'MENTOR', 'ADMIN'].includes(role) ? role : 'USER',
     isActive: dto.isActive, createdAt: dto.createdAt,
+    targetCertificateId: dto.targetCertificateId ?? null, targetScore: dto.targetScore ?? null,
+    currentLevel: dto.currentLevel ?? null, currentScore: dto.currentScore ?? null,
     avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(dto.email)}`,
   };
 }

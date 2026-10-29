@@ -3,10 +3,10 @@
  * -----------------------------------------------------------
  *   GET  /api/v1/practice-exams?type=&keyword=           → PageResponse<PracticeExam>
  *   GET  /api/v1/practice-exams/{examId}                 → PracticeExam
- *   POST /api/v1/practice-exams/{examId}/submit          → PracticeAnswer (STUDENT)
- *   POST /api/v1/practice-exams/answers/{id}/ai-evaluate → PracticeEvaluation (STUDENT, 10 - 60 giây)
+ *   POST /api/v1/practice-exams/{examId}/submit          → PracticeAnswer (USER, STUDENT)
+ *   POST /api/v1/practice-exams/answers/{id}/ai-evaluate → PracticeEvaluation (USER, STUDENT, 10 - 60 giây)
  *   GET  /api/v1/practice-exams/evaluations/{id}         → PracticeEvaluation
- *   GET  /api/v1/practice-exams/me/answers               → PracticeAnswer[] (STUDENT)
+ *   GET  /api/v1/practice-exams/me/answers               → PracticeAnswer[] (USER, STUDENT)
  */
 
 import { apiGet, apiPost } from '@/shared/api/axiosClient';

@@ -22,12 +22,18 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
     { label: 'Grammatical Range & Accuracy', score: evaluation.grammaticalAccuracy },
   ];
   const isMock = evaluation.model === 'mock';
+  // Thang theo chứng chỉ mục tiêu; bài chấm cũ không có thang → IELTS 0 – 9
+  const scale: ScoreScale = {
+    name: evaluation.certificateName || 'IELTS',
+    min: Number(evaluation.minScore ?? 0),
+    max: Number(evaluation.maxScore ?? 9),
+  };
 
   return (
     <Card noPadding className="overflow-hidden">
       {/* Band tổng */}
       <div className="p-5 bg-gradient-to-br from-blue-50 via-white to-violet-50 border-b border-slate-100 flex items-center gap-4">
-        <BandRing band={Number(evaluation.bandScore)} />
+        <BandRing band={Number(evaluation.bandScore)} scale={scale} />
         <div className="min-w-0">
           <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
             Kết quả AI chấm
@@ -37,6 +43,14 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
             <Badge variant="ai" size="sm" icon={Sparkles}>
               {evaluation.examType === 'SPEAKING' ? 'Speaking' : 'Writing'}
             </Badge>
+            <Badge variant="primary" size="sm">
+              {scale.name} · {formatScore(Number(evaluation.bandScore), scale)}/{formatScore(scale.max, scale)}
+            </Badge>
+            {evaluation.cefrLevel && (
+              <Badge variant="success" size="sm">
+                Level {evaluation.cefrLevel}
+              </Badge>
+            )}
             <Badge variant={isMock ? 'warning' : 'neutral'} size="sm">
               {isMock ? 'Chấm giả lập (mock)' : evaluation.model}
             </Badge>
@@ -51,13 +65,13 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-bold text-slate-800">{c.label}</p>
               <span className="text-sm font-extrabold text-[#0052CC] tabular-nums">
-                {Number(c.score.band).toFixed(1)}
+                {formatScore(Number(c.score.band), scale)}
               </span>
             </div>
             <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-[#2563EB] to-[#7C3AED]"
-                style={{ width: `${(Number(c.score.band) / 9) * 100}%` }}
+                style={{ width: `${ratio(Number(c.score.band), scale) * 100}%` }}
               />
             </div>
             {c.score.comment && (
@@ -103,11 +117,25 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
   );
 };
 
-/* Vòng tròn band tổng (0 - 9) */
-const BandRing: React.FC<{ band: number }> = ({ band }) => {
+interface ScoreScale {
+  name: string;
+  min: number;
+  max: number;
+}
+
+/** Tỷ lệ 0 – 1 của điểm trên thang (cho thanh tiến độ / vòng tròn). */
+const ratio = (score: number, scale: ScoreScale) =>
+  scale.max > scale.min ? Math.max(0, Math.min(1, (score - scale.min) / (scale.max - scale.min))) : 0;
+
+/** Thang ≤ 10 (IELTS, VSTEP…) hiện 1 chữ số thập phân; thang lớn (TOEIC 0 – 200) hiện số nguyên. */
+const formatScore = (score: number, scale: ScoreScale) =>
+  scale.max <= 10 ? score.toFixed(1) : String(Math.round(score));
+
+/* Vòng tròn điểm tổng theo thang chứng chỉ */
+const BandRing: React.FC<{ band: number; scale: ScoreScale }> = ({ band, scale }) => {
   const radius = 38;
   const circ = 2 * Math.PI * radius;
-  const offset = circ * (1 - Math.max(0, Math.min(1, band / 9)));
+  const offset = circ * (1 - ratio(band, scale));
   return (
     <div className="relative w-24 h-24 shrink-0">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -133,10 +161,10 @@ const BandRing: React.FC<{ band: number }> = ({ band }) => {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-extrabold text-slate-900 tabular-nums leading-none">
-          {band.toFixed(1)}
+          {formatScore(band, scale)}
         </span>
-        <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mt-0.5">
-          Band
+        <span className="max-w-[64px] truncate text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mt-0.5">
+          {scale.name}
         </span>
       </div>
     </div>

@@ -48,7 +48,14 @@ export interface PracticeEvaluation {
   practiceExamId: string;
   examTitle: string;
   examType: PracticeExamType;
+  /** Điểm tổng theo thang của chứng chỉ mục tiêu (certificateName, minScore – maxScore) */
   bandScore: number;
+  /** null với bài chấm trước khi có thang theo chứng chỉ → hiểu là IELTS 0 – 9 */
+  certificateName?: string | null;
+  minScore?: number | null;
+  maxScore?: number | null;
+  /** Level CEFR tương ứng (A1 – C2) */
+  cefrLevel?: string | null;
   taskAchievement: CriterionScore;
   coherenceCohesion: CriterionScore;
   lexicalResource: CriterionScore;

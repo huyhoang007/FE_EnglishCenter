@@ -210,11 +210,11 @@ const ClientRoutesComponent: React.FC = () => {
           {/* Khảo thí — Dev 3 */}
           <Route
             path={CLIENT_ROUTES.exams}
-            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><ExamListPage /></RoleRedirect>}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><RoleRedirect deniedRoles={['USER']} to={CLIENT_ROUTES.practice}><ExamListPage /></RoleRedirect></RoleRedirect>}
           />
           <Route
             path={CLIENT_ROUTES.exam()}
-            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><ExamDetailPage /></RoleRedirect>}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><RoleRedirect deniedRoles={['USER']} to={CLIENT_ROUTES.practice}><ExamDetailPage /></RoleRedirect></RoleRedirect>}
           />
           <Route
             path={CLIENT_ROUTES.examHistory}
@@ -240,8 +240,9 @@ const ClientRoutesComponent: React.FC = () => {
             path={CLIENT_ROUTES.study(':slug', ':lessonId')}
             element={<StudyRoomPage />}
           />
-          <Route path="/mentors" element={<MentorDirectoryPage />} />
-          <Route path="/mentors/:id" element={<MentorDetailPage />} />
+          {/* Learner (USER) không dùng Mentor 1-1 / Exam → về sàn khóa học / Test trình độ */}
+          <Route path="/mentors" element={<RoleRedirect deniedRoles={['USER']} to="/courses"><MentorDirectoryPage /></RoleRedirect>} />
+          <Route path="/mentors/:id" element={<RoleRedirect deniedRoles={['USER']} to="/courses"><MentorDetailPage /></RoleRedirect>} />
           <Route
             path="/profile"
             element={
@@ -261,7 +262,7 @@ const ClientRoutesComponent: React.FC = () => {
           <Route path="/payments" element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><PaymentHistoryView /></ProtectedRoute>} />
           <Route
             path={CLIENT_ROUTES.schedule}
-            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><SchedulePage /></RoleRedirect>}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><RoleRedirect deniedRoles={['USER']} to="/courses"><SchedulePage /></RoleRedirect></RoleRedirect>}
           />
           {/* Lịch học cá nhân — BE chỉ cho USER / STUDENT (TASK-D5-01) */}
           <Route
