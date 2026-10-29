@@ -52,6 +52,9 @@ export const ExamEditorView: React.FC = () => {
   const [questionTarget, setQuestionTarget] = useState<string | null>(null);
   const [isImportOpen, setImportOpen] = useState(false);
   const [isAddSectionOpen, setAddSectionOpen] = useState(false);
+  /** File Word kéo thả vào ô "Đề chưa có phần thi nào" — nhập luôn, không cần mở "Nhập từ Word" trước */
+  const [droppedFile, setDroppedFile] = useState<File | undefined>();
+  const [isDropping, setDropping] = useState(false);
 
   const backLink = (
     <Link
@@ -288,11 +291,33 @@ export const ExamEditorView: React.FC = () => {
         </div>
       ) : (
         !isAddSectionOpen && (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
-            <p className="text-base font-bold text-slate-900">Đề chưa có phần thi nào</p>
+          <div
+            onDragOver={(e) => {
+              if (!isDraft) return;
+              e.preventDefault();
+              setDropping(true);
+            }}
+            onDragLeave={() => setDropping(false)}
+            onDrop={(e) => {
+              if (!isDraft) return;
+              e.preventDefault();
+              setDropping(false);
+              const file = e.dataTransfer.files[0];
+              if (!file) return;
+              setDroppedFile(file);
+              setImportOpen(true);
+            }}
+            className={cn(
+              'rounded-2xl border border-dashed bg-white px-6 py-10 text-center transition-colors',
+              isDropping ? 'border-2 border-primary bg-primary/5' : 'border-slate-300',
+            )}
+          >
+            <p className="text-base font-bold text-slate-900">
+              {isDropping ? 'Thả file Word để tạo bộ đề' : 'Đề chưa có phần thi nào'}
+            </p>
             <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
               {isDraft
-                ? 'Thêm phần thi (Listening, Reading…) rồi thêm câu hỏi vào từng phần, hoặc nhập cả bộ đề từ file Word.'
+                ? 'Thêm phần thi (Listening, Reading…) rồi thêm câu hỏi vào từng phần, hoặc kéo thả file Word (.docx) vào đây để tạo cả bộ đề.'
                 : 'Chuyển đề về nháp để thêm phần thi và câu hỏi.'}
             </p>
             {isDraft && (
@@ -314,7 +339,11 @@ export const ExamEditorView: React.FC = () => {
           examId={examId}
           certificateLabel={exam.certificateName ?? 'đề không thuộc chứng chỉ'}
           scale={scale}
-          onClose={() => setImportOpen(false)}
+          initialFile={droppedFile}
+          onClose={() => {
+            setImportOpen(false);
+            setDroppedFile(undefined);
+          }}
         />
       )}
 

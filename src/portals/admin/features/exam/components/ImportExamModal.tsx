@@ -4,9 +4,10 @@
  * 1. Hướng dẫn + tải file mẫu + ví dụ có nút sao chép
  * 2. Kéo thả / chọn file → đọc và kiểm tra ngay trên trình duyệt
  * 3. Xem trước bộ đề (lỗi hiện kèm nội dung dòng) → bấm Tạo: tạo lần lượt section rồi câu hỏi qua API sẵn có
+ * Kéo thả file thẳng vào trang soạn đề (initialFile): đọc xong nếu không lỗi thì tạo luôn, có lỗi thì giữ cửa sổ để xem.
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, ChevronDown, Copy, Download, FileText, Upload } from 'lucide-react';
 import { unwrapOrThrow } from '@/shared/api/axiosClient';
@@ -34,6 +35,8 @@ interface ImportExamModalProps {
   certificateLabel: string;
   /** Thang của chứng chỉ của đề — các phần thi được dùng sau [SECTION] */
   scale: ScaleInfo;
+  /** File kéo thả ở trang soạn đề: đọc ngay và tạo luôn nếu không có lỗi */
+  initialFile?: File;
   onClose: () => void;
 }
 
@@ -65,13 +68,14 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
   examId,
   certificateLabel,
   scale,
+  initialFile,
   onClose,
 }) => {
   const allowedSections = sectionTokens(scale.parts);
   const queryClient = useQueryClient();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isGuideOpen, setGuideOpen] = useState(true);
+  const [isGuideOpen, setGuideOpen] = useState(!initialFile);
   const [isDragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -81,7 +85,8 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
   const [createError, setCreateError] = useState<string | null>(null);
   const isCreating = progress !== null && createError === null;
 
-  const handleFile = async (file?: File) => {
+  /** Đọc file; autoCreate = tạo luôn khi file không có lỗi (kéo thả ở trang soạn đề) */
+  const handleFile = async (file?: File, autoCreate = false) => {
     if (!file) return;
     setFileName(file.name);
     setResult(null);
@@ -90,14 +95,27 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
     setReading(true);
     try {
       const text = await readExamFile(file);
-      setResult(parseExamText(text, scale.parts));
+      const parsed = parseExamText(text, scale.parts);
+      setResult(parsed);
       setGuideOpen(false);
+      if (autoCreate && parsed.errors.length === 0 && parsed.sections.length + parsed.questionCount > 0) {
+        await handleCreate(parsed);
+      }
     } catch (err) {
       setReadError(err instanceof Error ? err.message : 'Không đọc được file');
     } finally {
       setReading(false);
     }
   };
+
+  // File kéo thả từ trang soạn đề: xử lý một lần khi mở
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (!initialFile || startedRef.current) return;
+    startedRef.current = true;
+    void handleFile(initialFile, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   const copyTemplate = async () => {
     try {
@@ -109,8 +127,9 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
   };
 
   /** Tạo lần lượt từng section rồi các câu của section đó; dừng ở lỗi đầu tiên. */
-  const handleCreate = async () => {
-    if (!result) return;
+  const handleCreate = async (source: ImportResult | null = result) => {
+    if (!source) return;
+    const result = source;
     const total = result.sections.length + result.questionCount;
     let done = 0;
     setCreateError(null);
@@ -293,7 +312,7 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
             Hủy
           </Button>
           <Button
-            onClick={handleCreate}
+            onClick={() => handleCreate()}
             isLoading={isCreating}
             disabled={!result || hasErrors || result.questionCount + result.sections.length === 0}
           >
