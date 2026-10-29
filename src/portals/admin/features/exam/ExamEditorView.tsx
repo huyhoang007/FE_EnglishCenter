@@ -337,7 +337,6 @@ export const ExamEditorView: React.FC = () => {
       {isImportOpen && (
         <ImportExamModal
           examId={examId}
-          certificateLabel={exam.certificateName ?? 'đề không thuộc chứng chỉ'}
           scale={scale}
           initialFile={droppedFile}
           onClose={() => {

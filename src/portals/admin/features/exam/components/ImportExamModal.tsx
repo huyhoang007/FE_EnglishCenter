@@ -1,15 +1,14 @@
 /**
  * ImportExamModal — nhập section + câu hỏi từ file Word (.docx) / .txt viết theo mẫu (Dev 3)
  * -----------------------------------------------------------
- * 1. Hướng dẫn + tải file mẫu + ví dụ có nút sao chép
- * 2. Kéo thả / chọn file → đọc và kiểm tra ngay trên trình duyệt
- * 3. Xem trước bộ đề (lỗi hiện kèm nội dung dòng) → bấm Tạo: tạo lần lượt section rồi câu hỏi qua API sẵn có
+ * 1. Kéo thả / chọn file → đọc và kiểm tra ngay trên trình duyệt
+ * 2. Xem trước bộ đề (lỗi hiện kèm nội dung dòng) → bấm Tạo: tạo lần lượt section rồi câu hỏi qua API sẵn có
  * Kéo thả file thẳng vào trang soạn đề (initialFile): đọc xong nếu không lỗi thì tạo luôn, có lỗi thì giữ cửa sổ để xem.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, ChevronDown, Copy, Download, FileText, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileText, Upload } from 'lucide-react';
 import { unwrapOrThrow } from '@/shared/api/axiosClient';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
@@ -19,44 +18,17 @@ import { QUESTION_TYPE_LABEL } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { addQuestionApi, createSectionApi } from '../services/adminExamService';
 import type { ScaleInfo } from '@/shared/constants/examScales';
-import {
-  IMPORT_TEMPLATE,
-  parseExamText,
-  readExamFile,
-  sectionTokens,
-  type ImportQuestion,
-  type ImportResult,
-} from '../utils/examImport';
+import { parseExamText, readExamFile, type ImportQuestion, type ImportResult } from '../utils/examImport';
 import { ExamModal } from './ExamFormParts';
 
 interface ImportExamModalProps {
   examId: string;
-  /** Tên chứng chỉ để hiện trong hướng dẫn */
-  certificateLabel: string;
   /** Thang của chứng chỉ của đề — các phần thi được dùng sau [SECTION] */
   scale: ScaleInfo;
   /** File kéo thả ở trang soạn đề: đọc ngay và tạo luôn nếu không có lỗi */
   initialFile?: File;
   onClose: () => void;
 }
-
-const TEMPLATE_URL = '/templates/mau-de-thi.docx';
-
-const GUIDE: { syntax: string; meaning: string }[] = [
-  { syntax: '[SECTION] READING | Part 2 - Reading', meaning: 'Mở một phần thi mới: LOẠI | Tiêu đề' },
-  { syntax: '[INSTRUCTIONS] Đọc và trả lời…', meaning: 'Hướng dẫn của phần thi' },
-  { syntax: '[PASSAGE] Tom moved to…', meaning: 'Đoạn đọc, viết được nhiều dòng liền sau' },
-  { syntax: '[AUDIO] https://…/audio.mp3', meaning: 'Link file nghe (chỉ phần LISTENING)' },
-  { syntax: '1. Câu hỏi…', meaning: 'Câu trắc nghiệm; A. B. C. … là lựa chọn' },
-  { syntax: '*B. In a bakery', meaning: 'Dấu * trước chữ cái = đáp án đúng (đúng 1 đáp án)' },
-  { syntax: '2. [TF] …  rồi  = False', meaning: 'Câu đúng / sai' },
-  { syntax: '3. [FILL] …  rồi  = moved | move', meaning: 'Điền từ, nhiều đáp án ngăn bằng |' },
-  { syntax: '4. [MATCH] …  rồi  - bakery = tiệm bánh', meaning: 'Nối cặp, mỗi cặp một dòng, ít nhất 2 cặp' },
-  { syntax: '5. [ESSAY] Describe your hometown.', meaning: 'Tự luận Writing / Speaking, mentor chấm' },
-  { syntax: '… {2}', meaning: 'Cuối câu hỏi: số điểm của câu (mặc định 1)' },
-  { syntax: '[EXPLAIN] Giải thích…', meaning: 'Giải thích đáp án cho câu ngay trên' },
-  { syntax: '# ghi chú', meaning: 'Dòng ghi chú, bị bỏ qua' },
-];
 
 const answerText = (q: ImportQuestion) =>
   (q.request.options ?? [])
@@ -66,16 +38,13 @@ const answerText = (q: ImportQuestion) =>
 
 export const ImportExamModal: React.FC<ImportExamModalProps> = ({
   examId,
-  certificateLabel,
   scale,
   initialFile,
   onClose,
 }) => {
-  const allowedSections = sectionTokens(scale.parts);
   const queryClient = useQueryClient();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isGuideOpen, setGuideOpen] = useState(!initialFile);
   const [isDragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -97,7 +66,6 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
       const text = await readExamFile(file);
       const parsed = parseExamText(text, scale.parts);
       setResult(parsed);
-      setGuideOpen(false);
       if (autoCreate && parsed.errors.length === 0 && parsed.sections.length + parsed.questionCount > 0) {
         await handleCreate(parsed);
       }
@@ -116,15 +84,6 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
     void handleFile(initialFile, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFile]);
-
-  const copyTemplate = async () => {
-    try {
-      await navigator.clipboard.writeText(IMPORT_TEMPLATE);
-      toast.success('Đã sao chép ví dụ, dán vào Word để sửa');
-    } catch {
-      toast.error('Trình duyệt không cho sao chép, hãy tải file mẫu');
-    }
-  };
 
   /** Tạo lần lượt từng section rồi các câu của section đó; dừng ở lỗi đầu tiên. */
   const handleCreate = async (source: ImportResult | null = result) => {
@@ -164,61 +123,6 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
   return (
     <ExamModal title="Nhập đề từ file Word" onClose={onClose} isDismissDisabled={isCreating}>
       <div className="p-6 pt-2 space-y-4">
-        {/* ---------- Hướng dẫn ---------- */}
-        <div className="rounded-2xl border border-slate-200">
-          <button
-            type="button"
-            onClick={() => setGuideOpen((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-slate-800"
-          >
-            <span>Hướng dẫn viết file đề ({certificateLabel})</span>
-            <ChevronDown className={cn('w-4 h-4 transition-transform', isGuideOpen && 'rotate-180')} />
-          </button>
-          {isGuideOpen && (
-            <div className="px-4 pb-4 space-y-3 text-sm text-slate-600">
-              <ol className="list-decimal pl-5 space-y-1">
-                <li>Tải file mẫu Word bên dưới (hoặc sao chép ví dụ rồi dán vào Word).</li>
-                <li>Sửa nội dung, giữ nguyên các thẻ trong ngoặc vuông như [SECTION], [TF]…</li>
-                <li>Lưu thành .docx (file .doc đời cũ phải "Lưu thành" .docx), rồi kéo thả vào ô bên dưới.</li>
-                <li>Xem trước bộ đề, sửa lỗi nếu có, rồi bấm "Tạo".</li>
-              </ol>
-              <p>
-                Ghi sau [SECTION] một trong các phần thi của chứng chỉ này:{' '}
-                {allowedSections.map((t) => (
-                  <Badge key={t} variant="neutral" size="sm" className="mr-1">
-                    {t}
-                  </Badge>
-                ))}
-              </p>
-              <div className="rounded-xl border border-slate-200 overflow-x-auto">
-                <table className="w-full text-xs">
-                  <tbody>
-                    {GUIDE.map((g) => (
-                      <tr key={g.syntax} className="border-t border-slate-100 first:border-t-0">
-                        <td className="px-3 py-1.5 font-mono text-slate-800 bg-slate-50 whitespace-nowrap">{g.syntax}</td>
-                        <td className="px-3 py-1.5">{g.meaning}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <a href={TEMPLATE_URL} download="mau-de-thi.docx">
-                  <Button variant="secondary" size="sm" leftIcon={Download}>
-                    Tải file mẫu Word
-                  </Button>
-                </a>
-                <Button variant="outline" size="sm" leftIcon={Copy} onClick={copyTemplate}>
-                  Sao chép ví dụ
-                </Button>
-              </div>
-              <pre className="max-h-48 overflow-auto rounded-xl bg-slate-900 text-slate-100 text-[11px] leading-relaxed p-3 whitespace-pre-wrap">
-                {IMPORT_TEMPLATE}
-              </pre>
-            </div>
-          )}
-        </div>
-
         {/* ---------- Chọn file ---------- */}
         <div
           onDragOver={(e) => {
