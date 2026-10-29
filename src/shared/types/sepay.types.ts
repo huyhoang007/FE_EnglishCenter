@@ -1,6 +1,6 @@
 export type OrderStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED' | 'REVIEW_REQUIRED';
 export interface PaymentOrder {
-  orderId: string; orderCode: string; studentId: string; courseId: string; courseTitle: string;
+  orderId: string; orderCode: string; studentId: string; studentName?: string | null; courseId: string; courseTitle: string;
   amount: number; currency: 'VND'; status: OrderStatus; createdAt: string; expiresAt: string;
   paidAt: string | null; bankCode: string; accountNumber: string; accountName: string;
   transferContent: string; qrUrl: string | null;
