@@ -41,17 +41,12 @@ import { formatVND } from '@/shared/utils/format';
 import { fetchCourses } from '@/shared/api/courseService';
 import { fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import {
+  CEFR_OPTIONS,
+  cefrLabel,
+  cefrShortLabel,
+} from '@/shared/constants/cefrLevels';
 import type { CourseDto } from '@/shared/types/catalog.types';
-
-/** Các mức trình độ — backend lưu `level` dạng string tự do. */
-const LEVELS = ['BEGINNER', 'INTERMEDIATE', 'UPPER_INTERMEDIATE', 'ADVANCED'];
-
-const LEVEL_LABEL: Record<string, string> = {
-  BEGINNER: 'Beginner',
-  INTERMEDIATE: 'Intermediate',
-  UPPER_INTERMEDIATE: 'Upper-Intermediate',
-  ADVANCED: 'Advanced',
-};
 
 /** Map trạng thái backend (lowercase) → Badge variant của hệ thống. */
 const STATUS_BADGE: Record<
@@ -212,9 +207,9 @@ const CourseMarketplacePage: React.FC = () => {
             aria-label="Lọc theo trình độ"
           >
             <option value="">Mọi trình độ</option>
-            {LEVELS.map((lv) => (
-              <option key={lv} value={lv}>
-                {LEVEL_LABEL[lv]}
+            {CEFR_OPTIONS.filter((o) => o.value !== '').map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>
@@ -372,9 +367,12 @@ const CourseCard: React.FC<{ course: CourseDto }> = ({ course }) => {
         {/* Metadata */}
         <div className="flex flex-wrap gap-2">
           {course.level && (
-            <span className="inline-flex items-center gap-1 h-5 px-2 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold">
+            <span
+              className="inline-flex items-center gap-1 h-5 px-2 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold"
+              title={cefrLabel(course.level)}
+            >
               <Layers3 className="w-3 h-3" />
-              {LEVEL_LABEL[course.level] ?? course.level}
+              {cefrShortLabel(course.level)}
             </span>
           )}
           {course.targetScore != null && (

@@ -328,6 +328,9 @@ export const vi: Record<TranslationKey, string> = {
 
   // Bài tập — chọn đề thi/bài kiểm tra định nghĩa sẵn
   'content.homework.examTitle': 'Chọn đề thi / bài kiểm tra',
+  'content.homework.skillTitle': 'Kỹ năng chứng chỉ đo lường',
+  'content.homework.skillHint':
+    'Tùy chọn — bài tập sẽ được tính vào kỹ năng này của chứng chỉ.',
   'content.homework.examSearch': 'Tìm đề thi…',
   'content.homework.examListEmpty':
     'Khóa học này chưa có đề thi hay bài kiểm tra nào. Hãy tạo ở phần Quản lý đề thi trước.',
@@ -386,6 +389,7 @@ export const vi: Record<TranslationKey, string> = {
   'content.validation.videoUrlInvalid': 'Link video phải là URL hợp lệ',
   'content.validation.durationInvalid': 'Thời lượng phải là số dương',
   'content.validation.maxScoreInvalid': 'Điểm tối đa phải là số dương',
+  'content.validation.dueDateInvalid': 'Hạn nộp không được ở quá khứ',
   'content.validation.maxAttemptsInvalid':
     'Số lần làm tối đa phải là số không âm',
   'content.validation.vocabularyEmpty': 'Cần thêm ít nhất một từ vào bộ từ vựng',

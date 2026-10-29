@@ -47,12 +47,17 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
         : formatScaleScore(scale, pointsToScaleScore(scale, skill, answer.earnedScore ?? 0, answer.points))
       : '',
   );
-  /** Tự chặn trong thang khi nhập */
+  /** Tự chặn trong thang + ép đúng bước nhảy khi nhập */
   const changeScore = (raw: string) => {
     if (raw === '') return setScore('');
     const v = Number(raw);
     if (Number.isNaN(v)) return;
-    setScore(String(Math.min(range.max, Math.max(range.min, v))));
+    const clamped = Math.min(range.max, Math.max(range.min, v));
+    // Ép bước nhảy của thang (VD: IELTS/VSTEP bước 0.5, TOEIC bước 5/10)
+    const stepped = range.step > 0 ? Math.round(clamped / range.step) * range.step : clamped;
+    // Tránh lỗi số thập phân của float (VD: 0.1 + 0.2)
+    const fixed = Math.round(stepped * 1000) / 1000;
+    setScore(String(fixed));
   };
   const [feedback, setFeedback] = useState(answer.mentorFeedback ?? '');
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -64,6 +69,14 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
     if (score === '' || Number.isNaN(value) || value < range.min || value > range.max) {
       setFieldError(`Điểm phải từ ${range.min} đến ${range.max}`);
       return;
+    }
+    // Bước nhảy của thang (VD: IELTS/VSTEP bước 0.5, TOEIC bước 5/10)
+    if (range.step > 0) {
+      const ratio = value / range.step;
+      if (Math.abs(ratio - Math.round(ratio)) > 1e-6) {
+        setFieldError(`Điểm phải là bội số của ${range.step} (VD: ${range.step * 2})`);
+        return;
+      }
     }
     setFieldError(null);
     const points = isRaw ? value : scaleScoreToPoints(scale, skill, value, answer.points);

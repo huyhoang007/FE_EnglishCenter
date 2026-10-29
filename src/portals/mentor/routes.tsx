@@ -12,6 +12,7 @@ import { MentorDashboardView } from '@/portals/mentor/features/assignment';
 import { GradingQueueView } from '@/portals/mentor/features/assignment';
 import { MentorScheduleView } from '@/portals/mentor/features/schedule';
 import { ExamGradingView } from '@/portals/mentor/features/exam-grading';
+import { HomeworkGradingView } from '@/portals/mentor/features/homework-grading';
 
 const LoadingFallback: React.FC = () => (
   <div className="min-h-[40vh] flex items-center justify-center text-slate-500 text-sm">
@@ -30,6 +31,8 @@ const MentorRoutes: React.FC = () => {
             <Route path="schedule" element={<MentorScheduleView />} />
             {/* Chấm bài thi tự luận — Dev 3 */}
             <Route path="exam-grading" element={<ExamGradingView />} />
+            {/* Chấm bài tập (tự luận + nộp file) — Dev 2.5 */}
+            <Route path="homework-grading" element={<HomeworkGradingView />} />
             <Route path="*" element={<Navigate to="/mentor" replace />} />
           </Route>
         </Routes>

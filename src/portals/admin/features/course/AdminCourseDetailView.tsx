@@ -34,6 +34,7 @@ import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { cn } from '@/shared/utils/cn';
 import { formatVND } from '@/shared/utils/format';
+import { cefrLabel } from '@/shared/constants/cefrLevels';
 import { useTranslation } from '@/shared/i18n/I18nProvider';
 import {
   deleteCourseContent,
@@ -482,7 +483,7 @@ export const AdminCourseDetailView: React.FC = () => {
         description={`Bạn có chắc chắn muốn xoá nội dung "${deleteTargetContent?.title}" khỏi khóa học?`}
         confirmLabel="Xác nhận xoá"
         cancelLabel="Huỷ"
-        variant="danger"
+        confirmVariant="danger"
         isLoading={deleteContentMutation.isPending}
         onConfirm={() => {
           if (deleteTargetContent) {

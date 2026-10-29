@@ -60,6 +60,12 @@ import {
 } from '@/shared/api/courseService';
 import { fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import {
+  CEFR_OPTIONS,
+  cefrLabel,
+  cefrShortLabel,
+  toFormLevel,
+} from '@/shared/constants/cefrLevels';
 import type {
   ContentType,
   CourseDto,
@@ -69,6 +75,8 @@ import type {
 } from '@/shared/types/catalog.types';
 import { ExamPicker } from './components/ExamPicker';
 import { VocabularyBankPicker } from './components/VocabularyBankPicker';
+import { AttachmentUpload } from './components/AttachmentUpload';
+import { CertificateSkillPicker } from './components/CertificateSkillPicker';
 import { buildVocabularyTitle } from '@/shared/api/courseContentBuilder';
 
 /** Backend trả status lowercase — map sang nhãn tiếng Việt + màu. */
@@ -487,7 +495,7 @@ export const CourseManagementView: React.FC = () => {
         description={`Bạn có chắc chắn muốn chuyển khóa học "${archiveTarget?.title}" sang trạng thái Lưu trữ?`}
         confirmLabel="Lưu trữ khóa học"
         cancelLabel="Huỷ"
-        variant="danger"
+        confirmVariant="danger"
         isLoading={updateStatusMutation.isPending}
         onConfirm={() => {
           if (archiveTarget) {
@@ -564,7 +572,16 @@ const CourseTable: React.FC<{
                 )}
               </td>
               <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                {c.level ?? '—'}
+                {c.level ? (
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700"
+                    title={cefrLabel(c.level)}
+                  >
+                    {cefrShortLabel(c.level)}
+                  </span>
+                ) : (
+                  <span className="text-slate-300">—</span>
+                )}
               </td>
               <td className="py-3 px-3 text-slate-700 max-w-[150px] truncate">
                 {c.mentorName ?? <span className="text-slate-300">VOD</span>}
@@ -679,9 +696,12 @@ const AdminCourseCard: React.FC<{
 
         <div className="flex flex-wrap gap-2">
           {course.level && (
-            <span className="inline-flex items-center gap-1 h-5 px-2 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold">
+            <span
+              className="inline-flex items-center gap-1 h-5 px-2 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold"
+              title={cefrLabel(course.level)}
+            >
               <Layers3 className="w-3 h-3" />
-              {course.level}
+              {cefrShortLabel(course.level)}
             </span>
           )}
           {course.targetScore != null && (
@@ -767,7 +787,7 @@ const CourseFormModal: React.FC<{
     code: '',
     title: '',
     description: '',
-    level: 'INTERMEDIATE',
+    level: '',
     price: '',
     targetScore: '',
     thumbnailUrl: '',
@@ -795,7 +815,7 @@ const CourseFormModal: React.FC<{
             code: editing.code ?? '',
             title: editing.title ?? '',
             description: editing.description ?? '',
-            level: editing.level ?? 'INTERMEDIATE',
+            level: toFormLevel(editing.level),
             price: editing.price != null ? String(editing.price) : '',
             targetScore:
               editing.targetScore != null ? String(editing.targetScore) : '',
@@ -964,13 +984,24 @@ const CourseFormModal: React.FC<{
           </Field>
 
           <Field label="Trình độ">
-            <input
-              type="text"
+            <select
               value={form.level}
               onChange={(e) => setForm({ ...form, level: e.target.value })}
-              placeholder="INTERMEDIATE"
-              className={inputCls(false)}
-            />
+              className={cn(inputCls(false), 'bg-white')}
+            >
+              {CEFR_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+              {/* Fallback an toàn: nếu khóa học cũ có giá trị tự do không khớp CEFR */}
+              {form.level &&
+                !CEFR_OPTIONS.some((o) => o.value === form.level) && (
+                  <option value={form.level}>
+                    {form.level} (Giá trị cũ)
+                  </option>
+                )}
+            </select>
           </Field>
 
           {editing ? (
@@ -1098,7 +1129,10 @@ const CourseDetailModal: React.FC<{
       <dl className="grid grid-cols-2 gap-3 text-xs">
         <DetailCell label="Mã khóa học" value={course.code} mono />
         <DetailCell label="Học phí" value={formatVND(course.price ?? 0)} accent />
-        <DetailCell label="Trình độ" value={course.level ?? '—'} />
+        <DetailCell
+          label="Trình độ"
+          value={course.level ? cefrLabel(course.level) : 'Không phân cấp'}
+        />
         <DetailCell
           label="Điểm mục tiêu"
           value={course.targetScore != null ? `Band ${course.targetScore}+` : '—'}
@@ -1155,6 +1189,8 @@ const ContentModal: React.FC<{
     timeLimitMinutes: '',
     maxAttempts: '',
     attachmentUrl: '',
+    attachmentName: '',
+    certificatePartId: '',
   };
   const [form, setForm] = useState(emptyForm);
   const lastCourseId = React.useRef<string | null>(null);
@@ -1266,6 +1302,7 @@ const ContentModal: React.FC<{
             ? Number(form.maxAttempts)
             : undefined,
           attachmentUrl: form.attachmentUrl.trim() || undefined,
+          attachmentName: form.attachmentName.trim() || undefined,
           examId,
           rubric: [],
         });
@@ -1278,6 +1315,10 @@ const ContentModal: React.FC<{
         contentOrder: Number(form.contentOrder) || 0,
         vocabularySetIds,
         examId,
+        certificatePartId:
+          form.contentType === 'homework'
+            ? form.certificatePartId.trim() || undefined
+            : undefined,
         contentData,
       });
     },
@@ -1305,6 +1346,8 @@ const ContentModal: React.FC<{
         timeLimitMinutes: '',
         maxAttempts: '',
         attachmentUrl: '',
+        attachmentName: '',
+        certificatePartId: '',
       }));
     },
     onError: (err) =>
@@ -1596,17 +1639,40 @@ const ContentModal: React.FC<{
                     className={cn(inputCls(false), 'bg-white')}
                   />
                 </Field>
-                <Field label="Link tài liệu">
-                  <input
-                    type="url"
-                    value={form.attachmentUrl}
-                    onChange={(e) =>
-                      setForm({ ...form, attachmentUrl: e.target.value })
-                    }
-                    placeholder="https://… (pdf)"
-                    className={inputCls(false)}
-                  />
-                </Field>
+              </div>
+
+              {/* ---- Tài liệu đính kèm (upload Cloudinary) ---- */}
+              <AttachmentUpload
+                value={form.attachmentUrl || undefined}
+                fileName={form.attachmentName || undefined}
+                onChange={(attachment) =>
+                  setForm({
+                    ...form,
+                    attachmentUrl: attachment.url,
+                    attachmentName: attachment.originalName ?? '',
+                  })
+                }
+                onClear={() =>
+                  setForm({
+                    ...form,
+                    attachmentUrl: '',
+                    attachmentName: '',
+                  })
+                }
+                label="Tài liệu đính kèm"
+              />
+
+              {/* ---- Kỹ năng chứng chỉ mà bài tập đo lường ---- */}
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Kỹ năng chứng chỉ đo lường
+                </p>
+                <CertificateSkillPicker
+                  value={form.certificatePartId}
+                  onChange={(certificatePartId) =>
+                    setForm({ ...form, certificatePartId })
+                  }
+                />
               </div>
             </>
           )}

@@ -41,6 +41,7 @@ import ExamListPage from '@/portals/client/pages/exams/ExamListPage';
 import ExamDetailPage from '@/portals/client/pages/exams/ExamDetailPage';
 import ExamResultPage from '@/portals/client/pages/exams/ExamResultPage';
 import ExamHistoryPage from '@/portals/client/pages/exams/ExamHistoryPage';
+import HomeworkExamPage from '@/portals/client/pages/homework/HomeworkExamPage';
 import MyCoursesPage from '@/portals/client/pages/student/MyCoursesPage';
 import CoursePlayerPage from '@/portals/client/pages/student/CoursePlayerPage';
 import StudyRoomPage from '@/portals/client/pages/student/StudyRoomPage';
@@ -226,6 +227,10 @@ const ClientRoutesComponent: React.FC = () => {
           <Route
             path={CLIENT_ROUTES.examResult()}
             element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><ExamResultPage /></ProtectedRoute>}
+          />
+          <Route
+            path={CLIENT_ROUTES.homeworkAttempt()}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><HomeworkExamPage /></ProtectedRoute>}
           />
           <Route
             path={CLIENT_ROUTES.study()}

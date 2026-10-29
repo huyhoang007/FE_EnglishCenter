@@ -334,6 +334,9 @@ export const en = {
 
   // Homework — chọn đề thi/bài kiểm tra định nghĩa sẵn
   'content.homework.examTitle': 'Pick an exam or practice test',
+  'content.homework.skillTitle': 'Certificate skill measured',
+  'content.homework.skillHint':
+    'Optional — this homework counts towards that certificate skill.',
   'content.homework.examSearch': 'Search exams…',
   'content.homework.examListEmpty':
     'This course has no exam or practice test yet. Create one in Exam Management first.',
@@ -392,6 +395,7 @@ export const en = {
   'content.validation.videoUrlInvalid': 'Video URL must be a valid URL',
   'content.validation.durationInvalid': 'Duration must be a positive number',
   'content.validation.maxScoreInvalid': 'Max score must be a positive number',
+  'content.validation.dueDateInvalid': 'Due date cannot be in the past',
   'content.validation.maxAttemptsInvalid':
     'Max attempts must be a non-negative number',
   'content.validation.vocabularyEmpty': 'Add at least one word to the set',
