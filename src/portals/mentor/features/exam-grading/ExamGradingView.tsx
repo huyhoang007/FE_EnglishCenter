@@ -1,7 +1,8 @@
 /**
  * ExamGradingView — Hàng đợi bài thi chờ chấm Writing/Speaking + panel chấm (Dev 3)
  * -----------------------------------------------------------
- * Cũ nhất trước. Admin thấy mọi đề; mentor chỉ thấy đề thuộc khóa mình phụ trách (backend lọc).
+ * Cũ nhất trước. Admin thấy mọi đề; mentor thấy mọi đề thi thử (để đánh giá năng lực học viên)
+ * và đề thuộc khóa mình phụ trách (backend lọc).
  * URL: /mentor/exam-grading
  */
 
