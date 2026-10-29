@@ -7,11 +7,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Gauge, History, Search } from 'lucide-react';
+import { FileCheck2, Gauge, History, Search } from 'lucide-react';
+import { usePendingAttempts } from '@/portals/mentor/features/exam-grading';
 import { Button } from '@/shared/components/Button';
 import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
-import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import { CLIENT_ROUTES, MENTOR_ROUTES } from '@/shared/constants/routes';
 import { EXAM_TYPE_LABEL, type ExamScope, type ExamType } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { useExamList } from '../hooks/useExams';
@@ -26,6 +27,10 @@ const SCOPE_OPTIONS: { value: ExamScope | ''; label: string }[] = [
 export const ExamListView: React.FC = () => {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  // Mentor / admin: lối vào trang chấm Writing / Speaking, kèm số bài đang chờ chấm
+  const canGrade = useAuthStore((s) => s.role === 'MENTOR' || s.role === 'ADMIN');
+  const pendingGrading = usePendingAttempts(0, isAuthenticated && canGrade);
+  const pendingCount = pendingGrading.data?.totalElements ?? 0;
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [examType, setExamType] = useState<ExamType | ''>('');
@@ -55,6 +60,16 @@ export const ExamListView: React.FC = () => {
           <p className="text-sm text-slate-500 mt-1">Chọn đề, làm bài có tính giờ và xem kết quả chấm tự động.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {isAuthenticated && canGrade && (
+            <Button variant="outline" leftIcon={FileCheck2} onClick={() => navigate(MENTOR_ROUTES.examGrading)}>
+              Chấm bài thi
+              {pendingCount > 0 && (
+                <span className="ml-1.5 min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold inline-flex items-center justify-center">
+                  {pendingCount}
+                </span>
+              )}
+            </Button>
+          )}
           <Button leftIcon={Gauge} onClick={() => navigate(CLIENT_ROUTES.examPlacement)}>
             Kiểm tra năng lực
           </Button>

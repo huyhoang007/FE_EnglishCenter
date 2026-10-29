@@ -13,11 +13,12 @@ import {
   type GradeAnswerPayload,
 } from '../services/examGradingService';
 
-export function usePendingAttempts(page: number) {
+export function usePendingAttempts(page: number, enabled = true) {
   return useQuery({
     queryKey: QUERY_KEYS.exam.gradingQueue(page),
     queryFn: async () => unwrapOrThrow(await getPendingAttemptsApi(page)),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
