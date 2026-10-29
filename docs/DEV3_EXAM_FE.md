@@ -61,7 +61,7 @@ section và câu hỏi qua API sẵn có — không cần sửa backend. File m�
 
 | Viết trong file | Ý nghĩa |
 |---|---|
-| `[SECTION] READING \| Part 2 - Reading` | Mở phần thi: LOẠI \| Tiêu đề (TOEIC chỉ LISTENING / READING) |
+| `[SECTION] READING | Part 2 - Reading` | Mở phần thi: TÊN PHẦN THI của chứng chỉ (hoặc kỹ năng) | Tiêu đề. Section được gắn vào phần thi đó || Part 2 - Reading` | Mở phần thi: LOẠI \| Tiêu đề (TOEIC chỉ LISTENING / READING) |
 | `[INSTRUCTIONS] …` / `[PASSAGE] …` / `[AUDIO] url` | Hướng dẫn / đoạn đọc (nhiều dòng) / file nghe (chỉ LISTENING) |
 | `1. Câu hỏi … {2}` + `A. …` `*B. …` | Trắc nghiệm, `*` = đáp án đúng, `{2}` = 2 điểm (mặc định 1) |
 | `2. [TF] …` + `= False` | Đúng / sai |
@@ -79,8 +79,15 @@ Trang `/exams/placement` (nút **Kiểm tra năng lực** ở ngân hàng đề)
 
 1. Nộp bài: trắc nghiệm / đúng-sai / điền từ / nối cặp chấm ngay.
 2. Writing / Speaking vào hàng đợi `/mentor/exam-grading` của **mọi mentor** (đề thi thử) — năng lực ở trạng thái `pending_grading`.
-3. Mentor chấm xong → năng lực `assessed`: IELTS band (overall làm tròn chuẩn IELTS) + CEFR, TOEIC L + R / 990 + CEFR từng kỹ năng,
-   VSTEP 0-10 + bậc B1 / B2 / C1.
+3. Mentor chấm xong → năng lực `assessed`. Backend trả % từng phần; FE quy đổi theo thang của chứng chỉ.
+
+### Thang điểm theo cấu hình chứng chỉ (Dev 2)
+
+Đề thi không viết cứng thang IELTS / TOEIC / VSTEP. `src/shared/constants/examScales.ts` dựng thang từ cấu hình admin
+khai báo ở trang **Chứng chỉ**: `scoring` trong `description` (Trung bình / Tổng / Độc lập, min, max, bước, làm tròn),
+`properties` của từng phần thi, và mốc CEFR của preset. Hook `useCertificateScale(certificateId)` lấy
+`GET /certificates/{id}` rồi dựng thang. Thêm chứng chỉ mới (VD TOEFL) ở trang Chứng chỉ là đề thi, form chấm của
+mentor, trang kết quả và trang năng lực tự theo. Section lưu `certificatePartId` để biết thang của phần thi.
 
 API (BE Task 3) cho module khác, ví dụ Dev 5 xếp lộ trình / lịch học theo khoảng cách tới mục tiêu:
 

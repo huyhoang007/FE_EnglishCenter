@@ -60,6 +60,8 @@ export interface CreateExamRequest {
 export interface CreateSectionRequest {
   title: string;
   sectionType?: string;
+  /** Phần thi của chứng chỉ (Dev 2) — thang điểm của section lấy theo phần này */
+  certificatePartId?: string;
   instructions?: string;
   passageText?: string;
   audioUrl?: string;

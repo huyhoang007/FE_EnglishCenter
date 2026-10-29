@@ -10,35 +10,26 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Gauge, Hourglass, LogIn } from 'lucide-react';
-import { fetchCertificates } from '@/shared/api/certificateService';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
 import { EmptyState, ErrorState, Skeleton } from '@/shared/components/Feedback';
-import { detectScale, formatScaleScore } from '@/shared/constants/examScales';
-import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import { formatScaleScore, formatScore, scaleResult } from '@/shared/constants/examScales';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import type { CertificateDto } from '@/shared/types/catalog.types';
 import type { Proficiency } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
+import { useCertificateScale, useCertificates } from '../hooks/useCertificateScale';
 import { useExamList, useMyProficiency } from '../hooks/useExams';
 import { ExamCard } from './ExamCard';
 import { formatDateTime } from '../utils/examRoom';
 
-const SKILL_LABEL: Record<string, string> = {
-  LISTENING: 'Listening',
-  READING: 'Reading',
-  WRITING: 'Writing',
-  SPEAKING: 'Speaking',
-  OTHER: 'Toàn bài',
-};
-
 export const PlacementView: React.FC = () => {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const certificates = useQuery({ queryKey: QUERY_KEYS.catalog.certificates, queryFn: fetchCertificates });
+  const certificates = useCertificates();
   const proficiency = useMyProficiency(isAuthenticated);
   const [certificateId, setCertificateId] = useState('');
 
@@ -81,34 +72,15 @@ export const PlacementView: React.FC = () => {
           <ErrorState message={certificates.error.message} onRetry={() => certificates.refetch()} />
         ) : (
           <div className="grid sm:grid-cols-3 gap-3" role="radiogroup" aria-label="Chứng chỉ mục tiêu">
-            {(certificates.data ?? []).map((c) => {
-              const scale = detectScale(c.certificateName);
-              const done = proficiency.data?.find((p) => p.certificateId === c.certificateId);
-              const isActive = c.certificateId === certificateId;
-              return (
-                <button
-                  key={c.certificateId}
-                  type="button"
-                  role="radio"
-                  aria-checked={isActive}
-                  onClick={() => setCertificateId(c.certificateId)}
-                  className={cn(
-                    'text-left rounded-2xl border p-4 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-                    isActive ? 'border-primary bg-primary/5' : 'border-slate-200 bg-white hover:border-slate-300',
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge variant={scale.badge}>{c.certificateName}</Badge>
-                    {done?.status === 'assessed' && done.overall !== undefined && (
-                      <span className="text-xs font-bold text-slate-700">
-                        Hiện tại: {formatScaleScore(scale, done.overall)}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-600 mt-2">{scale.range}</p>
-                </button>
-              );
-            })}
+            {(certificates.data ?? []).map((c) => (
+              <CertificateOption
+                key={c.certificateId}
+                certificate={c}
+                proficiency={proficiency.data?.find((p) => p.certificateId === c.certificateId)}
+                isActive={c.certificateId === certificateId}
+                onSelect={() => setCertificateId(c.certificateId)}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -164,10 +136,44 @@ export const PlacementView: React.FC = () => {
   );
 };
 
-/** Thẻ năng lực: điểm tổng theo thang, mô tả trình độ, CEFR, điểm từng kỹ năng. */
+/** Thẻ chọn chứng chỉ mục tiêu: thang điểm và năng lực hiện tại theo cấu hình của chứng chỉ. */
+const CertificateOption: React.FC<{
+  certificate: CertificateDto;
+  proficiency?: Proficiency;
+  isActive: boolean;
+  onSelect: () => void;
+}> = ({ certificate: c, proficiency: done, isActive, onSelect }) => {
+  const scale = useCertificateScale(c.certificateId);
+  const doneOverall = done?.status === 'assessed' ? scaleResult(scale, done.sections).overall : null;
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={isActive}
+      onClick={onSelect}
+      className={cn(
+        'text-left rounded-2xl border p-4 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+        isActive ? 'border-primary bg-primary/5' : 'border-slate-200 bg-white hover:border-slate-300',
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <Badge variant={scale.badge}>{c.certificateName}</Badge>
+        {doneOverall !== null && (
+          <span className="text-xs font-bold text-slate-700">Hiện tại: {formatScaleScore(scale, doneOverall)}</span>
+        )}
+      </div>
+      <p className="text-xs text-slate-600 mt-2">{scale.range}</p>
+    </button>
+  );
+};
+
+/** Thẻ năng lực: điểm tổng theo thang của chứng chỉ, mức năng lực, CEFR, điểm từng phần thi. */
 const ProficiencyCard: React.FC<{ proficiency: Proficiency }> = ({ proficiency: p }) => {
-  const scale = detectScale(p.certificateName);
+  const scale = useCertificateScale(p.certificateId);
+  const result = scaleResult(scale, p.sections);
   const isPending = p.status === 'pending_grading';
+  // Thang độc lập (không có điểm tổng) hoặc đề không chia phần: hiện % cả bài
+  const showPercent = result.overall === null && !isPending;
   return (
     <Card className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-4">
@@ -179,20 +185,28 @@ const ProficiencyCard: React.FC<{ proficiency: Proficiency }> = ({ proficiency: 
             <p className="text-sm font-semibold mt-3 flex items-center justify-center gap-1.5">
               <Hourglass className="w-4 h-4" /> Chờ mentor chấm
             </p>
+          ) : showPercent ? (
+            <>
+              <p className="text-4xl font-extrabold tabular-nums mt-1">{formatScore(p.percentage ?? 0)}%</p>
+              <p className="text-xs font-bold opacity-70">tỷ lệ đúng cả bài</p>
+            </>
           ) : (
             <>
-              <p className="text-4xl font-extrabold tabular-nums mt-1">{formatScaleScore(scale, p.overall)}</p>
-              <p className="text-xs font-bold opacity-70">/ {formatScaleScore(scale, p.overallMax)}</p>
+              <p className="text-4xl font-extrabold tabular-nums mt-1">{formatScaleScore(scale, result.overall)}</p>
+              <p className="text-xs font-bold opacity-70">
+                / {formatScaleScore(scale, result.overallMax)} {scale.unit}
+              </p>
             </>
           )}
         </div>
         <div className="flex-1 min-w-0 space-y-2">
           {!isPending && (
             <div className="flex flex-wrap items-center gap-2">
-              {p.level && <span className="text-base font-bold text-slate-900">{p.level}</span>}
-              {p.cefr && <Badge variant="primary">CEFR {p.cefr}</Badge>}
+              {result.level && <span className="text-base font-bold text-slate-900">{result.level}</span>}
+              {result.cefr && <Badge variant="primary">CEFR {result.cefr}</Badge>}
             </div>
           )}
+          <p className="text-xs text-slate-500">Thang điểm: {scale.range}</p>
           <p className="text-xs text-slate-600">
             Theo bài “{p.examTitle}”{p.takenAt ? ` · nộp lúc ${formatDateTime(p.takenAt)}` : ''}
           </p>
@@ -210,14 +224,14 @@ const ProficiencyCard: React.FC<{ proficiency: Proficiency }> = ({ proficiency: 
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {p.skills.map((s, i) => (
-          <div key={`${s.skill}-${i}`} className="rounded-xl border border-slate-200 p-3">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{SKILL_LABEL[s.skill] ?? s.skill}</p>
+        {result.skills.map((s, i) => (
+          <div key={`${s.part.name}-${i}`} className="rounded-xl border border-slate-200 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{s.part.name}</p>
             <p className="text-lg font-extrabold text-slate-900 tabular-nums">
-              {s.pendingManualGrading ? '—' : formatScaleScore(scale, s.score)}
-              <span className="text-xs text-slate-400 font-bold"> / {formatScaleScore(scale, s.maxScore)}</span>
+              {s.pending ? '—' : formatScore(s.score, s.part.step)}
+              <span className="text-xs text-slate-400 font-bold"> / {formatScore(s.part.max, s.part.step)}</span>
             </p>
-            {s.pendingManualGrading ? (
+            {s.pending ? (
               <p className="text-[11px] text-ai font-semibold">Chờ chấm</p>
             ) : (
               s.cefr && <p className="text-[11px] text-slate-600">CEFR {s.cefr}</p>

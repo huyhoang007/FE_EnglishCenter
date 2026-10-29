@@ -1,44 +1,63 @@
 /**
- * AddSectionForm — thêm phần thi theo kỹ năng của chứng chỉ (Dev 3)
+ * AddSectionForm — thêm phần thi theo các phần của chứng chỉ (Dev 3)
  * -----------------------------------------------------------
- * Mở ra khi bấm "Thêm phần thi" trên trang soạn đề. Loại phần thi đổi theo chứng chỉ:
- *   IELTS / VSTEP : Listening, Reading, Writing, Speaking
- *   TOEIC         : Listening, Reading
- *   khác          : thêm GENERAL
+ * Mở ra khi bấm "Thêm phần thi" trên trang soạn đề. Danh sách phần thi lấy từ cấu hình chứng chỉ ở trang
+ * Chứng chỉ (Dev 2): IELTS 4 phần, TOEIC L&R 2 phần, chứng chỉ tuỳ chỉnh theo các phần admin khai báo.
+ * Section lưu kèm certificatePartId để chấm / quy đổi điểm theo thang của phần đó.
+ * Đề không thuộc chứng chỉ: chọn loại kỹ năng (có GENERAL).
  * Link file nghe chỉ hiện với phần Listening.
  */
 
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
-import { SECTION_TYPES_BY_SCALE, type ScaleKind } from '@/shared/constants/examScales';
+import { formatScore, skillToSectionType, type ScaleInfo } from '@/shared/constants/examScales';
 import type { CreateSectionRequest } from '../services/adminExamService';
 import { AutoGrowTextarea, FIELD_CLASS, Field } from './ExamFormParts';
 
 interface AddSectionFormProps {
-  /** Loại thang của chứng chỉ của đề — quyết định các loại phần thi được chọn */
-  scaleKind: ScaleKind;
+  /** Thang của chứng chỉ của đề — quyết định các phần thi được chọn */
+  scale: ScaleInfo;
   isSubmitting: boolean;
   serverError?: string;
   onSubmit: (payload: CreateSectionRequest, reset: () => void) => void;
   onCancel?: () => void;
 }
 
+/** Lựa chọn trong ô "Phần thi": một phần của chứng chỉ, hoặc một loại kỹ năng (đề không thuộc chứng chỉ) */
+interface PartOption {
+  value: string;
+  label: string;
+  sectionType: string;
+  certificatePartId?: string;
+}
+
 export const AddSectionForm: React.FC<AddSectionFormProps> = ({
-  scaleKind,
+  scale,
   isSubmitting,
   serverError,
   onSubmit,
   onCancel,
 }) => {
-  const sectionTypes = SECTION_TYPES_BY_SCALE[scaleKind];
+  const linkedParts = scale.parts.filter((p) => p.partId);
+  const options: PartOption[] = linkedParts.length
+    ? linkedParts.map((p) => ({
+        value: p.partId as string,
+        label: `${p.name} (${formatScore(p.min, p.step)} – ${formatScore(p.max, p.step)})`,
+        sectionType: skillToSectionType(p.skill),
+        certificatePartId: p.partId,
+      }))
+    : scale.sectionTypes.map((t) => ({ value: t, label: t, sectionType: t }));
+  const [optionValue, setOptionValue] = useState(
+    (options.find((o) => o.sectionType === 'READING') ?? options[0])?.value ?? '',
+  );
+  const option = options.find((o) => o.value === optionValue) ?? options[0];
   const [title, setTitle] = useState('');
-  const [sectionType, setSectionType] = useState(sectionTypes.includes('READING') ? 'READING' : sectionTypes[0]);
   const [instructions, setInstructions] = useState('');
   const [passageText, setPassageText] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const isListening = sectionType === 'LISTENING';
+  const isListening = option?.sectionType === 'LISTENING';
 
   const reset = () => {
     setTitle('');
@@ -50,11 +69,13 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return setFieldError('Nhập tên phần thi');
+    if (!option) return setFieldError('Chứng chỉ chưa có phần thi nào — thêm phần thi ở trang Chứng chỉ');
     setFieldError(null);
     onSubmit(
       {
         title: title.trim(),
-        sectionType,
+        sectionType: option.sectionType,
+        certificatePartId: option.certificatePartId,
         instructions: instructions.trim() || undefined,
         passageText: passageText.trim() || undefined,
         // Chỉ phần Listening mới có file nghe
@@ -66,7 +87,7 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid sm:grid-cols-[1fr,180px] gap-4">
+      <div className="grid sm:grid-cols-[1fr,220px] gap-4">
         <Field label="Tên phần thi *">
           <input
             value={title}
@@ -76,11 +97,11 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
             autoFocus
           />
         </Field>
-        <Field label="Kỹ năng">
-          <select value={sectionType} onChange={(e) => setSectionType(e.target.value)} className={`${FIELD_CLASS} h-10`}>
-            {sectionTypes.map((t) => (
-              <option key={t} value={t}>
-                {t}
+        <Field label={linkedParts.length ? `Phần thi của ${scale.label}` : 'Kỹ năng'}>
+          <select value={option?.value ?? ''} onChange={(e) => setOptionValue(e.target.value)} className={`${FIELD_CLASS} h-10`}>
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
               </option>
             ))}
           </select>

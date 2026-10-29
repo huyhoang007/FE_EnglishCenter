@@ -17,15 +17,23 @@ import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { QUESTION_TYPE_LABEL } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { addQuestionApi, createSectionApi } from '../services/adminExamService';
-import { IMPORT_TEMPLATE, parseExamText, readExamFile, type ImportQuestion, type ImportResult } from '../utils/examImport';
+import type { ScaleInfo } from '@/shared/constants/examScales';
+import {
+  IMPORT_TEMPLATE,
+  parseExamText,
+  readExamFile,
+  sectionTokens,
+  type ImportQuestion,
+  type ImportResult,
+} from '../utils/examImport';
 import { ExamModal } from './ExamFormParts';
 
 interface ImportExamModalProps {
   examId: string;
   /** Tên chứng chỉ để hiện trong hướng dẫn */
   certificateLabel: string;
-  /** Loại section hợp lệ theo chứng chỉ của đề */
-  allowedSectionTypes: string[];
+  /** Thang của chứng chỉ của đề — các phần thi được dùng sau [SECTION] */
+  scale: ScaleInfo;
   onClose: () => void;
 }
 
@@ -56,9 +64,10 @@ const answerText = (q: ImportQuestion) =>
 export const ImportExamModal: React.FC<ImportExamModalProps> = ({
   examId,
   certificateLabel,
-  allowedSectionTypes,
+  scale,
   onClose,
 }) => {
+  const allowedSections = sectionTokens(scale.parts);
   const queryClient = useQueryClient();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -81,7 +90,7 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
     setReading(true);
     try {
       const text = await readExamFile(file);
-      setResult(parseExamText(text, allowedSectionTypes));
+      setResult(parseExamText(text, scale.parts));
       setGuideOpen(false);
     } catch (err) {
       setReadError(err instanceof Error ? err.message : 'Không đọc được file');
@@ -155,8 +164,8 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
                 <li>Xem trước bộ đề, sửa lỗi nếu có, rồi bấm "Tạo".</li>
               </ol>
               <p>
-                Loại phần thi cho chứng chỉ này:{' '}
-                {allowedSectionTypes.map((t) => (
+                Ghi sau [SECTION] một trong các phần thi của chứng chỉ này:{' '}
+                {allowedSections.map((t) => (
                   <Badge key={t} variant="neutral" size="sm" className="mr-1">
                     {t}
                   </Badge>

@@ -6,7 +6,7 @@ import React from 'react';
 import { Clock, FileQuestion, Layers, Lock } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Card } from '@/shared/components/Card';
-import { detectScale } from '@/shared/constants/examScales';
+import { useCertificateScale } from '../hooks/useCertificateScale';
 import { EXAM_TYPE_LABEL, type ExamSummary } from '@/shared/types';
 import { formatVND } from '@/shared/utils';
 
@@ -17,7 +17,7 @@ interface ExamCardProps {
 
 export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
   const isPaid = exam.examScope === 'trial' && exam.isFree === false;
-  const scale = detectScale(exam.certificateName);
+  const scale = useCertificateScale(exam.certificateId, exam.certificateName);
   return (
     <Card
       hoverable

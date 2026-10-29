@@ -1,7 +1,7 @@
 /**
  * EssayGradeForm — bài viết / ghi âm của học viên + ô chấm điểm và nhận xét (Dev 3)
  * -----------------------------------------------------------
- * Chấm theo thang chứng chỉ của đề: IELTS band 0–9, TOEIC Writing/Speaking 0–200, VSTEP 0–10;
+ * Chấm theo thang của phần thi (certificate part) mà admin cấu hình ở trang Chứng chỉ (VD IELTS Writing 0–9);
  * đề không thuộc chứng chỉ chấm thẳng theo điểm của câu. Ô điểm tự chặn trong thang,
  * khi lưu quy đổi sang điểm của câu (backend lưu theo points).
  */
@@ -12,13 +12,11 @@ import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { useToast } from '@/shared/components/Toast';
 import {
-  SKILL_LABEL,
-  formatScaleScore,
-  pointsToScaleScore,
-  scaleScoreToPoints,
-  skillRange,
+  formatScore,
+  pointsToScore,
+  scoreToPoints,
+  type PartScale,
   type ScaleInfo,
-  type Skill,
 } from '@/shared/constants/examScales';
 import type { AnswerResult } from '@/shared/types';
 import { countWords } from '@/shared/utils';
@@ -28,23 +26,24 @@ interface EssayGradeFormProps {
   attemptId: string;
   answer: AnswerResult;
   scale: ScaleInfo;
-  skill: Skill;
+  /** Thang của phần thi chứa câu này */
+  part: PartScale;
 }
 
 const AUDIO_URL = /^https?:\/\/\S+\.(mp3|wav|m4a|ogg|webm)$/i;
 
-export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answer, scale, skill }) => {
+export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answer, scale, part }) => {
   const grade = useGradeAnswer();
   const toast = useToast();
   const isRaw = scale.kind === 'raw';
   // Thang chấm: theo chứng chỉ, hoặc điểm của câu nếu đề không thuộc chứng chỉ
-  const range = isRaw ? { min: 0, max: answer.points, step: 0.25 } : skillRange(scale, skill);
+  const range = isRaw ? { min: 0, max: answer.points, step: 0.25 } : part;
   const hasScore = answer.earnedScore !== undefined && answer.earnedScore !== null && !answer.pendingManualGrading;
   const [score, setScore] = useState(
     hasScore
       ? isRaw
         ? String(answer.earnedScore)
-        : formatScaleScore(scale, pointsToScaleScore(scale, skill, answer.earnedScore ?? 0, answer.points))
+        : formatScore(pointsToScore(part, answer.earnedScore ?? 0, answer.points), part.step)
       : '',
   );
   /** Tự chặn trong thang khi nhập */
@@ -66,7 +65,7 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
       return;
     }
     setFieldError(null);
-    const points = isRaw ? value : scaleScoreToPoints(scale, skill, value, answer.points);
+    const points = isRaw ? value : scoreToPoints(part, value, answer.points);
     grade.mutate(
       { attemptId, questionId: answer.questionId, score: points, feedback: feedback.trim() || undefined },
       {
@@ -109,7 +108,7 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
         <label className="text-xs font-bold text-slate-600 space-y-1">
           {isRaw
             ? `Điểm (tối đa ${answer.points})`
-            : `${scale.label} ${SKILL_LABEL[skill]} (${range.min} – ${range.max})`}
+            : `${scale.label} ${part.name} (${range.min} – ${range.max})`}
           <input
             type="number"
             step={range.step}

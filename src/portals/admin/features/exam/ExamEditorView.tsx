@@ -27,12 +27,8 @@ import { Button } from '@/shared/components/Button';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
-import {
-  SECTION_TYPES_BY_SCALE,
-  detectScale,
-  formatScaleScore,
-  percentToPass,
-} from '@/shared/constants/examScales';
+import { formatPass } from '@/shared/constants/examScales';
+import { useCertificateScale } from '@/portals/client/features/exams/hooks/useCertificateScale';
 import { EXAM_TYPE_LABEL } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { useAdminExam, useExamActions } from './hooks/useAdminExams';
@@ -50,6 +46,7 @@ export const ExamEditorView: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const { data, isLoading, isError, error, refetch } = useAdminExam(examId);
+  const scale = useCertificateScale(data?.exam.certificateId, data?.exam.certificateName);
   const actions = useExamActions(examId);
   /** null = đóng modal; '' = câu không thuộc phần thi; còn lại = sectionId */
   const [questionTarget, setQuestionTarget] = useState<string | null>(null);
@@ -86,7 +83,6 @@ export const ExamEditorView: React.FC = () => {
   const { exam } = data;
   const isDraft = exam.status === 'draft';
   const isArchived = exam.status === 'archived';
-  const scale = detectScale(exam.certificateName);
   const onError = (err: Error) => toast.error(err.message);
   const looseQuestions = data.unsectionedQuestions ?? [];
   const hasContent = data.sections.length > 0 || looseQuestions.length > 0;
@@ -144,9 +140,7 @@ export const ExamEditorView: React.FC = () => {
     `${data.sections.length} phần thi`,
     `${data.maxScore} điểm`,
     `${exam.totalAttempts ?? 0} lượt thi`,
-    scale.kind !== 'raw'
-      ? `Điểm đạt ${scale.label} ${formatScaleScore(scale, percentToPass(scale, exam.passingScore ?? 0))}`
-      : `Điểm đạt ${exam.passingScore ?? 0}%`,
+    `Điểm đạt ${formatPass(scale, exam.passingScore ?? 0)}`,
   ].filter(Boolean);
 
   return (
@@ -240,7 +234,7 @@ export const ExamEditorView: React.FC = () => {
           <h3 className="text-base font-bold text-slate-900">Thêm phần thi</h3>
           <AddSectionForm
             key={exam.examId}
-            scaleKind={scale.kind}
+            scale={scale}
             isSubmitting={actions.addSection.isPending}
             serverError={actions.addSection.error?.message}
             onCancel={() => {
@@ -319,7 +313,7 @@ export const ExamEditorView: React.FC = () => {
         <ImportExamModal
           examId={examId}
           certificateLabel={exam.certificateName ?? 'đề không thuộc chứng chỉ'}
-          allowedSectionTypes={SECTION_TYPES_BY_SCALE[scale.kind]}
+          scale={scale}
           onClose={() => setImportOpen(false)}
         />
       )}

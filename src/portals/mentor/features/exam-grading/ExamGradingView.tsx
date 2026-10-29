@@ -14,7 +14,8 @@ import { Card } from '@/shared/components/Card';
 import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { ATTEMPT_STATUS_LABEL } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
-import { detectScale, toSkill } from '@/shared/constants/examScales';
+import { sectionPart } from '@/shared/constants/examScales';
+import { useCertificateScale } from '@/portals/client/features/exams/hooks/useCertificateScale';
 import { useAttemptForGrading, useGradingExamInfo, usePendingAttempts } from './hooks/useExamGrading';
 import { EssayGradeForm } from './EssayGradeForm';
 
@@ -34,10 +35,12 @@ export const ExamGradingView: React.FC = () => {
   const detail = useAttemptForGrading(selectedId);
   const essays = (detail.data?.answers ?? []).filter((a) => a.questionType === 'essay');
   const examInfo = useGradingExamInfo(detail.data?.attempt.examId);
-  const scale = detectScale(examInfo.data?.exam.certificateName);
-  /** Kỹ năng của câu theo section (Writing / Speaking) để chọn thang chấm */
-  const skillOf = (sectionId?: string) =>
-    toSkill((detail.data?.sectionScores ?? []).find((s) => s.sectionId === sectionId)?.sectionType);
+  const scale = useCertificateScale(examInfo.data?.exam.certificateId, examInfo.data?.exam.certificateName);
+  /** Thang chấm của câu: theo phần thi của chứng chỉ mà section của câu thuộc về */
+  const partOf = (sectionId?: string) => {
+    const section = (detail.data?.sectionScores ?? []).find((s) => s.sectionId === sectionId);
+    return sectionPart(scale, section ?? { sectionType: 'WRITING' });
+  };
 
   return (
     <div className="space-y-5">
@@ -132,7 +135,7 @@ export const ExamGradingView: React.FC = () => {
                   attemptId={selectedId}
                   answer={answer}
                   scale={scale}
-                  skill={skillOf(answer.sectionId)}
+                  part={partOf(answer.sectionId)}
                 />
               ))}
             </>

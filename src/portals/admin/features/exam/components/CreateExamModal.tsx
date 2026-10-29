@@ -11,7 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/shared/components/Button';
 import { useToast } from '@/shared/components/Toast';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
-import { detectScale, passToPercent } from '@/shared/constants/examScales';
+import { passToPercent } from '@/shared/constants/examScales';
+import { useCertificateScale } from '@/portals/client/features/exams/hooks/useCertificateScale';
 import { EXAM_TYPE_LABEL, type ExamScope, type ExamType } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { useCreateExam, useExamFormOptions } from '../hooks/useAdminExams';
@@ -43,7 +44,7 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
     setForm((f) => ({ ...f, [key]: value }));
 
   const certificate = (certificates.data ?? []).find((c) => c.certificateId === form.certificateId);
-  const scale = detectScale(certificate?.certificateName);
+  const scale = useCertificateScale(form.certificateId);
   const courseOptions = useMemo(
     () => (courses.data ?? []).filter((c) => c.certificateId === form.certificateId),
     [courses.data, form.certificateId],

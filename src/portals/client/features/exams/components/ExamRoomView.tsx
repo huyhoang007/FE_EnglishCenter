@@ -14,7 +14,7 @@ import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
-import { detectScale } from '@/shared/constants/examScales';
+import { useCertificateScale } from '../hooks/useCertificateScale';
 import type { ExamQuestion, ExamSection } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { useExamRoom, type SaveState } from '../hooks/useExamRoom';
@@ -32,6 +32,7 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
   const room = useExamRoom(attemptId);
   const [isConfirmOpen, setConfirmOpen] = useState(false);
   const [activeQuestionId, setActiveQuestionId] = useState('');
+  const scale = useCertificateScale(room.attempt?.exam?.exam.certificateId, room.attempt?.exam?.exam.certificateName);
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   if (room.attemptQuery.isLoading) {
@@ -57,7 +58,6 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
   }
 
   const exam = room.attempt.exam;
-  const scale = detectScale(exam.exam.certificateName);
   const jumpTo = (questionId: string) => {
     setActiveQuestionId(questionId);
     questionRefs.current[questionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });

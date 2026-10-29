@@ -2,7 +2,8 @@
  * examImport — đọc file Word (.docx) / .txt viết theo mẫu thành section + câu hỏi (Dev 3)
  * -----------------------------------------------------------
  * Mẫu (mỗi dòng một mục, không phân biệt hoa thường ở thẻ):
- *   [SECTION] READING | Part 2 - Reading      ← mở section mới (LISTENING/READING/WRITING/SPEAKING/GENERAL)
+ *   [SECTION] READING | Part 2 - Reading      ← mở section mới: tên phần thi của chứng chỉ (VD "Reading",
+ *                                              "Use of English") hoặc kỹ năng LISTENING/READING/WRITING/SPEAKING/GENERAL
  *   [INSTRUCTIONS] Đọc đoạn văn và trả lời     ← hướng dẫn của section
  *   [PASSAGE] Tom moved to London...           ← đoạn đọc (các dòng sau nối tiếp tới thẻ / câu hỏi kế)
  *   [AUDIO] https://.../audio.mp3              ← file nghe (chỉ section LISTENING)
@@ -21,6 +22,7 @@
  * Dòng trống được bỏ qua; dòng bắt đầu bằng # là ghi chú.
  */
 
+import { skillToSectionType, type PartScale } from '@/shared/constants/examScales';
 import type { QuestionType } from '@/shared/types';
 import type { CreateQuestionRequest, CreateSectionRequest, QuestionOptionInput } from '../services/adminExamService';
 
@@ -45,6 +47,12 @@ export interface ImportResult {
 }
 
 export const SECTION_TYPES_ALL = ['LISTENING', 'READING', 'WRITING', 'SPEAKING', 'GENERAL'];
+
+/** Từ được dùng sau [SECTION]: tên các phần thi của chứng chỉ, hoặc các kỹ năng nếu đề không thuộc chứng chỉ */
+export function sectionTokens(parts: PartScale[]): string[] {
+  const linked = parts.filter((p) => p.partId);
+  return linked.length ? linked.map((p) => p.name) : SECTION_TYPES_ALL;
+}
 
 const TYPE_TAGS: Record<string, QuestionType> = {
   TF: 'true_false',
@@ -84,7 +92,9 @@ export async function readExamFile(file: File): Promise<string> {
   return value;
 }
 
-export function parseExamText(text: string, allowedSectionTypes: string[] = SECTION_TYPES_ALL): ImportResult {
+/** @param parts phần thi của chứng chỉ của đề (Dev 2) — mỗi [SECTION] được gắn vào một phần */
+export function parseExamText(text: string, parts: PartScale[] = []): ImportResult {
+  const linkedParts = parts.filter((p) => p.partId);
   const lines = text.replace(/\r/g, '').split('\n');
   const sections: ImportSection[] = [];
   const looseQuestions: ImportQuestion[] = [];
@@ -124,15 +134,20 @@ export function parseExamText(text: string, allowedSectionTypes: string[] = SECT
       finishQuestion();
       if (name === 'SECTION') {
         const [typePart, ...titleParts] = value.split('|');
-        const sectionType = typePart.trim().toUpperCase();
-        const title = titleParts.join('|').trim() || sectionType;
-        if (!allowedSectionTypes.includes(sectionType)) {
+        const token = typePart.trim().toUpperCase();
+        // Khớp tên phần thi của chứng chỉ trước, rồi tới kỹ năng (READING → phần Reading)
+        const part =
+          linkedParts.find((p) => p.name.trim().toUpperCase() === token) ??
+          linkedParts.find((p) => skillToSectionType(p.skill) === token);
+        const sectionType = part ? skillToSectionType(part.skill) : token;
+        const title = titleParts.join('|').trim() || part?.name || sectionType;
+        if (linkedParts.length ? !part : !SECTION_TYPES_ALL.includes(token)) {
           errors.push({
             line: lineNo,
-            message: `Loại section "${typePart.trim()}" không hợp lệ cho chứng chỉ này (chỉ nhận: ${allowedSectionTypes.join(', ')})`,
+            message: `Phần thi "${typePart.trim()}" không có trong chứng chỉ này (chỉ nhận: ${sectionTokens(parts).join(', ')})`,
           });
         }
-        section = { line: lineNo, request: { title, sectionType }, questions: [] };
+        section = { line: lineNo, request: { title, sectionType, certificatePartId: part?.partId }, questions: [] };
         sections.push(section);
         continuing = null;
         return;

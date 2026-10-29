@@ -15,7 +15,7 @@ import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
 import { ATTEMPT_STATUS_LABEL } from '@/shared/types';
-import { detectScale } from '@/shared/constants/examScales';
+import { useCertificateScale } from '../hooks/useCertificateScale';
 import { useAttemptResult, useExamDetail } from '../hooks/useExams';
 import { formatDuration } from '../utils/examRoom';
 import { AnswerReviewItem } from './AnswerReviewItem';
@@ -30,7 +30,7 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
   const { data, isLoading, isError, error, refetch } = useAttemptResult(attemptId);
   // Kết quả không kèm tên chứng chỉ → lấy từ thông tin đề để chọn thang điểm
   const examDetail = useExamDetail(data?.attempt.examId ?? '');
-  const scale = detectScale(examDetail.data?.exam.certificateName);
+  const scale = useCertificateScale(examDetail.data?.exam.certificateId, examDetail.data?.exam.certificateName);
 
   const backButton = (
     <Button variant="ghost" size="sm" leftIcon={ArrowLeft} onClick={() => navigate(CLIENT_ROUTES.examHistory)}>
