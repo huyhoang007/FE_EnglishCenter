@@ -19,10 +19,10 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 
-export type ToastVariant = 'success' | 'error' | 'info';
+export type ToastVariant = 'success' | 'error' | 'info' | 'warning';
 
 interface ToastItem {
   id: number;
@@ -34,6 +34,7 @@ interface ToastContextValue {
   success: (message: string) => void;
   error: (message: string) => void;
   info: (message: string) => void;
+  warning: (message: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -56,6 +57,11 @@ const VARIANT_STYLES: Record<
     icon: Info,
     iconClass: 'text-[#0052CC]',
     ringClass: 'border-blue-200',
+  },
+  warning: {
+    icon: AlertTriangle,
+    iconClass: 'text-amber-500',
+    ringClass: 'border-amber-200',
   },
 };
 
@@ -85,6 +91,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({
       success: (m: string) => push('success', m),
       error: (m: string) => push('error', m),
       info: (m: string) => push('info', m),
+      warning: (m: string) => push('warning', m),
     }),
     [push],
   );

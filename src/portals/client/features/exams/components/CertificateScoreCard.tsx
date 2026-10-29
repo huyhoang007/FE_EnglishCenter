@@ -26,12 +26,21 @@ interface CertificateScoreCardProps {
   sections: SectionScore[];
 }
 
-const OVERALL_LABEL = { ielts: 'Overall band', toeic: 'Tổng điểm TOEIC', vstep: 'Điểm VSTEP', raw: '' } as const;
+const OVERALL_LABEL = {
+  ielts: 'Overall band',
+  toeic: 'Tổng điểm TOEIC',
+  vstep: 'Điểm VSTEP',
+  toefl: 'Overall TOEFL',
+  aptis: 'Final Scale Score',
+  raw: '',
+} as const;
 
 export const CertificateScoreCard: React.FC<CertificateScoreCardProps> = ({ scale, sections }) => {
   const result = scaleResult(scale, sections);
   const shownSkills =
-    scale.kind === 'toeic' ? result.skills : result.skills.filter((s) => s.skill !== 'OTHER' || result.skills.length === 1);
+    scale.kind === 'toeic' || scale.kind === 'aptis'
+      ? result.skills
+      : result.skills.filter((s) => s.skill !== 'OTHER' || result.skills.length === 1);
 
   return (
     <Card className="space-y-4">
@@ -49,6 +58,7 @@ export const CertificateScoreCard: React.FC<CertificateScoreCardProps> = ({ scal
               <p className="text-5xl font-extrabold tabular-nums mt-2">{formatScaleScore(scale, result.overall)}</p>
               <p className="text-sm font-bold opacity-70">/ {formatScaleScore(scale, result.overallMax)}</p>
               {result.level && <p className="mt-2 text-sm font-extrabold">Bậc {result.level}</p>}
+              {result.cefr && <p className="mt-2 text-sm font-extrabold">CEFR {result.cefr}</p>}
             </>
           ) : (
             <p className="text-sm font-semibold mt-3 flex items-center justify-center gap-1.5">
@@ -70,6 +80,9 @@ export const CertificateScoreCard: React.FC<CertificateScoreCardProps> = ({ scal
                 </span>
               </div>
               <p className="text-xs text-slate-500 truncate">{s.title}</p>
+              {s.cefr && (
+                <p className="text-[11px] font-extrabold text-[#0052CC]">CEFR {s.cefr}</p>
+              )}
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full"

@@ -182,6 +182,10 @@ export interface HomeworkContentData {
   /** Thời gian làm bài (phút). */
   timeLimitMinutes?: number;
   attachmentUrl?: string;
+  /** Tên file tài liệu đính kèm (để hiển thị cho học viên). */
+  attachmentName?: string;
+  /** Public ID của file trên Cloudinary (dùng để xoá file khi gỡ tài liệu). */
+  attachmentPublicId?: string;
   /** Số lần làm bài tối đa (thiếu = không giới hạn). */
   maxAttempts?: number;
   /** `examId` của đề trắc nghiệm liên kết (khi `submissionType = multiple_choice`). */
@@ -228,6 +232,12 @@ export interface CourseContentDto {
   examId?: string | null;
   /** Tên đề thi liên kết. */
   examTitle?: string | null;
+  /**
+   * Id kỹ năng (certificate_part) mà bài tập đo lường.
+   * <p>
+   * Chỉ có giá trị khi `contentType = 'homework'`. `null` = chưa gắn kỹ năng.
+   */
+  certificatePartId?: string | null;
   /**
    * Danh sách id bộ từ vựng CHUNG được tham chiếu —
    * chỉ có giá trị khi `contentType = 'vocabulary'`.
@@ -386,6 +396,11 @@ export interface CreateCourseContentPayload {
    * và bài tập là trắc nghiệm.
    */
   examId?: string;
+  /**
+   * Id kỹ năng (certificate_part) mà bài tập đo lường — chỉ dùng khi
+   * `contentType = 'homework'`. Bỏ trống = chưa gắn kỹ năng.
+   */
+  certificatePartId?: string;
   /** JSON **string** — backend nhận string rồi normalize vào cột JSONB. */
   contentData?: string;
 }
@@ -399,6 +414,11 @@ export interface UpdateCourseContentPayload {
   vocabularySetIds?: string[];
   /** Chỉ dùng khi nội dung có `contentType = 'homework'`. */
   examId?: string;
+  /**
+   * Id kỹ năng (certificate_part) mà bài tập đo lường — chỉ dùng khi
+   * `contentType = 'homework'`. Bỏ trống = giữ nguyên kỹ năng đang gắn.
+   */
+  certificatePartId?: string;
   contentData?: string;
 }
 

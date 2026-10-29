@@ -10,9 +10,11 @@
  * Loại thang nhận diện theo tên chứng chỉ (IELTS / TOEIC / VSTEP).
  */
 
-import type { BadgeVariant } from '@/shared/components/Badge';
+import type { BadgeVariant } from '../types/badge.types';
+import { roundToHalfStep } from '../utils/format';
+import { getAptisOverallCefr, getAptisSkillCefr, type AptisCefr } from './aptisCefr.ts';
 
-export type ScaleKind = 'ielts' | 'toeic' | 'vstep' | 'raw';
+export type ScaleKind = 'ielts' | 'toeic' | 'vstep' | 'toefl' | 'aptis' | 'raw';
 export type Skill = 'LISTENING' | 'READING' | 'WRITING' | 'SPEAKING' | 'OTHER';
 
 export interface ScaleInfo {
@@ -70,6 +72,30 @@ export const SCALE_INFO: Record<ScaleKind, ScaleInfo> = {
     badge: 'vstep',
     accent: 'bg-cert-vstep-bg border-cert-vstep-border text-cert-vstep-text',
   },
+  toefl: {
+    kind: 'toefl',
+    label: 'TOEFL iBT',
+    range: '1 – 6 mỗi kỹ năng (bước 0.5, từ 21/01/2026)',
+    passLabel: 'Điểm TOEFL đạt',
+    passMin: 1,
+    passMax: 6,
+    passStep: 0.5,
+    defaultPass: 4,
+    badge: 'primary',
+    accent: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+  },
+  aptis: {
+    kind: 'aptis',
+    label: 'APTIS',
+    range: '0 – 50 mỗi kỹ năng; Final Scale Score 0 – 200 (4 kỹ năng)',
+    passLabel: 'Điểm đạt / kỹ năng',
+    passMin: 0,
+    passMax: 50,
+    passStep: 1,
+    defaultPass: 25,
+    badge: 'primary',
+    accent: 'bg-teal-50 border-teal-200 text-teal-700',
+  },
   raw: {
     kind: 'raw',
     label: 'Điểm đề',
@@ -89,6 +115,8 @@ export const SECTION_TYPES_BY_SCALE: Record<ScaleKind, string[]> = {
   ielts: ['LISTENING', 'READING', 'WRITING', 'SPEAKING'],
   vstep: ['LISTENING', 'READING', 'WRITING', 'SPEAKING'],
   toeic: ['LISTENING', 'READING'],
+  toefl: ['READING', 'LISTENING', 'SPEAKING', 'WRITING'],
+  aptis: ['LISTENING', 'READING', 'WRITING', 'SPEAKING', 'OTHER'],
   raw: ['LISTENING', 'READING', 'WRITING', 'SPEAKING', 'GENERAL'],
 };
 
@@ -97,7 +125,48 @@ export function detectScale(certificateName?: string | null): ScaleInfo {
   if (name.includes('IELTS')) return SCALE_INFO.ielts;
   if (name.includes('TOEIC')) return SCALE_INFO.toeic;
   if (name.includes('VSTEP')) return SCALE_INFO.vstep;
+  if (name.includes('TOEFL')) return SCALE_INFO.toefl;
+  if (name.includes('APTIS')) return SCALE_INFO.aptis;
   return SCALE_INFO.raw;
+}
+
+/**
+ * Suy ra thang điểm từ CẤU HÌNH thật của chứng chỉ trong DB (`description` JSON).
+ * Ưu tiên cấu hình này trước `detectScale` (đoán theo tên) để tôn trọng
+ * thang điểm mà admin đã cấu hình, kể cả khi tên chứng chỉ không khớp chuẩn.
+ */
+export function detectScaleFromCertificate(cert?: {
+  certificateName?: string | null;
+  description?: string | null;
+} | null): ScaleInfo {
+  if (!cert) return SCALE_INFO.raw;
+
+  const desc = (cert.description ?? '').trim();
+  if (desc.startsWith('{') && desc.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(desc) as {
+        scoring?: { maxScore?: number; minScore?: number; step?: number; scaleType?: string };
+      };
+      const s = parsed.scoring;
+      if (s && typeof s.maxScore === 'number' && s.maxScore > 0) {
+        const name = (cert.certificateName ?? '').toUpperCase();
+        const base = detectScale(cert.certificateName);
+
+        // Bản thang chuẩn của nhóm vẫn giữ định dạng hiển thị; chỉ dùng cấu hình
+        // để biết kỹ năng nào được chấm và tổng tính thế nào.
+        if (s.scaleType === 'AVERAGE' && name.includes('TOEFL')) {
+          return { ...base, passMin: s.minScore ?? 1, passMax: s.maxScore, passStep: s.step ?? 0.5 };
+        }
+        if (s.scaleType === 'SUM' && name.includes('APTIS')) {
+          return base;
+        }
+      }
+    } catch {
+      // Không parse được → rơi về detectScale theo tên.
+    }
+  }
+
+  return detectScale(cert.certificateName);
 }
 
 export function toSkill(sectionType?: string | null): Skill {
@@ -130,6 +199,10 @@ export function passToPercent(scale: ScaleInfo, value: number): number {
       return Math.round(((value - 10) / 980) * 100);
     case 'vstep':
       return Math.round((value / 10) * 100);
+    case 'toefl':
+      return Math.round(((value - 1) / 5) * 100);
+    case 'aptis':
+      return Math.round((value / 50) * 100);
     default:
       return Math.round(value);
   }
@@ -144,6 +217,10 @@ export function percentToPass(scale: ScaleInfo, percent: number): number {
       return roundTo(10 + p * 980, 5);
     case 'vstep':
       return roundTo(p * 10, 0.5);
+    case 'toefl':
+      return roundTo(1 + p * 5, 0.5);
+    case 'aptis':
+      return roundTo(p * 50, 1);
     default:
       return Math.round(percent);
   }
@@ -168,6 +245,10 @@ export function skillRange(scale: ScaleInfo, skill: Skill): SkillRange {
         : { min: 0, max: 200, step: 10 };
     case 'vstep':
       return { min: 0, max: 10, step: 0.5 };
+    case 'toefl':
+      return { min: 1, max: 6, step: 0.5 };
+    case 'aptis':
+      return { min: 0, max: 50, step: 1 };
     default:
       return { min: 0, max: 100, step: 1 };
   }
@@ -197,13 +278,15 @@ export function pointsToScaleScore(scale: ScaleInfo, skill: Skill, earned: numbe
 /* ---------- Điểm tổng theo thang chứng chỉ ---------- */
 
 export interface SkillScore {
-  skill: Skill;
+   skill: Skill;
   title: string;
   /** Điểm theo thang; null khi phần này còn chờ mentor chấm */
   score: number | null;
   range: SkillRange;
   percentage: number;
   pending: boolean;
+  /** Bậc CEFR của riêng kỹ năng này (chỉ có với APTIS — cut-score khác nhau theo kỹ năng). */
+  cefr?: string;
 }
 
 export interface ScaledResult {
@@ -214,6 +297,8 @@ export interface ScaledResult {
   overallMax: number;
   /** VSTEP: bậc đạt được */
   level?: string;
+  /** APTIS: bậc CEFR tổng (TB làm tròn của bậc 4 kỹ năng) — tính độc lập với Final Scale Score. */
+  cefr?: string;
 }
 
 interface SectionLike {
@@ -230,16 +315,35 @@ export function vstepLevel(score: number): string {
   return 'Chưa đạt bậc';
 }
 
+/**
+ * Bậc CEFR của một kỹ năng APTIS.
+ *
+ * Cut-score khác nhau theo từng kỹ năng (BC Aptis Scoring System v2.1), nên
+ * Grammar & Vocabulary (Core) không có bậc CEFR riêng.
+ */
+function aptisCefrForSkill(skill: Skill, score: number): AptisCefr | undefined {
+  if (skill === 'LISTENING') return getAptisSkillCefr('Listening', score);
+  if (skill === 'READING') return getAptisSkillCefr('Reading', score);
+  if (skill === 'WRITING') return getAptisSkillCefr('Writing', score);
+  if (skill === 'SPEAKING') return getAptisSkillCefr('Speaking', score);
+  return undefined;
+}
+
 export function scaleResult(scale: ScaleInfo, sections: SectionLike[]): ScaledResult {
   const skills: SkillScore[] = sections.map((s) => {
     const skill = toSkill(s.sectionType);
+    const score = s.pendingManualGrading ? null : percentToSkillScore(scale, skill, s.percentage);
     return {
       skill,
       title: s.title,
-      score: s.pendingManualGrading ? null : percentToSkillScore(scale, skill, s.percentage),
+      score,
       range: skillRange(scale, skill),
       percentage: s.percentage,
       pending: s.pendingManualGrading,
+      // APTIS: bậc CEFR theo cut-score RIÊNG của từng kỹ năng (BC Aptis Scoring System v2.1).
+      ...(scale.kind === 'aptis' && score !== null
+        ? { cefr: aptisCefrForSkill(skill, score) }
+        : {}),
     };
   });
   const graded = skills.filter((s) => s.score !== null).map((s) => s.score as number);
@@ -247,11 +351,13 @@ export function scaleResult(scale: ScaleInfo, sections: SectionLike[]): ScaledRe
 
   switch (scale.kind) {
     case 'ielts': {
-      const overall = !hasPending && graded.length ? roundTo(graded.reduce((a, b) => a + b, 0) / graded.length, 0.5) : null;
+      // Overall: quy tắc .25/.75 (round-half-up) — dùng CHUNG roundToHalfStep.
+      const overall = !hasPending && graded.length ? roundToHalfStep(graded.reduce((a, b) => a + b, 0) / graded.length) : null;
       return { scale, skills, overall, overallMax: 9 };
     }
     case 'vstep': {
-      const overall = !hasPending && graded.length ? roundTo(graded.reduce((a, b) => a + b, 0) / graded.length, 0.5) : null;
+      // Tổng = trung bình 4 kỹ năng, làm tròn 0.5 gần nhất; điểm giữa làm tròn lên.
+      const overall = !hasPending && graded.length ? roundToHalfStep(graded.reduce((a, b) => a + b, 0) / graded.length) : null;
       return { scale, skills, overall, overallMax: 10, level: overall !== null ? vstepLevel(overall) : undefined };
     }
     case 'toeic': {
@@ -259,13 +365,34 @@ export function scaleResult(scale: ScaleInfo, sections: SectionLike[]): ScaledRe
       const overall = lr.length && lr.every((s) => s.score !== null) ? lr.reduce((a, s) => a + (s.score ?? 0), 0) : null;
       return { scale, skills, overall, overallMax: lr.length * 495 || 990 };
     }
+    case 'toefl': {
+      // TOEFL iBT thang 1–6 (từ 21/01/2026): Overall = trung bình 4 kỹ năng, làm tròn 0.5
+      const overall =
+        !hasPending && graded.length === 4 ? roundToHalfStep(graded.reduce((a, b) => a + b, 0) / 4) : null;
+      return { scale, skills, overall, overallMax: 6 };
+    }
+    case 'aptis': {
+      // APTIS: Final Scale Score = tổng 4 kỹ năng ngôn ngữ (0–200), KHÔNG gồm Grammar & Vocabulary.
+      const languageSkills = skills.filter((s) => s.skill !== 'OTHER');
+      const canTotal = languageSkills.length === 4 && languageSkills.every((s) => s.score !== null);
+      const overall = canTotal ? languageSkills.reduce((a, s) => a + (s.score ?? 0), 0) : null;
+      // Bậc CEFR tổng: TB làm tròn của bậc CEFR 4 kỹ năng (BC Aptis Scoring System v2.1 §3.2).
+      const skillCefrs = languageSkills
+        .map((s) => s.cefr)
+        .filter((c): c is AptisCefr => typeof c === 'string');
+      const cefr =
+        canTotal && skillCefrs.length === 4 ? getAptisOverallCefr(skillCefrs) : undefined;
+      return { scale, skills, overall, overallMax: 200, cefr };
+    }
     default:
       return { scale, skills, overall: null, overallMax: 0 };
   }
 }
 
-/** "6.5", "785", "7.0" — IELTS/VSTEP luôn 1 chữ số thập phân. */
+/** "6.5", "785", "7.0" — IELTS/VSTEP/TOEFL luôn 1 chữ số thập phân. */
 export function formatScaleScore(scale: ScaleInfo, value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
-  return scale.kind === 'ielts' || scale.kind === 'vstep' ? value.toFixed(1) : String(Math.round(value));
+  return scale.kind === 'ielts' || scale.kind === 'vstep' || scale.kind === 'toefl'
+    ? value.toFixed(1)
+    : String(Math.round(value));
 }

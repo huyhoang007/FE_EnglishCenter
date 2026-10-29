@@ -25,6 +25,10 @@ export const CLIENT_ROUTES = {
   examHistory: '/exams/history',
   examAttempt: (attemptId: string = ':attemptId') => `/exams/attempts/${attemptId}`,
   examResult: (attemptId: string = ':attemptId') => `/exams/attempts/${attemptId}/result`,
+  /* ---------- Homework: làm bài trắc nghiệm ---------- */
+  /** Màn làm bài trắc nghiệm của một bài tập (không đi qua phòng thi của module Exam). */
+  homeworkAttempt: (attemptId: string = ':attemptId') =>
+    `/homework/attempts/${attemptId}`,
   study: (slug: string = ':slug', lessonId?: string) =>
     lessonId ? `/study/${slug}/${lessonId}` : `/study/${slug}`,
   schedule: '/schedule',

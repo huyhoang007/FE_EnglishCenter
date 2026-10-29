@@ -90,6 +90,8 @@ import {
 } from './form/formControls';
 import { ExamPicker } from './ExamPicker';
 import { VocabularyBankPicker } from './VocabularyBankPicker';
+import { CertificateSkillPicker } from './CertificateSkillPicker';
+import { AttachmentUpload } from './AttachmentUpload';
 
 /* =========================================================
  * Types
@@ -133,9 +135,20 @@ interface HomeworkForm extends CommonForm {
   /** Thời gian làm bài (phút). */
   timeLimitMinutes: string;
   maxAttempts: string;
+  /** URL công khai của tài liệu đính kèm (file `upload` trên Cloudinary). */
   attachmentUrl: string;
+  /** Tên file tài liệu đính kèm (để hiển thị). */
+  attachmentName: string;
+  /** Public ID trên Cloudinary (dùng để xoá file khi gỡ tài liệu). */
+  attachmentPublicId: string;
   /** `examId` của đề trắc nghiệm liên kết. */
   examId: string;
+  /**
+   * `certificatePartId` — kỹ năng (chứng chỉ) mà bài tập này đo lường.
+   * <p>
+   * Rỗng = chưa gắn kỹ năng. Backend lưu ở `course_content.certificate_part_id`.
+   */
+  certificatePartId: string;
   rubric: RubricInput[];
 }
 
@@ -166,7 +179,10 @@ const EMPTY_HOMEWORK: HomeworkForm = {
   timeLimitMinutes: '',
   maxAttempts: '',
   attachmentUrl: '',
+  attachmentName: '',
+  attachmentPublicId: '',
   examId: '',
+  certificatePartId: '',
   rubric: [],
 };
 
@@ -301,7 +317,10 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           maxAttempts:
             data.maxAttempts != null ? String(data.maxAttempts) : '',
           attachmentUrl: (data.attachmentUrl as string) ?? '',
+          attachmentName: (data.attachmentName as string) ?? '',
+          attachmentPublicId: (data.attachmentPublicId as string) ?? '',
           examId: (data.examId as string) ?? '',
+          certificatePartId: editing.certificatePartId ?? '',
           rubric: rubric.map((r) => ({
             criterion: r.criterion ?? '',
             description: r.description ?? '',
@@ -355,6 +374,12 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
   const lesson = form as LessonForm;
   const vocabulary = form as VocabularyForm;
   const homework = form as HomeworkForm;
+  /**
+   * Hình thức nộp hiện tại — dùng để ẩn/khóa các trường không liên quan
+   * (Thời gian làm bài + Số lần làm chỉ dành cho trắc nghiệm).
+   */
+  const hwSubmissionType: HomeworkSubmissionType =
+    homework.submissionType ?? 'text';
 
   /**
    * Mảng rubric LUÔN là mảng (không bao giờ `undefined`).
@@ -438,7 +463,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
       maxScore:
         contentType === 'homework' && (homework.maxScore ?? '').trim()
           ? !Number.isFinite(Number(homework.maxScore)) ||
-            Number(homework.maxScore) < 0
+            Number(homework.maxScore) <= 0
             ? t('content.validation.maxScoreInvalid')
             : ''
           : '',
@@ -466,9 +491,20 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
         contentType === 'homework' &&
         (homework.maxAttempts ?? '').trim()
           ? !Number.isFinite(Number(homework.maxAttempts)) ||
-            Number(homework.maxAttempts) < 0
+            Number(homework.maxAttempts) < 1
             ? t('content.validation.maxAttemptsInvalid')
             : ''
+          : '',
+      /**
+       * Hạn nộp không được nằm ở quá khứ khi tạo mới.
+       * (Khi SỬA bài cũ thì hạn nộp quá khứ vẫn hợp lệ → chỉ chặn khi tạo mới.)
+       */
+      dueDate:
+        contentType === 'homework' &&
+        (homework.dueDate ?? '').trim() &&
+        !isEditing &&
+        isDueDateInPast(homework.dueDate ?? '')
+          ? t('content.validation.dueDateInvalid')
           : '',
       /**
        * Bài trắc nghiệm BẮT BUỘC có đề thi liên kết — học viên cần đề để làm
@@ -547,6 +583,8 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           ? Number(homework.maxAttempts)
           : null,
         attachmentUrl: homework.attachmentUrl,
+        attachmentName: homework.attachmentName,
+        attachmentPublicId: homework.attachmentPublicId,
         examId:
           (homework.submissionType ?? 'text') === 'multiple_choice'
             ? homework.examId
@@ -605,6 +643,11 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           (homework.submissionType ?? 'text') === 'multiple_choice'
             ? homework.examId || undefined
             : undefined,
+        // Bài tập → gắn kỹ năng chứng chỉ (FK `course_content.certificate_part_id`).
+        certificatePartId:
+          contentType === 'homework'
+            ? homework.certificatePartId || undefined
+            : undefined,
         contentData: buildContentData(),
       }),
     onSuccess: () => {
@@ -634,6 +677,10 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           contentType === 'homework' &&
           (homework.submissionType ?? 'text') === 'multiple_choice'
             ? homework.examId || undefined
+            : undefined,
+        certificatePartId:
+          contentType === 'homework'
+            ? homework.certificatePartId || undefined
             : undefined,
         contentData: buildContentData(),
       });
@@ -956,6 +1003,25 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
                       )}
                     </div>
                   )}
+
+                  {/* ---- Kỹ năng chứng chỉ mà bài tập đo lường ---- */}
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                      {t('content.homework.skillTitle')}
+                    </p>
+                    <CertificateSkillPicker
+                      value={homework.certificatePartId ?? ''}
+                      onChange={(certificatePartId) =>
+                        setForm((f) => ({
+                          ...(f as HomeworkForm),
+                          certificatePartId,
+                        }) as AnyForm)
+                      }
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      {t('content.homework.skillHint')}
+                    </p>
+                  </div>
                 </div>
 
                 <Field label={t('content.form.instructions')}>
@@ -1049,6 +1115,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
                         'content.homework.timeLimitPlaceholder',
                       )}
                       invalid={Boolean(touched && errors.timeLimit)}
+                      disabled={hwSubmissionType !== 'multiple_choice'}
                     />
                   </Field>
                 </div>
@@ -1061,7 +1128,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
                   >
                     <TextInput
                       type="number"
-                      min={0}
+                      min={1}
                       value={homework.maxAttempts ?? ''}
                       onChange={(e) =>
                         setForm((f) => ({
@@ -1071,6 +1138,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
                       }
                       placeholder={t('content.form.maxAttemptsPlaceholder')}
                       invalid={Boolean(touched && errors.maxAttempts)}
+                      disabled={hwSubmissionType !== 'multiple_choice'}
                     />
                   </Field>
 
@@ -1094,19 +1162,28 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
                   </Field>
                 </div>
 
-                <Field label={t('content.form.attachmentUrl')}>
-                  <TextInput
-                    type="url"
-                    value={homework.attachmentUrl ?? ''}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...(f as HomeworkForm),
-                        attachmentUrl: e.target.value,
-                      }) as AnyForm)
-                    }
-                    placeholder={t('content.form.attachmentUrlPlaceholder')}
-                  />
-                </Field>
+                {/* ---- Tài liệu đính kèm (upload Cloudinary, file public) ---- */}
+                <AttachmentUpload
+                  value={homework.attachmentUrl || undefined}
+                  fileName={homework.attachmentName || undefined}
+                  onChange={(attachment) =>
+                    setForm((f) => ({
+                      ...(f as HomeworkForm),
+                      attachmentUrl: attachment.url,
+                      attachmentName: attachment.originalName ?? '',
+                      attachmentPublicId: attachment.publicId,
+                    }) as AnyForm)
+                  }
+                  onClear={() =>
+                    setForm((f) => ({
+                      ...(f as HomeworkForm),
+                      attachmentUrl: '',
+                      attachmentName: '',
+                      attachmentPublicId: '',
+                    }) as AnyForm)
+                  }
+                  label={t('content.form.attachmentUrl')}
+                />
 
                 {/* ---- Rubric ---- */}
                 <div>
@@ -1485,5 +1562,22 @@ const PreviewRow: React.FC<{
     </span>
   </div>
 );
+
+/**
+ * Hạn nộp có nằm ở quá khứ không.
+ * <p>
+ * So sánh theo ngày (không tính giờ) — hạn trong hôm nay vẫn hợp lệ.
+ */
+function isDueDateInPast(dueDate: string): boolean {
+  const trimmed = dueDate.trim();
+  if (!trimmed) return false;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return false;
+  // So sánh theo đầu ngày: hôm nay → không quá khứ.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsed.setHours(0, 0, 0, 0);
+  return parsed < today;
+}
 
 export default CourseContentModal;

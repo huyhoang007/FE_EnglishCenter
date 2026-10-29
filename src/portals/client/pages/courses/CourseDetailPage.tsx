@@ -16,7 +16,7 @@
  * Be Vietnam Pro, màu nhấn #0052CC.
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
@@ -59,6 +59,7 @@ import {
 } from '@/shared/components/Feedback';
 import { cn } from '@/shared/utils';
 import { formatVND } from '@/shared/utils/format';
+import { cefrLabel } from '@/shared/constants/cefrLevels';
 import {
   fetchCourseById,
   fetchCourseContents,
@@ -72,6 +73,8 @@ import {
   type VocabularyWord,
 } from '@/shared/api/vocabularyService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import { HomeworkSubmitModal } from '@/portals/client/features/homework';
+import { useMyHomeworkSubmissions } from '@/portals/client/features/homework/hooks/useHomework';
 import type {
   CourseContentDto,
   CourseDto,
@@ -79,6 +82,7 @@ import type {
   LessonContentData,
   RubricCriterion,
 } from '@/shared/types/catalog.types';
+import type { HomeworkSubmission } from '@/shared/types/homework.types';
 
 type Tab = 'syllabus' | 'vocabulary' | 'homework';
 
@@ -283,8 +287,8 @@ const CourseDetailContent: React.FC = () => {
               </span>
             )}
             {course.level && (
-              <span className="bg-blue-500/10 text-blue-300 border border-blue-500/20 text-xs font-bold px-3 py-1 rounded-md uppercase">
-                {course.level}
+              <span className="bg-blue-500/10 text-blue-300 border border-blue-500/20 text-xs font-bold px-3 py-1 rounded-md">
+                {cefrLabel(course.level)}
               </span>
             )}
             {course.certificatePartName && (
@@ -1024,13 +1028,27 @@ const VocabularyGrid: React.FC<{ items: CourseVocabularySet[] }> = ({
 };
 
 /* =========================================================
- * HomeworkList — đề bài + rubric chấm điểm
+ * HomeworkList — đề bài + rubric chấm điểm + nút nộp bài
  * ========================================================= */
-const HomeworkList: React.FC<{ items: CourseContentDto[] }> = ({ items }) => (
+const HomeworkList: React.FC<{ items: CourseContentDto[] }> = ({ items }) => {
+  const [activeHomework, setActiveHomework] = useState<CourseContentDto | null>(null);
+
+  // Bài nộp của học viên → hiển thị trạng thái (chờ chấm / đã đạt / chưa đạt).
+  const { data: mySubmissions } = useMyHomeworkSubmissions();
+  const statusByHomework = useMemo(() => {
+    const map = new Map<string, HomeworkSubmission>();
+    for (const s of mySubmissions ?? []) {
+      if (!map.has(s.homeworkContentId)) map.set(s.homeworkContentId, s);
+    }
+    return map;
+  }, [mySubmissions]);
+
+  return (
   <div className="space-y-4">
     {items.map((item, i) => {
       const d = item.contentData as HomeworkContentData | null;
       const rubric = (d?.rubric ?? []) as RubricCriterion[];
+      const mySubmission = statusByHomework.get(item.contentId);
       return (
         <div
           key={item.contentId}
@@ -1051,11 +1069,38 @@ const HomeworkList: React.FC<{ items: CourseContentDto[] }> = ({ items }) => (
                   </p>
                 )}
               </div>
-              {d?.maxScore != null && (
-                <Badge variant="primary" size="sm">
-                  {d.maxScore} điểm
-                </Badge>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {d?.maxScore != null && (
+                  <Badge variant="primary" size="sm">
+                    {d.maxScore} điểm
+                  </Badge>
+                )}
+                {mySubmission && (
+                  <Badge
+                    variant={
+                      !mySubmission.graded
+                        ? 'warning'
+                        : mySubmission.passed
+                          ? 'success'
+                          : 'danger'
+                    }
+                    size="sm"
+                  >
+                    {!mySubmission.graded
+                      ? 'Chờ chấm'
+                      : mySubmission.passed
+                        ? `Đã đạt${mySubmission.score != null ? ` · ${mySubmission.score}` : ''}`
+                        : `Chưa đạt${mySubmission.score != null ? ` · ${mySubmission.score}` : ''}`}
+                  </Badge>
+                )}
+                <Button
+                  size="sm"
+                  leftIcon={ClipboardList}
+                  onClick={() => setActiveHomework(item)}
+                >
+                  {mySubmission ? 'Xem bài' : 'Nộp bài'}
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -1112,15 +1157,26 @@ const HomeworkList: React.FC<{ items: CourseContentDto[] }> = ({ items }) => (
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0052CC] hover:underline"
               >
                 <FileText className="w-3.5 h-3.5" />
-                Tải tài liệu đính kèm
+                {d.attachmentName
+                  ? `Tải ${d.attachmentName}`
+                  : 'Tải tài liệu đính kèm'}
               </a>
             )}
           </div>
         </div>
       );
     })}
+
+    {activeHomework && (
+      <HomeworkSubmitModal
+        open={Boolean(activeHomework)}
+        onClose={() => setActiveHomework(null)}
+        homework={activeHomework}
+      />
+    )}
   </div>
-);
+  );
+};
 
 /* =========================================================
  * Modal + Skeleton helpers
