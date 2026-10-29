@@ -26,6 +26,11 @@ export interface AuthUser {
   isActive?: boolean;
   createdAt?: string;
   avatarUrl?: string;
+  /** Nguyện vọng + trình độ hiện tại (USER / STUDENT) */
+  targetCertificateId?: string | null;
+  targetScore?: number | null;
+  currentLevel?: string | null;
+  currentScore?: number | null;
 }
 
 /** Payload đăng nhập (gửi lên Backend) */

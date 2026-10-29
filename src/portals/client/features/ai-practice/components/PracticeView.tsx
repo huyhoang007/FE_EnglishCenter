@@ -38,6 +38,8 @@ import {
   Wand2,
   Wifi,
   WifiOff,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
@@ -76,7 +78,9 @@ type Phase = 'idle' | 'submitting' | 'evaluating';
 export const PracticeView: React.FC = () => {
   const [searchParams] = useSearchParams();
   const role = useRole();
-  const isStudent = role === 'STUDENT';
+  // Learner (USER) dùng trang này làm Test trình độ (Free), Student dùng để Luyện tập AI
+  const isStudent = role === 'STUDENT' || role === 'USER';
+  const isLearner = role === 'USER';
 
   const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'history' ? 'history' : 'bank');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
@@ -258,14 +262,14 @@ export const PracticeView: React.FC = () => {
       <header>
         <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
           <Sparkles className="w-3.5 h-3.5" />
-          Luyện đề với AI
+          {isLearner ? 'Test trình độ miễn phí' : 'Luyện đề với AI'}
         </div>
         <h1 className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          Phòng luyện Writing & Speaking
+          {isLearner ? 'Kiểm tra trình độ Writing & Speaking' : 'Phòng luyện Writing & Speaking'}
         </h1>
         <p className="mt-1.5 text-sm text-slate-600 max-w-2xl">
-          Chọn đề, viết bài (Writing) hoặc ghi âm bài nói (Speaking) và nhận điểm theo 4 tiêu chí IELTS kèm nhận xét
-          bằng tiếng Việt.
+          Chọn đề, viết bài (Writing) hoặc ghi âm bài nói (Speaking) và nhận điểm theo thang của chứng chỉ mục tiêu
+          (IELTS, TOEIC, VSTEP…) kèm level CEFR và nhận xét bằng tiếng Việt.
         </p>
       </header>
 
@@ -283,8 +287,7 @@ export const PracticeView: React.FC = () => {
 
       {!isStudent && (
         <Card className="bg-amber-50 border-amber-200 text-sm text-amber-800">
-          Chỉ tài khoản Học viên (STUDENT) đăng nhập bằng Backend mới nộp bài và được AI chấm. Bạn vẫn xem được
-          kho đề.
+          Đăng nhập để làm bài và được AI chấm. Bạn vẫn xem được kho đề.
         </Card>
       )}
 
@@ -733,6 +736,8 @@ const HistoryList: React.FC<{
   onView: (a: PracticeAnswer) => void;
   onEvaluate: (a: PracticeAnswer) => void;
 }> = ({ answers, isLoading, errorMessage, busy, onView, onEvaluate }) => {
+  // Bài làm đang mở xem nội dung (mỗi lúc 1 bài)
+  const [openAnswerId, setOpenAnswerId] = useState<string | null>(null);
   if (isLoading) {
     return (
       <Card className="flex justify-center py-8 text-slate-400">
@@ -750,38 +755,54 @@ const HistoryList: React.FC<{
     <Card noPadding>
       <ul className="divide-y divide-slate-100">
         {answers.map((a) => (
-          <li key={a.answerId} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <ExamTypeBadge type={a.examType} />
-                {a.status === 'EVALUATED' ? (
-                  <Badge variant="success" size="sm">
-                    Đã chấm
-                  </Badge>
-                ) : (
-                  <Badge variant="warning" size="sm">
-                    Chưa chấm
-                  </Badge>
-                )}
+          <li key={a.answerId} className="p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <ExamTypeBadge type={a.examType} />
+                  {a.status === 'EVALUATED' ? (
+                    <Badge variant="success" size="sm">
+                      Đã chấm
+                    </Badge>
+                  ) : (
+                    <Badge variant="warning" size="sm">
+                      Chưa chấm
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1.5 font-bold text-slate-900 truncate">{a.examTitle}</p>
+                <p className="text-xs text-slate-500">
+                  {new Date(a.submittedAt).toLocaleString('vi-VN')} · {a.wordCount} từ
+                </p>
               </div>
-              <p className="mt-1.5 font-bold text-slate-900 truncate">{a.examTitle}</p>
-              <p className="text-xs text-slate-500">
-                {new Date(a.submittedAt).toLocaleString('vi-VN')} · {a.wordCount} từ
-              </p>
+              {a.status === 'EVALUATED' && a.bandScore != null && (
+                <span className="text-2xl font-extrabold text-[#0052CC] tabular-nums">
+                  {Number(a.bandScore) > 10 ? Math.round(Number(a.bandScore)) : Number(a.bandScore).toFixed(1)}
+                </span>
+              )}
+              {a.status === 'EVALUATED' ? (
+                <Button variant="outline" size="sm" onClick={() => onView(a)}>
+                  Xem kết quả
+                </Button>
+              ) : (
+                <Button variant="ai" size="sm" leftIcon={Wand2} disabled={busy} onClick={() => onEvaluate(a)}>
+                  AI chấm
+                </Button>
+              )}
             </div>
-            {a.status === 'EVALUATED' && a.bandScore != null && (
-              <span className="text-2xl font-extrabold text-[#0052CC] tabular-nums">
-                {Number(a.bandScore).toFixed(1)}
-              </span>
-            )}
-            {a.status === 'EVALUATED' ? (
-              <Button variant="outline" size="sm" onClick={() => onView(a)}>
-                Xem kết quả
-              </Button>
-            ) : (
-              <Button variant="ai" size="sm" leftIcon={Wand2} disabled={busy} onClick={() => onEvaluate(a)}>
-                AI chấm
-              </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              leftIcon={openAnswerId === a.answerId ? EyeOff : Eye}
+              onClick={() => setOpenAnswerId((id) => (id === a.answerId ? null : a.answerId))}
+              className="mt-3 w-full sm:w-auto"
+            >
+              {openAnswerId === a.answerId ? 'Ẩn bài làm' : 'Xem bài làm'}
+            </Button>
+            {openAnswerId === a.answerId && (
+              <p className="mt-2 max-h-72 overflow-y-auto rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                {a.content || 'Bài làm trống.'}
+              </p>
             )}
           </li>
         ))}
