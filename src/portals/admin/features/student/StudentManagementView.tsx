@@ -31,7 +31,7 @@ import {
   AlertTriangle,
   Check,
 } from 'lucide-react';
-import { getUsers, updateUserStatus } from '@/shared/api/domainApi';
+import { getUsers, registerRequest, updateUserStatus } from '@/shared/api/domainApi';
 import type { AuthUser } from '@/shared/types';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
@@ -121,11 +121,43 @@ export const StudentManagementView: React.FC = () => {
     setPage(0);
   };
 
+  const createStudentMutation = useMutation({
+    mutationFn: (payload: { email: string; fullName: string; phone?: string }) =>
+      registerRequest({
+        email: payload.email,
+        fullName: payload.fullName,
+        phone: payload.phone || undefined,
+        password: 'Student@123456',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.accounts });
+      setIsAddOpen(false);
+      setSuccessToast(
+        `Đã ghi danh học viên ${newStudentForm.fullName} vào hệ thống thành công! (Mật khẩu mặc định: Student@123456)`
+      );
+      setNewStudentForm({
+        fullName: '',
+        email: '',
+        phone: '',
+        courseName: 'IELTS Intensive 7.5+',
+        batch: 'Batch 2025',
+        targetScore: '7.5 IELTS',
+      });
+      setTimeout(() => setSuccessToast(null), 4000);
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Lỗi khi tạo tài khoản học viên');
+    },
+  });
+
   const handleAddStudent = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsAddOpen(false);
-    setSuccessToast(`Đã thêm học viên ${newStudentForm.fullName} vào hệ thống thành công!`);
-    setTimeout(() => setSuccessToast(null), 3000);
+    if (!newStudentForm.fullName.trim() || !newStudentForm.email.trim()) return;
+    createStudentMutation.mutate({
+      fullName: newStudentForm.fullName.trim(),
+      email: newStudentForm.email.trim(),
+      phone: newStudentForm.phone.trim(),
+    });
   };
 
   return (
@@ -621,6 +653,7 @@ export const StudentManagementView: React.FC = () => {
                   type="submit"
                   variant="primary"
                   size="sm"
+                  isLoading={createStudentMutation.isPending}
                   className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
                 >
                   Ghi danh học viên
