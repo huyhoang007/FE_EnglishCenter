@@ -9,6 +9,7 @@ export * from './auth.types';
 export * from './catalog.types';
 export * from './course.types';
 export * from './exam.types';
+export * from './homework.types';
 export * from './learning.types';
 export * from './sepay.types';
 // Dev 5

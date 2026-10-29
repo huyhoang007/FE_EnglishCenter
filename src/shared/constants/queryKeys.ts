@@ -64,6 +64,24 @@ export const QUERY_KEYS = {
     directory: (params?: unknown) => ['mentor', 'directory', params] as const,
     detail: (id: string) => ['mentor', 'detail', id] as const,
   },
+  /* ---------- Dev 2.5: Homework ---------- */
+  homework: {
+    all: ['homework'] as const,
+    /** Bài nộp của tôi cho một bài tập. */
+    mySubmission: (homeworkContentId: string) =>
+      ['homework', 'my-submission', homeworkContentId] as const,
+    /** Toàn bộ bài nộp của tôi. */
+    mine: () => ['homework', 'mine'] as const,
+    /** Hàng đợi chấm của mentor. `pendingOnly` phải nằm trong key để toggle filter refetch. */
+    gradingQueue: (page: number, pendingOnly = true) =>
+      ['homework', 'grading-queue', page, pendingOnly] as const,
+    /** Chi tiết bài nộp cho mentor. */
+    gradingDetail: (submissionId: string) =>
+      ['homework', 'grading-detail', submissionId] as const,
+    /** Lượt thi của bài tắc nghiệm. */
+    attempt: (attemptId: string) =>
+      ['homework', 'attempt', attemptId] as const,
+  },
   account: {
     profile: ['account', 'profile'] as const,
   },

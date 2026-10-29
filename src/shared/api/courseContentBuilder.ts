@@ -99,6 +99,10 @@ export interface HomeworkPayloadInput {
   /** Thời gian làm bài (phút). */
   timeLimitMinutes?: number | null;
   attachmentUrl?: string;
+  /** Tên file tài liệu đính kèm (để hiển thị cho học viên). */
+  attachmentName?: string;
+  /** Public ID trên Cloudinary (dùng để xoá file khi gỡ tài liệu). */
+  attachmentPublicId?: string;
   /**
    * Số lần làm bài tối đa (null = không giới hạn).
    *
@@ -132,6 +136,12 @@ export function buildHomeworkContentData(
 
   const attachmentUrl = (input.attachmentUrl ?? '').trim();
   if (attachmentUrl) data.attachmentUrl = attachmentUrl;
+
+  const attachmentName = (input.attachmentName ?? '').trim();
+  if (attachmentName) data.attachmentName = attachmentName;
+
+  const attachmentPublicId = (input.attachmentPublicId ?? '').trim();
+  if (attachmentPublicId) data.attachmentPublicId = attachmentPublicId;
 
   const maxScore = Number(input.maxScore);
   if (Number.isFinite(maxScore) && maxScore > 0) {

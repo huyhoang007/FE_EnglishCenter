@@ -8,17 +8,22 @@
  *   - certificates.description  (JSON "scoring": AVERAGE / SUM / INDEPENDENT, min, max, step, làm tròn, preset)
  *   - certificate_parts.properties  (min / max / step / weight của từng phần thi)
  *   - mốc CEFR / mức năng lực: benchmarks của preset Dev 2 (IELTS, VSTEP, TOEIC, TOEFL, thang 100…)
- * Đọc qua các hàm của Dev 2 (getCertificateScoring, getPartScoreInfo, CERTIFICATE_PRESETS) nên thêm chứng chỉ
- * mới hay đổi thang ở trang Chứng chỉ là đề thi tự theo, không phải sửa code.
+ * Đọc qua các hàm của Dev 2 (getCertificateScoring, getPartScoreInfo, computeCertificateTotal, CERTIFICATE_PRESETS,
+ * cut-score APTIS) nên thêm chứng chỉ mới hay đổi thang ở trang Chứng chỉ là đề thi tự theo, không phải sửa code.
  * Đề không gắn chứng chỉ: giữ thang % (raw).
  */
 
 import {
   CERTIFICATE_PRESETS,
+  computeCertificateTotal,
   formatScoringSummary,
+  getAptisOverallCefr,
+  getAptisSkillCefr,
   getCertificateScoring,
   getPartScoreInfo,
+  type AptisCefr,
   type CefrBenchmarkLevel,
+  type CertificateScoringSystem,
   type ScoreCalculationType,
 } from '@/portals/admin/features/certificate/certificateScoring';
 import type { BadgeVariant } from '@/shared/components/Badge';
@@ -37,6 +42,8 @@ export interface PartScale {
   max: number;
   step: number;
   weight?: number;
+  /** Không cộng vào điểm tổng (VD APTIS Grammar & Vocabulary) */
+  excludeFromTotal?: boolean;
 }
 
 export interface ScaleInfo {
@@ -45,12 +52,14 @@ export interface ScaleInfo {
   label: string;
   unit: string;
   scaleType: ScoreCalculationType | 'PERCENT';
+  /** Cấu hình gốc của chứng chỉ (Dev 2) — dùng để tính điểm tổng bằng computeCertificateTotal */
+  scoring?: CertificateScoringSystem;
+  /** Preset Dev 2 (IELTS, TOEFL_NEW, APTIS…) */
+  preset?: string;
   /** Thang điểm tổng của chứng chỉ */
   min: number;
   max: number;
   step: number;
-  /** Làm tròn điểm tổng: half = quy tắc IELTS / VSTEP (.25 / .75), step = theo bước điểm */
-  rounding: 'half' | 'step';
   parts: PartScale[];
   benchmarks: CefrBenchmarkLevel[];
   /** Loại section được dùng cho đề của chứng chỉ (theo các phần thi) */
@@ -87,7 +96,6 @@ export const RAW_SCALE: ScaleInfo = {
   min: 0,
   max: 100,
   step: 1,
-  rounding: 'step',
   parts: [],
   benchmarks: [],
   sectionTypes: ALL_SECTION_TYPES,
@@ -123,11 +131,12 @@ export const SKILL_LABEL: Record<Skill, string> = {
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const roundTo = (v: number, step: number) => Math.round(Math.round(v / step) * step * 1000) / 1000;
 
-/** Làm tròn .25 / .75 (IELTS, VSTEP): < .25 xuống, [.25, .75) thành .5, >= .75 lên */
-const roundHalf = (v: number) => {
-  const int = Math.floor(v);
-  const dec = Math.round((v - int) * 1000) / 1000;
-  return dec < 0.25 ? int : dec < 0.75 ? int + 0.5 : int + 1;
+/** Kỹ năng APTIS theo tên trong bảng cut-score của Dev 2 (Grammar & Vocabulary không có) */
+const APTIS_SKILL: Partial<Record<Skill, 'Listening' | 'Reading' | 'Writing' | 'Speaking'>> = {
+  LISTENING: 'Listening',
+  READING: 'Reading',
+  WRITING: 'Writing',
+  SPEAKING: 'Speaking',
 };
 
 /** Số đầu tiên trong "6.0 – 6.5" / "< 4.0" / "945 – 990" của benchmark Dev 2 */
@@ -172,6 +181,7 @@ export function scaleFromCertificate(cert?: CertificateDto | null): ScaleInfo {
           max: info.maxScore ?? def?.maxScore ?? fallback.max,
           step: info.step ?? def?.step ?? fallback.step,
           weight: info.weight ?? def?.weight,
+          excludeFromTotal: info.excludeFromTotal || def?.excludeFromTotal === true,
         };
       })
     : (preset?.defaultParts ?? []).map((d) => ({
@@ -181,6 +191,7 @@ export function scaleFromCertificate(cert?: CertificateDto | null): ScaleInfo {
         max: d.maxScore,
         step: d.step ?? fallback.step,
         weight: d.weight,
+        excludeFromTotal: d.excludeFromTotal === true,
       }));
 
   const sectionTypes = parts.length
@@ -197,10 +208,11 @@ export function scaleFromCertificate(cert?: CertificateDto | null): ScaleInfo {
     label: cert.certificateName,
     unit: scoring.unit,
     scaleType: scoring.scaleType,
+    scoring,
+    preset: scoring.preset,
     min: scoring.minScore,
     max: scoring.maxScore,
     step: scoring.step,
-    rounding: scoring.roundingRule === 'IELTS' || scoring.roundingRule === 'VSTEP' ? 'half' : 'step',
     parts,
     benchmarks,
     sectionTypes,
@@ -342,8 +354,17 @@ export interface SectionLike {
   certificatePartId?: string | null;
 }
 
+/** CEFR của một kỹ năng: APTIS theo cut-score riêng từng kỹ năng (Dev 2), chứng chỉ khác theo benchmarks */
+function skillCefr(scale: ScaleInfo, part: PartScale, score: number): string | undefined {
+  if (scale.preset === 'APTIS') {
+    const skill = APTIS_SKILL[part.skill];
+    return skill ? getAptisSkillCefr(skill, score) : undefined;
+  }
+  // Benchmarks của thang tổng (SUM) là mốc điểm tổng, không áp cho từng phần
+  return scale.scaleType === 'SUM' ? undefined : benchmarkFor(scale, score)?.cefr;
+}
+
 export function scaleResult(scale: ScaleInfo, sections: SectionLike[]): ScaledResult {
-  const perSkillCefr = scale.scaleType === 'AVERAGE' || scale.scaleType === 'INDEPENDENT';
   const skills: SkillScore[] = sections.map((s) => {
     const part = sectionPart(scale, s);
     const score = s.pendingManualGrading ? null : percentToScore(part, s.percentage);
@@ -354,26 +375,33 @@ export function scaleResult(scale: ScaleInfo, sections: SectionLike[]): ScaledRe
       score,
       percentage: s.percentage,
       pending: s.pendingManualGrading,
-      cefr: perSkillCefr && score !== null ? benchmarkFor(scale, score)?.cefr : undefined,
+      cefr: score !== null ? skillCefr(scale, part, score) : undefined,
     };
   });
   const ready = skills.length > 0 && skills.every((s) => s.score !== null);
+  const included = skills.filter((s) => !s.part.excludeFromTotal);
 
+  // Điểm tổng theo đúng công thức của trang Chứng chỉ (Dev 2): SUM / AVERAGE (trọng số) / INDEPENDENT
   let overall: number | null = null;
-  let overallMax = scale.max;
-  if (scale.scaleType === 'AVERAGE' && ready) {
-    const weighted = skills.every((s) => s.part.weight);
-    const total = weighted ? skills.reduce((a, s) => a + (s.part.weight ?? 0), 0) : skills.length;
-    const avg = skills.reduce((a, s) => a + (s.score ?? 0) * (weighted ? (s.part.weight ?? 0) : 1), 0) / total;
-    overall = clamp(scale.rounding === 'half' ? roundHalf(avg) : roundTo(avg, scale.step), scale.min, scale.max);
-  } else if (scale.scaleType === 'SUM') {
-    overallMax = skills.reduce((a, s) => a + s.part.max, 0) || scale.max;
-    if (ready) overall = skills.reduce((a, s) => a + (s.score ?? 0), 0);
-  } else if (scale.scaleType !== 'AVERAGE') {
-    overallMax = 0;
+  let overallMax = 0;
+  if (scale.scoring && scale.scaleType !== 'INDEPENDENT') {
+    overallMax = scale.scaleType === 'SUM' ? included.reduce((a, s) => a + s.part.max, 0) || scale.max : scale.max;
+    if (ready) {
+      const total = computeCertificateTotal(
+        scale.scoring,
+        skills.map((s) => ({ score: s.score ?? 0, weight: s.part.weight, excludeFromTotal: s.part.excludeFromTotal })),
+      );
+      overall = total === null ? null : clamp(total, scale.min, Math.max(scale.max, overallMax));
+    }
   }
 
   // Mốc năng lực của điểm tổng chỉ đúng khi đề có đủ các phần thi của chứng chỉ
+  if (scale.preset === 'APTIS') {
+    const cefrs = included.map((s) => s.cefr).filter((c): c is AptisCefr => Boolean(c));
+    const cefr = overall !== null && cefrs.length === 4 ? getAptisOverallCefr(cefrs) : undefined;
+    const b = scale.benchmarks.find((x) => x.cefr === cefr);
+    return { scale, skills, overall, overallMax, cefr, level: b?.label };
+  }
   const b = overall !== null && overallMax === scale.max ? benchmarkFor(scale, overall) : undefined;
   return { scale, skills, overall, overallMax, level: b?.level, cefr: b?.cefr };
 }

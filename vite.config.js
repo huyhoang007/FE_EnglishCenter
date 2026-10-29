@@ -16,16 +16,16 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Backend Dev 2 chạy ở http://localhost:8080
+      // Backend Dev 2 chạy ở http://127.0.0.1:8080
       // Giữ nguyên đường dẫn /api/v1/... nên không phải sửa service.
       '/api': {
-        target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8080',
+        target: process.env.VITE_PROXY_TARGET ?? 'http://127.0.0.1:8080',
         changeOrigin: true,
         secure: false,
       },
       // Dev 5: WebSocket STOMP thông báo realtime (BE endpoint /ws-connect)
       '/ws-connect': {
-        target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8080',
+        target: process.env.VITE_PROXY_TARGET ?? 'http://127.0.0.1:8080',
         ws: true,
         changeOrigin: true,
         secure: false,

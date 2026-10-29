@@ -17,6 +17,7 @@ import {
   LogOut,
   ChevronRight,
   FileCheck2,
+  ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/mentor/grading', label: 'Grading Queue', icon: ClipboardList, end: false },
   { to: '/mentor/schedule', label: 'Schedule', icon: CalendarDays, end: false },
   { to: '/mentor/exam-grading', label: 'Exam Grading', icon: FileCheck2, end: false },
+  { to: '/mentor/homework-grading', label: 'Homework Grading', icon: ClipboardCheck, end: false },
 ];
 
 export const MentorLayout: React.FC = () => {

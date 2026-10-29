@@ -15,17 +15,9 @@
 
 import React from 'react';
 import { cn } from '@/shared/utils/cn';
+import type { BadgeVariant } from '@/shared/types/badge.types';
 
-export type BadgeVariant =
-  | 'primary'
-  | 'ai'
-  | 'ielts'
-  | 'toeic'
-  | 'vstep'
-  | 'success'
-  | 'warning'
-  | 'danger'
-  | 'neutral';
+export type { BadgeVariant };
 
 export type BadgeSize = 'sm' | 'md';
 
