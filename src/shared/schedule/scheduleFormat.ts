@@ -5,7 +5,7 @@
  */
 
 import type { BadgeVariant } from '@/shared/components/Badge';
-import type { BookingStatus, ScheduleSlotStatus } from '@/shared/types';
+import type { BookingStatus, ScheduleSlotStatus, StudyRepeatRule, StudyStatus } from '@/shared/types';
 
 const WEEKDAY_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const WEEKDAY_FULL = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
@@ -98,3 +98,25 @@ export const SLOT_STATUS_VARIANT: Record<ScheduleSlotStatus, BadgeVariant> = {
 /** Booking còn hiệu lực: được hủy / đổi lịch */
 export const isActiveBooking = (status: BookingStatus): boolean =>
   status === 'pending' || status === 'confirmed';
+
+/* ---------------- Lịch học cá nhân (TASK-D5-01) ---------------- */
+
+export const STUDY_STATUS_LABEL: Record<StudyStatus, string> = {
+  pending: 'Chờ học',
+  done: 'Đã học',
+  skipped: 'Bỏ qua',
+  cancelled: 'Đã hủy',
+};
+
+export const STUDY_STATUS_VARIANT: Record<StudyStatus, BadgeVariant> = {
+  pending: 'primary',
+  done: 'success',
+  skipped: 'warning',
+  cancelled: 'neutral',
+};
+
+export const REPEAT_RULE_LABEL: Record<StudyRepeatRule, string> = {
+  none: 'Không lặp',
+  daily: 'Hằng ngày',
+  weekly: 'Hằng tuần',
+};

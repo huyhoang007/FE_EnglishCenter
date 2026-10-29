@@ -10,3 +10,4 @@ export * from './Modal';
 export * from './NotificationBell';
 export * from './ProtectedRoute';
 export * from './Toast';
+export * from './RoleRedirect';

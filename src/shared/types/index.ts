@@ -17,3 +17,4 @@ export * from './notification.types';
 export * from './learningPath.types';
 export * from './practice.types';
 export * from './schedule.types';
+export * from './studySchedule.types';

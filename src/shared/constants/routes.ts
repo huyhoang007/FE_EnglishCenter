@@ -30,6 +30,10 @@ export const CLIENT_ROUTES = {
   schedule: '/schedule',
   /** Mentor quản lý khung giờ dạy 1-1 (Dev 5) — trong layout client */
   teachingSchedule: '/teaching-schedule',
+  /** Mentor chấm Writing/Speaking bài thi (flow Dev 3) — trong layout client */
+  examGrading: '/exam-grading',
+  /** Lịch học cá nhân của người học USER / STUDENT (Dev 5 — TASK-D5-01) */
+  studySchedule: '/study-schedule',
   learningPath: '/learning-path',
   practice: '/practice',
   myCourses: '/my-courses',

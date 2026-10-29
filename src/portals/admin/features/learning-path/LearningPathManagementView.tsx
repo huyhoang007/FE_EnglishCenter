@@ -66,6 +66,9 @@ const TYPE_META: Record<
 const ITEM_TYPES = Object.keys(TYPE_META) as LearningPathItemType[];
 const STAGE_SUGGESTIONS = ['Nền tảng', 'Bứt phá', 'Luyện đề', 'Tăng tốc', 'Về đích'];
 
+/** Giá trị đặc biệt của dropdown giai đoạn: chuyển sang ô tự nhập */
+const CUSTOM_STAGE = '__custom__';
+
 /* =========================================================
  * Types nội bộ
  * ========================================================= */
@@ -648,13 +651,10 @@ const LearningPathFormModal: React.FC<{
                       <span className="w-6 h-6 rounded-md bg-[#0052CC] text-white text-[10px] font-black flex items-center justify-center shrink-0">
                         {idx + 1}
                       </span>
-                      <input
-                        type="text"
-                        list="learning-path-stage-suggestions"
+                      <StageSelect
                         value={item.stage}
-                        onChange={(e) => updateItem(item.key, { stage: e.target.value })}
-                        placeholder="Giai đoạn (VD: Nền tảng)"
-                        className={cn(inputCls(Boolean(error && !item.stage.trim())), 'max-w-[200px]')}
+                        invalid={Boolean(error && !item.stage.trim())}
+                        onChange={(stage) => updateItem(item.key, { stage })}
                       />
                       <select
                         value={item.type}
@@ -753,11 +753,6 @@ const LearningPathFormModal: React.FC<{
               })}
             </ul>
           )}
-          <datalist id="learning-path-stage-suggestions">
-            {STAGE_SUGGESTIONS.map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
         </div>
 
         {editing && editing.enrolledCount > 0 && (
@@ -916,3 +911,71 @@ const ModalShell: React.FC<{
 );
 
 export default LearningPathManagementView;
+
+/* =========================================================
+ * Chọn giai đoạn của chặng
+ * ---------------------------------------------------------
+ * Dropdown luôn hiện đủ các giai đoạn gợi ý (datalist cũ lọc theo chữ đang gõ
+ * nên chỉ hiện "Nền tảng"). Chọn "Khác…" để tự đặt tên; tên lạ từ dữ liệu cũ
+ * cũng mở thẳng ô tự nhập.
+ * ========================================================= */
+const StageSelect: React.FC<{
+  value: string;
+  invalid: boolean;
+  onChange: (stage: string) => void;
+}> = ({ value, invalid, onChange }) => {
+  const [custom, setCustom] = useState(() => value.trim() !== '' && !STAGE_SUGGESTIONS.includes(value));
+
+  if (custom) {
+    return (
+      <div className="flex items-center gap-1 max-w-[220px] w-full">
+        <input
+          type="text"
+          autoFocus
+          value={value}
+          maxLength={100}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Tên giai đoạn"
+          className={inputCls(invalid)}
+        />
+        <button
+          type="button"
+          title="Chọn giai đoạn có sẵn"
+          onClick={() => {
+            setCustom(false);
+            onChange(STAGE_SUGGESTIONS[0]);
+          }}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === CUSTOM_STAGE) {
+          setCustom(true);
+          onChange('');
+          return;
+        }
+        onChange(e.target.value);
+      }}
+      className={cn(inputCls(invalid), 'max-w-[200px]')}
+      aria-label="Giai đoạn"
+    >
+      <option value="" disabled>
+        Chọn giai đoạn
+      </option>
+      {STAGE_SUGGESTIONS.map((stage) => (
+        <option key={stage} value={stage}>
+          {stage}
+        </option>
+      ))}
+      <option value={CUSTOM_STAGE}>Khác (tự nhập)…</option>
+    </select>
+  );
+};

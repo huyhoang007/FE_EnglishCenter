@@ -8,8 +8,7 @@
  * bo góc 16-24px, viền slate-200/80, màu nhấn #0052CC (giống Certificates / Courses).
  */
 
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import {
   FileText,
   Mic,
@@ -28,8 +27,6 @@ import { Badge } from '@/shared/components/Badge';
 import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { getErrorMessage } from '@/shared/api/axiosClient';
-import { fetchCourses } from '@/shared/api/courseService';
-import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { cn } from '@/shared/utils';
 import { formatDate } from '@/shared/utils/format';
 import type { PracticeExam, PracticeExamPayload, PracticeExamType } from '@/shared/types';
@@ -40,6 +37,8 @@ import {
 } from './hooks/useAdminPracticeExams';
 
 const PAGE_SIZE = 10;
+/** Chiều cao tối thiểu ô "Đề bài" (px) — đề Writing/Speaking thường dài */
+const DESCRIPTION_MIN_HEIGHT = 320;
 
 const TYPE_LABEL: Record<PracticeExamType, string> = {
   WRITING: 'Writing',
@@ -238,7 +237,6 @@ export const PracticeExamManagementView: React.FC = () => {
                 <tr className="bg-slate-50/70 border-b border-slate-200/80 text-slate-500 font-extrabold text-[10px] uppercase tracking-wider text-left">
                   <th className="py-3.5 px-4 font-bold">Đề luyện tập</th>
                   <th className="py-3.5 px-3 font-bold">Kỹ năng</th>
-                  <th className="py-3.5 px-3 font-bold">Bộ đề</th>
                   <th className="py-3.5 px-3 font-bold">Ngày tạo</th>
                   <th className="py-3.5 px-3 font-bold">Cập nhật</th>
                   <th className="py-3.5 px-4 font-bold text-right">Thao tác</th>
@@ -260,7 +258,6 @@ export const PracticeExamManagementView: React.FC = () => {
                         {TYPE_LABEL[exam.examType]}
                       </Badge>
                     </td>
-                    <td className="py-3 px-3 text-slate-600">{exam.bankName ?? '—'}</td>
                     <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
                       {exam.createdAt ? formatDate(exam.createdAt) : '—'}
                     </td>
@@ -357,17 +354,15 @@ const PracticeExamFormModal: React.FC<{
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [examType, setExamType] = useState<PracticeExamType>('WRITING');
-  const [bankName, setBankName] = useState('');
-  const [courseId, setCourseId] = useState('');
   const [touched, setTouched] = useState(false);
-
-  // Khóa học liên quan (không bắt buộc)
-  const { data: courses = [] } = useQuery({
-    queryKey: QUERY_KEYS.admin.courseOptions,
-    queryFn: async () => (await fetchCourses({ page: 0, size: 200 })).data,
-    enabled: open,
-    staleTime: 60_000,
-  });
+  // Ô đề bài cao sẵn và tự giãn theo nội dung (đề thường dài, không bắt admin tự kéo)
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = descriptionRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.max(el.scrollHeight, DESCRIPTION_MIN_HEIGHT)}px`;
+  }, [description, open]);
 
   // Nạp dữ liệu đề đang sửa (1 lần cho mỗi lần mở)
   const loadedFor = React.useRef<string | null>(null);
@@ -383,8 +378,6 @@ const PracticeExamFormModal: React.FC<{
     setTitle(editing?.title ?? '');
     setDescription(editing?.description ?? '');
     setExamType(editing?.examType ?? 'WRITING');
-    setBankName(editing?.bankName ?? '');
-    setCourseId(editing?.courseId ?? '');
   }, [open, editing]);
 
   const titleError = !title.trim() ? 'Tiêu đề là bắt buộc' : title.trim().length > 255 ? 'Tối đa 255 ký tự' : '';
@@ -393,8 +386,7 @@ const PracticeExamFormModal: React.FC<{
     : description.trim().length > 5000
       ? 'Tối đa 5000 ký tự'
       : '';
-  const bankError = bankName.trim().length > 255 ? 'Tối đa 255 ký tự' : '';
-  const hasError = Boolean(titleError || descriptionError || bankError);
+  const hasError = Boolean(titleError || descriptionError);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -404,8 +396,9 @@ const PracticeExamFormModal: React.FC<{
       title: title.trim(),
       description: description.trim(),
       examType,
-      bankName: bankName.trim() || undefined,
-      courseId: courseId || undefined,
+      // Form không còn ô "Bộ đề" / "Khóa học liên quan": giữ nguyên giá trị cũ khi sửa để không bị xóa mất
+      bankName: editing?.bankName ?? undefined,
+      courseId: editing?.courseId ?? undefined,
     };
     saveMutation.mutate(
       { practiceExamId: editing?.practiceExamId, payload },
@@ -453,7 +446,7 @@ const PracticeExamFormModal: React.FC<{
           />
         </Field>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="max-w-sm">
           <Field label="Kỹ năng" required>
             <div className="grid grid-cols-2 gap-2">
               {(['WRITING', 'SPEAKING'] as PracticeExamType[]).map((t) => (
@@ -474,20 +467,11 @@ const PracticeExamFormModal: React.FC<{
               ))}
             </div>
           </Field>
-          <Field label="Bộ đề" error={touched ? bankError : ''}>
-            <input
-              type="text"
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              placeholder="VD: Cambridge IELTS 18 (không bắt buộc)"
-              className={inputCls(Boolean(touched && bankError))}
-            />
-          </Field>
         </div>
 
         <Field label="Đề bài" required error={touched ? descriptionError : ''}>
           <textarea
-            rows={6}
+            ref={descriptionRef}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={
@@ -495,21 +479,10 @@ const PracticeExamFormModal: React.FC<{
                 ? 'VD: Some people think technology makes life easier. Others disagree. Discuss both views and give your opinion.'
                 : 'VD: Describe a place you like to visit. You should say: where it is, how often you go there… (học viên nộp bản phiên âm câu trả lời)'
             }
-            className={cn(inputCls(Boolean(touched && descriptionError)), 'h-auto py-2 resize-y')}
+            style={{ minHeight: DESCRIPTION_MIN_HEIGHT }}
+            className={cn(inputCls(Boolean(touched && descriptionError)), 'h-auto py-2 leading-relaxed resize-none overflow-hidden')}
           />
           <p className="text-[10px] text-slate-400 text-right mt-1">{description.trim().length}/5000</p>
-        </Field>
-
-        <Field label="Khóa học liên quan">
-          <select value={courseId} onChange={(e) => setCourseId(e.target.value)} className={inputCls(false)}>
-            <option value="">— Không gắn khóa học —</option>
-            {courses.map((c) => (
-              <option key={c.courseId} value={c.courseId}>
-                {c.title}
-                {c.certificateName ? ` · ${c.certificateName}` : ''}
-              </option>
-            ))}
-          </select>
         </Field>
 
         <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">

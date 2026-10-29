@@ -11,11 +11,17 @@
  *   Nếu AI chấm lỗi (502/5016) thì bài đã nộp vẫn được giữ → bấm "Chấm lại" không phải nộp lại.
  * Tab "Lịch sử": các bài đã làm, xem lại kết quả hoặc chấm bài chưa chấm.
  *
+ * Lưu nháp & mất mạng:
+ *   - Bài làm / phiên âm tự lưu nháp vào máy (localStorage) theo học viên + đề, mở lại đề thì khôi phục.
+ *     Nộp bài thành công thì xóa nháp.
+ *   - Mất mạng: hiện cảnh báo, khóa nút nộp, dừng ghi âm (phần đã nói vẫn giữ). Writing vẫn viết tiếp được.
+ *     Có mạng lại thì báo để học viên nộp bài / bấm "Ghi âm tiếp".
+ *
  * URL hỗ trợ ?examId=... để mở sẵn 1 đề (dùng từ trang Lộ trình học),
  * ?tab=history để mở sẵn tab Lịch sử (dùng khi bấm thông báo kết quả chấm).
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -27,14 +33,18 @@ import {
   RotateCcw,
   Search,
   Sparkles,
+  Save,
   Square,
   Wand2,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { cn, countWords } from '@/shared/utils';
 import { useRole } from '@/portals/client/features/auth';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { getErrorMessage } from '@/shared/api/axiosClient';
 import type {
   PracticeAnswer,
@@ -50,6 +60,8 @@ import {
   useSubmitPracticeAnswer,
 } from '../hooks/usePractice';
 import { useSpeechToText } from '../hooks/useSpeechToText';
+import { practiceDraftKey, readPracticeDraft, usePracticeDraftAutosave } from '../hooks/usePracticeDraft';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { EvaluationResult } from './EvaluationResult';
 
 /** BE yêu cầu bài làm 50 - 20000 ký tự */
@@ -100,6 +112,47 @@ export const PracticeView: React.FC = () => {
     setPendingAnswerId(null);
   });
 
+  /* ---------------- Lưu nháp ---------------- */
+  const userId = useAuthStore((s) => s.user?.id);
+  const draftKey = isStudent && userId && selectedExamId ? practiceDraftKey(userId, selectedExamId) : null;
+  /** Thời điểm của bản nháp vừa khôi phục (để báo cho học viên) */
+  const [restoredAt, setRestoredAt] = useState<string | null>(null);
+
+  // Mở đề (hoặc tải lại trang) → khôi phục nháp của đề đó. Phải đặt TRƯỚC hook tự lưu.
+  useEffect(() => {
+    setRestoredAt(null);
+    if (!draftKey) return;
+    const draft = readPracticeDraft(draftKey);
+    if (draft?.content.trim()) {
+      setContent(draft.content);
+      setRestoredAt(draft.savedAt);
+    }
+  }, [draftKey]);
+
+  const draft = usePracticeDraftAutosave(draftKey, content);
+
+  /* ---------------- Trạng thái mạng ---------------- */
+  const isOnline = useOnlineStatus();
+  const wasOfflineRef = useRef(false);
+  /** Vừa có mạng lại (hiện thông báo vài giây) */
+  const [backOnline, setBackOnline] = useState(false);
+  const stopRecording = stt.stop;
+
+  useEffect(() => {
+    if (!isOnline) {
+      // Nhận dạng giọng nói cần mạng → dừng hẳn, phần đã nói vẫn nằm trong ô phiên âm
+      stopRecording();
+      wasOfflineRef.current = true;
+      setBackOnline(false);
+      return undefined;
+    }
+    if (!wasOfflineRef.current) return undefined;
+    wasOfflineRef.current = false;
+    setBackOnline(true);
+    const id = window.setTimeout(() => setBackOnline(false), 6000);
+    return () => window.clearTimeout(id);
+  }, [isOnline, stopRecording]);
+
   /* ---------------- Actions ---------------- */
   const resetWorkspace = () => {
     setContent('');
@@ -110,7 +163,8 @@ export const PracticeView: React.FC = () => {
   };
 
   const handleSelectExam = (examId: string) => {
-    if (phase !== 'idle') return;
+    // Bấm lại đúng đề đang làm thì giữ nguyên bài (tránh xóa trắng rồi ghi đè nháp)
+    if (phase !== 'idle' || examId === selectedExamId) return;
     stt.stop();
     setSelectedExamId(examId);
     resetWorkspace();
@@ -150,6 +204,9 @@ export const PracticeView: React.FC = () => {
         examId: selectedExam.practiceExamId,
         content: content.trim(),
       });
+      // Bài đã lưu trên BE (kể cả nếu AI chấm lỗi vẫn chấm lại được từ Lịch sử) → xóa nháp
+      draft.discard();
+      setRestoredAt(null);
       await runEvaluate(answer.answerId);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -170,6 +227,16 @@ export const PracticeView: React.FC = () => {
     stt.stop();
     setContent('');
     setPendingAnswerId(null);
+    setRestoredAt(null);
+  };
+
+  /** Bỏ bản nháp vừa khôi phục, làm lại từ đầu */
+  const handleDiscardDraft = () => {
+    stt.stop();
+    draft.discard();
+    setContent('');
+    setPendingAnswerId(null);
+    setRestoredAt(null);
   };
 
   /* ---------------- Render ---------------- */
@@ -178,6 +245,7 @@ export const PracticeView: React.FC = () => {
   const wordCount = content.trim() ? countWords(content) : 0;
   const canSubmit =
     isStudent &&
+    isOnline &&
     !!selectedExam &&
     phase === 'idle' &&
     !stt.isRecording &&
@@ -294,6 +362,15 @@ export const PracticeView: React.FC = () => {
                   </div>
 
                   <div className="p-5">
+                    {isStudent && (
+                      <DraftNetworkNotice
+                        isOnline={isOnline}
+                        backOnline={backOnline}
+                        isSpeaking={isSpeaking}
+                        restoredAt={restoredAt}
+                        onDiscardDraft={handleDiscardDraft}
+                      />
+                    )}
                     {isSpeaking && isStudent && (
                       <SpeakingRecorder
                         isSupported={stt.isSupported}
@@ -301,7 +378,7 @@ export const PracticeView: React.FC = () => {
                         seconds={stt.seconds}
                         interimText={stt.interimText}
                         error={stt.error}
-                        disabled={phase !== 'idle'}
+                        disabled={phase !== 'idle' || !isOnline}
                         hasTranscript={content.trim().length > 0}
                         onStart={stt.start}
                         onStop={stt.stop}
@@ -339,6 +416,12 @@ export const PracticeView: React.FC = () => {
                         <span className="tabular-nums">{charCount}</span> ký tự
                         {charCount < MIN_CHARS && (
                           <span className="ml-2 text-amber-600">(tối thiểu {MIN_CHARS} ký tự)</span>
+                        )}
+                        {isStudent && draft.lastSavedAt && charCount > 0 && !pendingAnswerId && !evaluation && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-slate-400">
+                            <Save className="w-3 h-3" />
+                            Đã lưu nháp {formatClock(draft.lastSavedAt)}
+                          </span>
                         )}
                       </p>
                       <Button
@@ -453,6 +536,54 @@ const TabButton: React.FC<{
 /** Định dạng giây → mm:ss */
 const formatDuration = (sec: number) =>
   `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+
+/** "20:15:03" theo giờ máy */
+const formatClock = (iso: string) =>
+  new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+/** Cảnh báo mất mạng / vừa có mạng lại / đã khôi phục bản nháp */
+const DraftNetworkNotice: React.FC<{
+  isOnline: boolean;
+  backOnline: boolean;
+  isSpeaking: boolean;
+  restoredAt: string | null;
+  onDiscardDraft: () => void;
+}> = ({ isOnline, backOnline, isSpeaking, restoredAt, onDiscardDraft }) => (
+  <>
+    {!isOnline && (
+      <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
+        <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
+        <span>
+          <span className="font-bold">Đang mất kết nối mạng.</span> Bài làm đã được lưu nháp trên máy này, không bị
+          mất.{' '}
+          {isSpeaking
+            ? 'Ghi âm tạm dừng (phần đã nói vẫn được giữ) — có mạng lại hãy bấm "Ghi âm tiếp".'
+            : 'Bạn vẫn viết tiếp được, có mạng lại hãy bấm nộp bài.'}
+        </span>
+      </div>
+    )}
+    {isOnline && backOnline && (
+      <div className="mb-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2">
+        <Wifi className="w-4 h-4 shrink-0 mt-0.5" />
+        <span>
+          Đã có mạng trở lại.{' '}
+          {isSpeaking ? 'Bấm "Ghi âm tiếp" để nói tiếp phần còn lại.' : 'Bạn có thể nộp bài.'}
+        </span>
+      </div>
+    )}
+    {restoredAt && (
+      <div className="mb-3 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-2">
+          <Save className="w-4 h-4 shrink-0" />
+          Đã khôi phục bản nháp lưu lúc {formatClock(restoredAt)} {new Date(restoredAt).toLocaleDateString('vi-VN')}.
+        </span>
+        <button type="button" onClick={onDiscardDraft} className="font-bold hover:underline shrink-0">
+          Bỏ nháp
+        </button>
+      </div>
+    )}
+  </>
+);
 
 /** Thanh ghi âm cho đề Speaking — nhận dạng giọng nói trên trình duyệt */
 const SpeakingRecorder: React.FC<{

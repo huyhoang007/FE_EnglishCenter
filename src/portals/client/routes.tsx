@@ -16,6 +16,11 @@
  *   /learning-path     → LearningPathPage (lộ trình học — Dev 5)
  *   /practice          → PracticePage (luyện đề Writing/Speaking, AI chấm — Dev 5)
  *   /teaching-schedule → TeachingSchedulePage (mentor mở khung giờ dạy 1-1 — Dev 5)
+ *   /exam-grading      → ExamGradingPage (mentor chấm Writing/Speaking — flow Dev 3)
+ *   /study-schedule    → StudySchedulePage (lịch học cá nhân USER/STUDENT — Dev 5)
+ *
+ * Mentor chỉ dùng: Lịch dạy, Chấm bài, Learning Paths. Các trang của người học
+ * (ngân hàng đề, luyện đề AI, đặt lịch 1-1) bị RoleRedirect đưa về /teaching-schedule.
  *   /notifications     → NotificationsPage (tất cả thông báo — Dev 5)
  *   /my-courses        → MyCoursesPage
  *
@@ -43,11 +48,14 @@ import SchedulePage from '@/portals/client/pages/student/SchedulePage';
 import LearningPathPage from '@/portals/client/pages/student/LearningPathPage';
 import PracticePage from '@/portals/client/pages/student/PracticePage';
 import TeachingSchedulePage from '@/portals/client/pages/mentors/TeachingSchedulePage';
+import ExamGradingPage from '@/portals/client/pages/mentors/ExamGradingPage';
+import StudySchedulePage from '@/portals/client/pages/student/StudySchedulePage';
 import MentorDirectoryPage from '@/portals/client/pages/mentors/MentorDirectoryPage';
 import MentorDetailPage from '@/portals/client/pages/mentors/MentorDetailPage';
 import ProfilePage from '@/portals/client/pages/profile/ProfilePage';
 import NotificationsPage from '@/portals/client/pages/notifications/NotificationsPage';
 import { ProtectedRoute } from '@/shared/components/ProtectedRoute';
+import { RoleRedirect } from '@/shared/components/RoleRedirect';
 import { PaymentHistoryView } from '@/portals/client/features/checkout/components/PaymentHistoryView';
 import { CLIENT_ROUTES, ADMIN_ROUTES, MENTOR_ROUTES } from '@/shared/constants/routes';
 import { ArrowRight, BookOpen, Sparkles, Wrench } from 'lucide-react';
@@ -199,10 +207,13 @@ const ClientRoutesComponent: React.FC = () => {
             element={<CourseDetailPage />}
           />
           {/* Khảo thí — Dev 3 */}
-          <Route path={CLIENT_ROUTES.exams} element={<ExamListPage />} />
+          <Route
+            path={CLIENT_ROUTES.exams}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><ExamListPage /></RoleRedirect>}
+          />
           <Route
             path={CLIENT_ROUTES.exam()}
-            element={<ExamDetailPage />}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><ExamDetailPage /></RoleRedirect>}
           />
           <Route
             path={CLIENT_ROUTES.examHistory}
@@ -243,12 +254,33 @@ const ClientRoutesComponent: React.FC = () => {
             }
           />
           <Route path="/payments" element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><PaymentHistoryView /></ProtectedRoute>} />
-          <Route path={CLIENT_ROUTES.schedule} element={<SchedulePage />} />
+          <Route
+            path={CLIENT_ROUTES.schedule}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><SchedulePage /></RoleRedirect>}
+          />
+          {/* Lịch học cá nhân — BE chỉ cho USER / STUDENT (TASK-D5-01) */}
+          <Route
+            path={CLIENT_ROUTES.studySchedule}
+            element={
+              <ProtectedRoute allowedRoles={['USER', 'STUDENT']}>
+                <StudySchedulePage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path={CLIENT_ROUTES.teachingSchedule}
             element={
               <ProtectedRoute allowedRoles={['MENTOR']}>
                 <TeachingSchedulePage />
+              </ProtectedRoute>
+            }
+          />
+          {/* Mentor chấm Writing / Speaking (flow Dev 3) */}
+          <Route
+            path={CLIENT_ROUTES.examGrading}
+            element={
+              <ProtectedRoute allowedRoles={['MENTOR']}>
+                <ExamGradingPage />
               </ProtectedRoute>
             }
           />
@@ -260,18 +292,21 @@ const ClientRoutesComponent: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          <Route path={CLIENT_ROUTES.practice} element={<PracticePage />} />
+          <Route
+            path={CLIENT_ROUTES.practice}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><PracticePage /></RoleRedirect>}
+          />
           <Route
             path={CLIENT_ROUTES.learningPath}
             element={<LearningPathPage />}
           />
           <Route
             path={CLIENT_ROUTES.myCourses}
-            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT', 'MENTOR', 'ADMIN']}><MyCoursesPage /></ProtectedRoute>}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT', 'ADMIN']}><MyCoursesPage /></ProtectedRoute>}
           />
           <Route
             path={CLIENT_ROUTES.myLearning}
-            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT', 'MENTOR', 'ADMIN']}><MyCoursesPage /></ProtectedRoute>}
+            element={<ProtectedRoute allowedRoles={['USER', 'STUDENT', 'ADMIN']}><MyCoursesPage /></ProtectedRoute>}
           />
           <Route
             path="/my-courses/:slug/learn"

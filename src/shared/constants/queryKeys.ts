@@ -90,6 +90,11 @@ export const QUERY_KEYS = {
     list: ['notification', 'list'] as const,
     page: (page: number) => ['notification', 'page', page] as const,
   },
+  /** Lịch học cá nhân USER / STUDENT (TASK-D5-01) */
+  studySchedule: {
+    all: ['study-schedule'] as const,
+    list: (status: string, page: number) => ['study-schedule', 'list', status, page] as const,
+  },
   learningPath: {
     all: ['learning-path'] as const,
     list: (certificateId?: string) => ['learning-path', 'list', certificateId ?? 'all'] as const,

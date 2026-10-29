@@ -13,7 +13,7 @@ import type { UserRole } from '@/shared/types';
 
 const redirectAfterLogin = (role: UserRole): string => {
   if (role === 'ADMIN') return '/admin';
-  if (role === 'MENTOR') return '/admin/mentors';
+  if (role === 'MENTOR') return '/teaching-schedule';
   if (role === 'STUDENT') return '/courses';
   return '/courses';
 };

@@ -3,8 +3,10 @@
  * -----------------------------------------------------------
  *  - max-w-7xl mx-auto rounded-full shadow-md border
  *  - 100% English navigation labels
- *  - Compact search + streak + notifications + user dropdown
+ *  - Compact search + notifications + user dropdown (đã bỏ streak giả "5 Days")
  *  - Truly generic — does NOT contain page-specific content
+ *  - Menu theo role: MENTOR chỉ có Teaching Schedule, Exam Grading, Learning Paths
+ *    (không có khóa học, thi thử, luyện đề AI, ô tìm khóa học)
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -18,11 +20,13 @@ import {
   Search,
   LogIn,
   GraduationCap,
+  CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/shared/utils';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import type { UserRole } from '@/shared/types';
 import { NotificationBell } from '@/shared/components/NotificationBell';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
 
 export interface HeaderProps {
   className?: string;
@@ -36,48 +40,52 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  /* ---------- MENTOR: lịch dạy 1-1, chấm Writing/Speaking, xem lộ trình ---------- */
+  {
+    // Dev 5: mentor mở / quản lý khung giờ dạy ngay trong layout client
+    label: 'Teaching Schedule',
+    to: CLIENT_ROUTES.teachingSchedule,
+    roles: ['MENTOR'],
+  },
+  {
+    // Flow Dev 3: mentor chấm Writing / Speaking của bài kiểm tra năng lực
+    label: 'Exam Grading',
+    to: CLIENT_ROUTES.examGrading,
+    roles: ['MENTOR'],
+  },
+  /* ---------- Người học + chung ---------- */
   {
     label: 'My Courses',
-    to: '/my-courses',
-    roles: ['USER', 'STUDENT', 'MENTOR'],
+    to: CLIENT_ROUTES.myCourses,
+    roles: ['USER', 'STUDENT'],
   },
   {
     label: 'Programs & Paths',
     to: '/courses',
-    roles: ['GUEST', 'USER', 'STUDENT', 'MENTOR', 'ADMIN'],
+    roles: ['GUEST', 'USER', 'STUDENT', 'ADMIN'],
     hasDropdown: true,
   },
   {
     label: 'Practice & Mock Tests',
-    to: '/exams',
-    roles: ['GUEST', 'USER', 'STUDENT', 'MENTOR', 'ADMIN'],
+    to: CLIENT_ROUTES.exams,
+    roles: ['GUEST', 'USER', 'STUDENT', 'ADMIN'],
     hasDropdown: true,
   },
   {
     label: 'Learning Paths',
-    to: '/learning-path',
+    to: CLIENT_ROUTES.learningPath,
     roles: ['STUDENT', 'MENTOR', 'ADMIN'],
   },
   {
     label: 'AI Practice',
-    to: '/practice',
-    roles: ['STUDENT', 'MENTOR', 'ADMIN'],
+    to: CLIENT_ROUTES.practice,
+    roles: ['STUDENT', 'ADMIN'],
   },
   {
-    label: '1-on-1 Mentorship',
-    to: '/schedule',
+    // Học viên đặt lịch kèm 1-1 với mentor (Dev 5)
+    label: 'Mentor Schedule',
+    to: CLIENT_ROUTES.schedule,
     roles: ['STUDENT'],
-  },
-  {
-    // Dev 5: mentor mở / quản lý khung giờ dạy ngay trong layout client
-    label: '1-on-1 Mentorship',
-    to: '/teaching-schedule',
-    roles: ['MENTOR'],
-  },
-  {
-    label: 'Mentors',
-    to: '/mentors',
-    roles: ['GUEST', 'USER', 'STUDENT', 'MENTOR', 'ADMIN'],
   },
   {
     label: 'Admin Portal',
@@ -140,6 +148,9 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
   const avatarInitial = displayName.charAt(0).toUpperCase();
   const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(role));
   const showAuthenticatedCluster = isAuthenticated && role !== 'GUEST';
+  /** Mentor: không có ô tìm khóa học, My Learning; logo về lịch dạy */
+  const isMentor = role === 'MENTOR';
+  const isLearner = role === 'USER' || role === 'STUDENT';
 
   return (
     <header
@@ -156,7 +167,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
     >
       {/* ============== LOGO ============== */}
       <Link
-        to="/"
+        to={isMentor ? CLIENT_ROUTES.teachingSchedule : '/'}
         className="flex items-center gap-2.5 shrink-0"
         title="PrepMaster — Home"
       >
@@ -173,10 +184,14 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
 
       {/* ============== NAV MENU ============== */}
       <nav
-        className="hidden lg:flex items-center h-full"
+        className={cn(
+          'hidden lg:flex items-center h-full',
+          // Mentor chỉ có 3 mục: dãn đều trên toàn bộ khoảng giữa logo và cụm bên phải
+          isMentor && 'flex-1 mx-8',
+        )}
         aria-label="Primary navigation"
       >
-        <ul className="flex items-center gap-1">
+        <ul className={cn('flex items-center gap-1', isMentor && 'w-full justify-evenly')}>
           {visibleNav.map((item) => (
             <li key={item.to}>
               <Link
@@ -200,23 +215,25 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
 
       {/* ============== RIGHT CLUSTER ============== */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Search bar — dẫn tới /courses?keyword= (GET /api/v1/courses?keyword=) */}
-        <div className="hidden md:flex items-center gap-2 h-10 px-3.5 rounded-full bg-slate-50 border border-slate-200/80 focus-within:border-[#0052CC] focus-within:bg-white transition-colors min-w-[220px]">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
-          <input
-            type="text"
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && keywordInput.trim()) {
-                navigate(`/courses?keyword=${encodeURIComponent(keywordInput.trim())}`);
-              }
-            }}
-            placeholder="Search courses, topics..."
-            className="bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400 w-full"
-            aria-label="Search courses, topics"
-          />
-        </div>
+        {/* Search bar — dẫn tới /courses?keyword= (GET /api/v1/courses?keyword=); mentor không có */}
+        {!isMentor && (
+          <div className="hidden md:flex items-center gap-2 h-10 px-3.5 rounded-full bg-slate-50 border border-slate-200/80 focus-within:border-[#0052CC] focus-within:bg-white transition-colors min-w-[220px]">
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && keywordInput.trim()) {
+                  navigate(`/courses?keyword=${encodeURIComponent(keywordInput.trim())}`);
+                }
+              }}
+              placeholder="Search courses, topics..."
+              className="bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400 w-full"
+              aria-label="Search courses, topics"
+            />
+          </div>
+        )}
 
         {!showAuthenticatedCluster ? (
           <>
@@ -249,15 +266,6 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
           </>
         ) : (
           <>
-            {/* Daily Streak */}
-            <span
-              className="hidden lg:inline-flex items-center gap-1.5 h-9 px-3 rounded-full bg-amber-50 border border-amber-200/70 text-amber-700 text-xs font-bold"
-              title="Daily study streak"
-            >
-              <span aria-hidden="true">🔥</span>
-              5 Days
-            </span>
-
             {/* Notifications (Dev 5 — API thật) */}
             <NotificationBell />
 
@@ -311,17 +319,32 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
                     </span>
                   </div>
                   <ul className="py-1">
-                    {['USER', 'STUDENT'].includes(role) && <li><Link to="/payments" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"><Receipt className="w-4 h-4 text-slate-400" />Payments</Link></li>}
-                    <li>
-                      <Link
-                        to="/my-courses"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
-                      >
-                        <GraduationCap className="w-4 h-4 text-slate-400" />
-                        My Learning
-                      </Link>
-                    </li>
+                    {isLearner && <li><Link to="/payments" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"><Receipt className="w-4 h-4 text-slate-400" />Payments</Link></li>}
+                    {/* Lịch học cá nhân (Dev 5 — TASK-D5-01): chỉ USER / STUDENT */}
+                    {isLearner && (
+                      <li>
+                        <Link
+                          to={CLIENT_ROUTES.studySchedule}
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <CalendarClock className="w-4 h-4 text-slate-400" />
+                          Study Schedule
+                        </Link>
+                      </li>
+                    )}
+                    {!isMentor && (
+                      <li>
+                        <Link
+                          to={CLIENT_ROUTES.myCourses}
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <GraduationCap className="w-4 h-4 text-slate-400" />
+                          My Learning
+                        </Link>
+                      </li>
+                    )}
                     <li>
                       <Link
                         to="/profile"

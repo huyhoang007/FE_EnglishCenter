@@ -52,7 +52,7 @@ const ERROR_MESSAGE: Record<string, string> = {
   'not-allowed': 'Bạn chưa cho phép dùng micro. Hãy bật quyền micro cho trang này rồi thử lại.',
   'service-not-allowed': 'Trình duyệt chặn dịch vụ nhận dạng giọng nói.',
   'audio-capture': 'Không tìm thấy micro. Kiểm tra lại thiết bị ghi âm.',
-  network: 'Mất kết nối mạng, không nhận dạng được giọng nói.',
+  network: 'Mất kết nối mạng, không nhận dạng được giọng nói. Phần đã nói trước đó vẫn được giữ — có mạng lại hãy bấm "Ghi âm tiếp".',
 };
 
 export function useSpeechToText(onFinalText: (text: string) => void, lang = 'en-US') {
