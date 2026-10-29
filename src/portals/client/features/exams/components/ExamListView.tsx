@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { History, Search } from 'lucide-react';
+import { Gauge, History, Search } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
@@ -54,11 +54,16 @@ export const ExamListView: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-slate-900">Khảo thí & Luyện đề</h1>
           <p className="text-sm text-slate-500 mt-1">Chọn đề, làm bài có tính giờ và xem kết quả chấm tự động.</p>
         </div>
-        {isAuthenticated && (
-          <Button variant="outline" leftIcon={History} onClick={() => navigate(CLIENT_ROUTES.examHistory)}>
-            Lịch sử thi của tôi
+        <div className="flex flex-wrap gap-2">
+          <Button leftIcon={Gauge} onClick={() => navigate(CLIENT_ROUTES.examPlacement)}>
+            Kiểm tra năng lực
           </Button>
-        )}
+          {isAuthenticated && (
+            <Button variant="outline" leftIcon={History} onClick={() => navigate(CLIENT_ROUTES.examHistory)}>
+              Lịch sử thi của tôi
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-card p-4 flex flex-col md:flex-row gap-3">

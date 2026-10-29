@@ -203,6 +203,35 @@ export interface AnswerItemRequest {
   timeSpentSeconds?: number;
 }
 
+/** Năng lực theo chứng chỉ, xác định từ bài kiểm tra năng lực (placement_test) gần nhất — GET /me/proficiency */
+export interface ProficiencySkill {
+  /** LISTENING | READING | WRITING | SPEAKING | OTHER */
+  skill: string;
+  title?: string;
+  score?: number;
+  maxScore: number;
+  percentage: number;
+  pendingManualGrading?: boolean;
+  cefr?: string;
+}
+
+export interface Proficiency {
+  certificateId: string;
+  certificateName: string;
+  scale: 'ielts' | 'toeic' | 'vstep' | 'raw';
+  examId: string;
+  examTitle: string;
+  attemptId: string;
+  takenAt?: string;
+  /** assessed: đã đủ điểm; pending_grading: còn phần Writing / Speaking chờ mentor chấm */
+  status: 'assessed' | 'pending_grading';
+  overall?: number;
+  overallMax: number;
+  level?: string;
+  cefr?: string;
+  skills: ProficiencySkill[];
+}
+
 export const EXAM_TYPE_LABEL: Record<ExamType, string> = {
   quiz: 'Quiz',
   midterm: 'Giữa kỳ',

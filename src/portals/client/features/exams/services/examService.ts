@@ -9,6 +9,7 @@
  *   POST /api/v1/attempts/{attemptId}/submit                             → AttemptResult (5013 đã nộp, 5014 hết giờ)
  *   GET  /api/v1/me/exam-attempts?page=                                  → PageResponse<AttemptSummary>
  *   GET  /api/v1/me/exam-attempts/{attemptId}/result                     → AttemptResult
+ *   GET  /api/v1/me/proficiency?certificateId=                           → Proficiency[] (năng lực theo bài kiểm tra đầu vào)
  */
 
 import { apiGet, apiPost, apiPut } from '@/shared/api/axiosClient';
@@ -23,6 +24,7 @@ import type {
   ExamSummary,
   ExamType,
   PageResponse,
+  Proficiency,
 } from '@/shared/types';
 
 export interface ExamListFilter {
@@ -30,6 +32,7 @@ export interface ExamListFilter {
   examType?: ExamType | '';
   examScope?: ExamScope | '';
   level?: string;
+  certificateId?: string;
   page?: number;
   size?: number;
 }
@@ -55,6 +58,7 @@ export const getExamsApi = (filter: ExamListFilter = {}): Promise<ApiResponse<Pa
       examType: filter.examType || undefined,
       examScope: filter.examScope || undefined,
       level: filter.level?.trim() || undefined,
+      certificateId: filter.certificateId || undefined,
       page: filter.page ?? 0,
       size: filter.size ?? 12,
     },
@@ -85,3 +89,6 @@ export const getMyAttemptsApi = (page = 0, size = 10): Promise<ApiResponse<PageR
 
 export const getAttemptResultApi = (attemptId: string): Promise<ApiResponse<AttemptResult>> =>
   apiGet<AttemptResult>(`/api/v1/me/exam-attempts/${attemptId}/result`);
+
+export const getMyProficiencyApi = (certificateId?: string): Promise<ApiResponse<Proficiency[]>> =>
+  apiGet<Proficiency[]>('/api/v1/me/proficiency', { params: { certificateId: certificateId || undefined } });

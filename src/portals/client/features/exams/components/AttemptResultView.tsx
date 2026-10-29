@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Clock, Hourglass, MinusCircle, Target, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Gauge, Hourglass, MinusCircle, Target, XCircle } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
@@ -57,6 +57,7 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
 
   const { attempt } = data;
   const isPending = attempt.pendingManualGrading === true;
+  const isPlacement = examDetail.data?.exam.examType === 'placement_test';
 
   return (
     <div className="space-y-5">
@@ -91,6 +92,11 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
             <p className="text-sm text-ai font-semibold flex items-center gap-1.5">
               <Hourglass className="w-4 h-4" /> Phần Writing/Speaking đang chờ mentor chấm, điểm sẽ cập nhật sau.
             </p>
+          )}
+          {isPlacement && (
+            <Button size="sm" variant="secondary" leftIcon={Gauge} onClick={() => navigate(CLIENT_ROUTES.examPlacement)}>
+              Xem năng lực của tôi
+            </Button>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Stat icon={Check} label="Đúng" value={data.correctCount ?? '—'} />

@@ -71,3 +71,22 @@ section và câu hỏi qua API sẵn có — không cần sửa backend. File m�
 | `[EXPLAIN] …` / `# …` | Giải thích cho câu ngay trên / ghi chú bị bỏ qua |
 
 File `.doc` đời cũ không đọc được: mở bằng Word rồi "Lưu thành" `.docx`.
+
+## Kiểm tra năng lực (placement) và xác định trình độ
+
+Trang `/exams/placement` (nút **Kiểm tra năng lực** ở ngân hàng đề): học viên chọn chứng chỉ mục tiêu, làm một
+**bài kiểm tra năng lực** = đề thi thử (`trial`) có loại đề **Kiểm tra đầu vào** (`placement_test`) của chứng chỉ đó.
+
+1. Nộp bài: trắc nghiệm / đúng-sai / điền từ / nối cặp chấm ngay.
+2. Writing / Speaking vào hàng đợi `/mentor/exam-grading` của **mọi mentor** (đề thi thử) — năng lực ở trạng thái `pending_grading`.
+3. Mentor chấm xong → năng lực `assessed`: IELTS band (overall làm tròn chuẩn IELTS) + CEFR, TOEIC L + R / 990 + CEFR từng kỹ năng,
+   VSTEP 0-10 + bậc B1 / B2 / C1.
+
+API (BE Task 3) cho module khác, ví dụ Dev 5 xếp lộ trình / lịch học theo khoảng cách tới mục tiêu:
+
+| | |
+|---|---|
+| `GET /api/v1/me/proficiency?certificateId=` | Năng lực của học viên đang đăng nhập (mỗi chứng chỉ lấy bài kiểm tra gần nhất) |
+| `ProficiencyService.getProficiency(studentId, certificateId)` | Gọi trực tiếp trong backend |
+
+Admin tạo bài kiểm tra năng lực: Exams → Tạo đề thi → chọn chứng chỉ, phạm vi **Thi thử chứng chỉ**, loại đề **Kiểm tra đầu vào** → soạn / nhập từ Word → **Công khai đề**.
