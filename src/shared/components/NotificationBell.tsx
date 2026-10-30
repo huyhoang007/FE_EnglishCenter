@@ -65,7 +65,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className })
 
   const handleClickItem = (n: AppNotification) => {
     if (!n.isRead) markOne.mutate(n.notificationId);
-    const link = getNotificationLink(n.type, role);
+    const link = getNotificationLink(n.type, role, n.title);
     if (link) {
       setOpen(false);
       navigate(link);

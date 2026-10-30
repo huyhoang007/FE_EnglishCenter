@@ -8,7 +8,13 @@
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
 import type { NotificationType, UserRole } from '@/shared/types';
 
-export function getNotificationLink(type: NotificationType, role: UserRole): string | null {
+export function getNotificationLink(type: NotificationType, role: UserRole, title?: string): string | null {
+  if (title) {
+    const t = title.toLowerCase();
+    if (t.includes('test trình độ') || t.includes('trình độ miễn phí') || t.includes('kiểm tra trình độ')) {
+      return CLIENT_ROUTES.practice;
+    }
+  }
   switch (type) {
     case 'mentor_session':
       return role === 'MENTOR' ? CLIENT_ROUTES.teachingSchedule : CLIENT_ROUTES.schedule;

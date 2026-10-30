@@ -20,6 +20,7 @@ import { useAttemptResult, useExamDetail } from '../hooks/useExams';
 import { formatDuration } from '../utils/examRoom';
 import { AnswerReviewItem } from './AnswerReviewItem';
 import { CertificateScoreCard } from './CertificateScoreCard';
+import { TestRecommendations } from '@/portals/client/features/ai-practice/components/TestRecommendations';
 
 interface AttemptResultViewProps {
   attemptId: string;
@@ -145,6 +146,9 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
           <AnswerReviewItem key={a.questionId} answer={a} isScoreVisible={data.scoreVisible} />
         ))}
       </Card>
+
+      {/* Gợi ý khóa học & lộ trình học phù hợp sau khi có kết quả thi (TASK-DEV1 T8) */}
+      <TestRecommendations />
     </div>
   );
 };

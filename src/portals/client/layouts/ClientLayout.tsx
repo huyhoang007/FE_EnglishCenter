@@ -13,11 +13,52 @@
  *  - mt-auto footer → never causes page overflow
  */
 
-import React from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, Outlet } from 'react-router-dom';
+import { ArrowRight, Sparkles, X } from 'lucide-react';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
 import { Header } from './ClientHeader';
 import { ClientFooter } from './ClientFooter';
+
+/* =========================================================
+ * Free Level Test Banner (TASK DEV1 - T3)
+ * ========================================================= */
+const FreeLevelTestBanner: React.FC = () => {
+  const { role, user } = useAuthStore();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (role !== 'USER' || user?.currentLevel || dismissed) {
+    return null;
+  }
+
+  return (
+    <div className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white text-xs sm:text-sm py-2 px-4 shadow-sm">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Sparkles className="w-4 h-4 shrink-0 text-amber-300 animate-pulse" />
+          <span className="truncate">
+            Bạn chưa biết trình độ của mình?
+          </span>
+          <Link
+            to={CLIENT_ROUTES.practice}
+            className="inline-flex items-center gap-1 font-bold underline hover:text-blue-100 transition-colors shrink-0 ml-1"
+          >
+            Làm test miễn phí <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+          aria-label="Đóng thông báo"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 /* =========================================================
  * Discreet Top Bar — compact role switcher strip
@@ -53,6 +94,7 @@ export const AppLayout: React.FC = () => {
       style={{ fontFamily: "'Poppins', 'Be Vietnam Pro', sans-serif" }}
     >
       <TopBar />
+      <FreeLevelTestBanner />
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <Header />
       </div>

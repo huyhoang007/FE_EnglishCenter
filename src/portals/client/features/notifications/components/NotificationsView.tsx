@@ -51,7 +51,7 @@ export const NotificationsView: React.FC = () => {
 
   const handleClick = (n: AppNotification) => {
     if (!n.isRead) markOne.mutate(n.notificationId);
-    const link = getNotificationLink(n.type, role);
+    const link = getNotificationLink(n.type, role, n.title);
     if (link) navigate(link);
   };
 
@@ -104,7 +104,7 @@ export const NotificationsView: React.FC = () => {
         <Card noPadding>
           <ul className="divide-y divide-slate-100">
             {notifications.map((n) => {
-              const hasLink = !!getNotificationLink(n.type, role);
+              const hasLink = !!getNotificationLink(n.type, role, n.title);
               return (
                 <li key={n.notificationId}>
                   <button

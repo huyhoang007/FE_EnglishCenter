@@ -22,7 +22,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   FileText,
@@ -40,7 +40,13 @@ import {
   WifiOff,
   Eye,
   EyeOff,
+  Target,
 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { getProfile, updateProfile } from '@/shared/api/domainApi';
+import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import { TargetGoalFields, type TargetGoal } from '@/shared/components/TargetGoalFields';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
@@ -65,6 +71,7 @@ import { useSpeechToText } from '../hooks/useSpeechToText';
 import { practiceDraftKey, readPracticeDraft, usePracticeDraftAutosave } from '../hooks/usePracticeDraft';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { EvaluationResult } from './EvaluationResult';
+import { TestRecommendations } from './TestRecommendations';
 
 /** BE yêu cầu bài làm 50 - 20000 ký tự */
 const MIN_CHARS = 50;
@@ -84,6 +91,7 @@ export const PracticeView: React.FC = () => {
 
   const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'history' ? 'history' : 'bank');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
+  const [filterByTargetCert, setFilterByTargetCert] = useState(true);
   const [keywordInput, setKeywordInput] = useState('');
   const [keyword, setKeyword] = useState('');
 
@@ -96,14 +104,62 @@ export const PracticeView: React.FC = () => {
   /** Kết quả vừa chấm xong */
   const [evaluation, setEvaluation] = useState<PracticeEvaluation | null>(null);
   /** Kết quả đang xem lại từ tab Lịch sử */
+  const queryClient = useQueryClient();
+  const authUser = useAuthStore((s) => s.user);
+
+  // Profile Query for mandatory goal modal (TASK DEV1 - T2)
+  const profileQuery = useQuery({
+    queryKey: QUERY_KEYS.account.profile,
+    queryFn: getProfile,
+    enabled: isStudent,
+    initialData: authUser || undefined,
+  });
+
+  const targetCertificateId = profileQuery.data?.targetCertificateId ?? authUser?.targetCertificateId ?? null;
+  const showGoalModal = isStudent && !profileQuery.isLoading && !targetCertificateId;
+
+  const [modalGoal, setModalGoal] = useState<TargetGoal>({ certificateId: '', score: '' });
+  const [goalModalError, setGoalModalError] = useState<string | null>(null);
+
+  const saveGoalMutation = useMutation({
+    mutationFn: () => {
+      if (!modalGoal.certificateId || modalGoal.score === '') {
+        throw new Error('Vui lòng chọn chứng chỉ và điểm mục tiêu');
+      }
+      return updateProfile({
+        targetCertificateId: modalGoal.certificateId,
+        targetScore: Number(modalGoal.score),
+      });
+    },
+    onSuccess: (updated) => {
+      toast.success('Đã lưu mục tiêu học tập!');
+      queryClient.setQueryData(QUERY_KEYS.account.profile, updated);
+      useAuthStore.setState((prev) => ({
+        ...prev,
+        user: prev.user ? { ...prev.user, ...updated } : null,
+      }));
+    },
+    onError: (err: Error) => {
+      setGoalModalError(err.message || 'Lưu mục tiêu thất bại');
+    },
+  });
+
   const [viewEvaluationId, setViewEvaluationId] = useState<string | null>(null);
 
   /* ---------------- Data (hooks) ---------------- */
-  const examsQuery = usePracticeExams(typeFilter === 'ALL' ? undefined : typeFilter, keyword);
+  const effectiveCertId = filterByTargetCert && targetCertificateId ? targetCertificateId : undefined;
+  const examsQuery = usePracticeExams(
+    typeFilter === 'ALL' ? undefined : typeFilter,
+    keyword,
+    effectiveCertId,
+  );
   const exams: PracticeExam[] = examsQuery.data ?? [];
   const selectedExam = exams.find((e) => e.practiceExamId === selectedExamId) ?? null;
 
-  const historyQuery = useMyPracticeAnswers(isStudent && tab === 'history');
+  const historyQuery = useMyPracticeAnswers(isStudent);
+  const usedAttempts = isLearner ? (historyQuery.data?.length ?? 0) : 0;
+  const remainingAttempts = isLearner ? Math.max(0, 3 - usedAttempts) : Infinity;
+  const isLimitReached = isLearner && remainingAttempts <= 0;
   const viewedEvaluationQuery = usePracticeEvaluation(viewEvaluationId);
   const submitMutation = useSubmitPracticeAnswer();
   const evaluateMutation = useEvaluatePracticeAnswer();
@@ -251,6 +307,7 @@ export const PracticeView: React.FC = () => {
     isStudent &&
     isOnline &&
     !!selectedExam &&
+    !isLimitReached &&
     phase === 'idle' &&
     !stt.isRecording &&
     charCount >= MIN_CHARS &&
@@ -258,6 +315,60 @@ export const PracticeView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Modal chọn mục tiêu bắt buộc (TASK DEV1 - T2) */}
+      {showGoalModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#0052CC] flex items-center justify-center shrink-0">
+                <Target className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900">Chọn mục tiêu học tập</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Bước bắt buộc để cá nhân hóa bài kiểm tra và lộ trình học của bạn
+                </p>
+              </div>
+            </div>
+
+            {goalModalError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                {goalModalError}
+              </div>
+            )}
+
+            <div className="py-2">
+              <TargetGoalFields
+                value={modalGoal}
+                onChange={(val) => {
+                  setModalGoal(val);
+                  setGoalModalError(null);
+                }}
+                disabled={saveGoalMutation.isPending}
+              />
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-slate-100">
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full justify-center"
+                isLoading={saveGoalMutation.isPending}
+                disabled={!modalGoal.certificateId || modalGoal.score === '' || saveGoalMutation.isPending}
+                onClick={() => saveGoalMutation.mutate()}
+              >
+                Lưu mục tiêu & Bắt đầu
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ============== HEADER ============== */}
       <header>
         <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
@@ -271,6 +382,13 @@ export const PracticeView: React.FC = () => {
           Chọn đề, viết bài (Writing) hoặc ghi âm bài nói (Speaking) và nhận điểm theo thang của chứng chỉ mục tiêu
           (IELTS, TOEIC, VSTEP…) kèm level CEFR và nhận xét bằng tiếng Việt.
         </p>
+        {isLearner && (
+          <div className="mt-3 flex items-center gap-2">
+            <Badge variant={isLimitReached ? 'danger' : 'primary'} size="sm">
+              Còn {remainingAttempts}/3 lượt test miễn phí
+            </Badge>
+          </div>
+        )}
       </header>
 
       {/* ============== TABS ============== */}
@@ -298,22 +416,40 @@ export const PracticeView: React.FC = () => {
             <>
               {/* Bộ lọc */}
               <Card className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {(['ALL', 'WRITING', 'SPEAKING'] as TypeFilter[]).map((t) => (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    {(['ALL', 'WRITING', 'SPEAKING'] as TypeFilter[]).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTypeFilter(t)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-full text-xs font-bold border transition-colors',
+                          typeFilter === t
+                            ? 'bg-[#0052CC] border-[#0052CC] text-white'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        {t === 'ALL' ? 'Tất cả' : t === 'WRITING' ? 'Writing' : 'Speaking'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {targetCertificateId && (
                     <button
-                      key={t}
                       type="button"
-                      onClick={() => setTypeFilter(t)}
+                      onClick={() => setFilterByTargetCert(!filterByTargetCert)}
                       className={cn(
-                        'px-3 py-1.5 rounded-full text-xs font-bold border transition-colors',
-                        typeFilter === t
-                          ? 'bg-[#0052CC] border-[#0052CC] text-white'
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+                        'px-3 py-1.5 rounded-full text-xs font-bold border transition-colors inline-flex items-center gap-1.5',
+                        filterByTargetCert
+                          ? 'bg-purple-50 border-purple-300 text-purple-700'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100',
                       )}
                     >
-                      {t === 'ALL' ? 'Tất cả' : t === 'WRITING' ? 'Writing' : 'Speaking'}
+                      <Sparkles className="w-3.5 h-3.5" />
+                      {filterByTargetCert ? 'Đề theo mục tiêu của bạn' : 'Xem tất cả chứng chỉ'}
                     </button>
-                  ))}
+                  )}
                 </div>
                 <form
                   className="flex gap-2"
@@ -352,6 +488,11 @@ export const PracticeView: React.FC = () => {
                   <div className="p-5 border-b border-slate-100 space-y-2">
                     <div className="flex flex-wrap gap-1.5">
                       <ExamTypeBadge type={selectedExam.examType} />
+                      {selectedExam.certificateName && (
+                        <Badge variant="ai" size="sm">
+                          {selectedExam.certificateName}
+                        </Badge>
+                      )}
                       {selectedExam.bankName && (
                         <Badge variant="neutral" size="sm">
                           {selectedExam.bankName}
@@ -365,6 +506,29 @@ export const PracticeView: React.FC = () => {
                   </div>
 
                   <div className="p-5">
+                    {isLimitReached && (
+                      <div className="mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="text-sm font-bold">
+                              Bạn đã dùng hết 3 lượt test miễn phí
+                            </p>
+                            <p className="text-xs text-amber-800">
+                              Để tiếp tục làm bài không giới hạn và nhận lộ trình học tập chuyên sâu, hãy đăng ký các khóa học của trung tâm.
+                            </p>
+                            <div className="pt-2">
+                              <Link
+                                to="/courses"
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs shadow-sm hover:from-blue-700 hover:to-indigo-700 transition-colors"
+                              >
+                                Mua khóa học để luyện tập không giới hạn →
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {isStudent && (
                       <DraftNetworkNotice
                         isOnline={isOnline}
@@ -496,7 +660,10 @@ export const PracticeView: React.FC = () => {
               )}
             </Card>
           ) : shownEvaluation ? (
-            <EvaluationResult evaluation={shownEvaluation} />
+            <div className="space-y-6">
+              <EvaluationResult evaluation={shownEvaluation} />
+              <TestRecommendations />
+            </div>
           ) : (
             <Card className="text-center py-10 border-dashed">
               <Sparkles className="w-8 h-8 mx-auto text-slate-300" />
@@ -714,6 +881,11 @@ const ExamList: React.FC<{
         >
           <div className="flex flex-wrap gap-1.5">
             <ExamTypeBadge type={exam.examType} />
+            {exam.certificateName && (
+              <Badge variant="ai" size="sm">
+                {exam.certificateName}
+              </Badge>
+            )}
             {exam.bankName && (
               <Badge variant="neutral" size="sm">
                 {exam.bankName}

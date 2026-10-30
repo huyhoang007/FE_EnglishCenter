@@ -573,7 +573,7 @@ export const AdminDashboardView: React.FC = () => {
                 <CalendarDays className="w-4 h-4 text-cyan-600" />
                 <h3 className="font-extrabold text-slate-900 text-base">Recent 1-1 Bookings</h3>
               </div>
-              <Badge variant="info" size="sm">
+              <Badge variant="primary" size="sm">
                 {totalBookings} Buổi hẹn
               </Badge>
             </div>

@@ -9,7 +9,9 @@
  */
 
 import React, { useLayoutEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
+  Award,
   FileText,
   Mic,
   PenLine,
@@ -27,6 +29,8 @@ import { Badge } from '@/shared/components/Badge';
 import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { getErrorMessage } from '@/shared/api/axiosClient';
+import { fetchCertificates } from '@/shared/api/certificateService';
+import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { cn } from '@/shared/utils';
 import { formatDate } from '@/shared/utils/format';
 import type { PracticeExam, PracticeExamPayload, PracticeExamType } from '@/shared/types';
@@ -53,6 +57,7 @@ export const PracticeExamManagementView: React.FC = () => {
   const toast = useToast();
 
   const [type, setType] = useState<PracticeExamType | ''>('');
+  const [certificateFilter, setCertificateFilter] = useState<string>('');
   const [keywordInput, setKeywordInput] = useState('');
   const [keyword, setKeyword] = useState('');
   const [page, setPage] = useState(0);
@@ -63,7 +68,19 @@ export const PracticeExamManagementView: React.FC = () => {
   // Dev 3: tạo đề từ file PDF / Word bằng AI
   const [isAiImportOpen, setAiImportOpen] = useState(false);
 
-  const listQuery = useAdminPracticeExams({ type, keyword, page, size: PAGE_SIZE });
+  const { data: certificates = [] } = useQuery({
+    queryKey: QUERY_KEYS.catalog.certificates,
+    queryFn: fetchCertificates,
+    staleTime: 5 * 60_000,
+  });
+
+  const listQuery = useAdminPracticeExams({
+    type,
+    keyword,
+    certificateId: certificateFilter || undefined,
+    page,
+    size: PAGE_SIZE,
+  });
   // Thống kê theo kỹ năng: chỉ cần totalElements
   const writingQuery = useAdminPracticeExams({ type: 'WRITING', page: 0, size: 1 });
   const speakingQuery = useAdminPracticeExams({ type: 'SPEAKING', page: 0, size: 1 });
@@ -72,7 +89,7 @@ export const PracticeExamManagementView: React.FC = () => {
   const exams = listQuery.data?.data ?? [];
   const writingTotal = writingQuery.data?.totalElements ?? 0;
   const speakingTotal = speakingQuery.data?.totalElements ?? 0;
-  const hasFilter = Boolean(type || keyword);
+  const hasFilter = Boolean(type || keyword || certificateFilter);
 
   /* ---------- Debounce keyword (giống Courses) ---------- */
   const timerRef = React.useRef<number | undefined>(undefined);
@@ -87,6 +104,7 @@ export const PracticeExamManagementView: React.FC = () => {
 
   const resetFilters = () => {
     setType('');
+    setCertificateFilter('');
     setKeywordInput('');
     setKeyword('');
     setPage(0);
@@ -199,6 +217,23 @@ export const PracticeExamManagementView: React.FC = () => {
             <option value="SPEAKING">Speaking</option>
           </select>
 
+          <select
+            value={certificateFilter}
+            onChange={(e) => {
+              setCertificateFilter(e.target.value);
+              setPage(0);
+            }}
+            className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
+            aria-label="Lọc theo chứng chỉ"
+          >
+            <option value="">Tất cả chứng chỉ</option>
+            {certificates.map((cert) => (
+              <option key={cert.certificateId} value={cert.certificateId}>
+                {cert.name}
+              </option>
+            ))}
+          </select>
+
           {hasFilter && (
             <button
               type="button"
@@ -245,6 +280,7 @@ export const PracticeExamManagementView: React.FC = () => {
                 <tr className="bg-slate-50/70 border-b border-slate-200/80 text-slate-500 font-extrabold text-[10px] uppercase tracking-wider text-left">
                   <th className="py-3.5 px-4 font-bold">Đề luyện tập</th>
                   <th className="py-3.5 px-3 font-bold">Kỹ năng</th>
+                  <th className="py-3.5 px-3 font-bold">Chứng chỉ</th>
                   <th className="py-3.5 px-3 font-bold">Ngày tạo</th>
                   <th className="py-3.5 px-3 font-bold">Cập nhật</th>
                   <th className="py-3.5 px-4 font-bold text-right">Thao tác</th>
@@ -265,6 +301,15 @@ export const PracticeExamManagementView: React.FC = () => {
                       >
                         {TYPE_LABEL[exam.examType]}
                       </Badge>
+                    </td>
+                    <td className="py-3 px-3">
+                      {exam.certificateName ? (
+                        <Badge variant="ai" size="sm" icon={Award}>
+                          {exam.certificateName}
+                        </Badge>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
                       {exam.createdAt ? formatDate(exam.createdAt) : '—'}
@@ -364,7 +409,15 @@ const PracticeExamFormModal: React.FC<{
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [examType, setExamType] = useState<PracticeExamType>('WRITING');
+  const [certificateId, setCertificateId] = useState<string>('');
   const [touched, setTouched] = useState(false);
+
+  const { data: certificates = [] } = useQuery({
+    queryKey: QUERY_KEYS.catalog.certificates,
+    queryFn: fetchCertificates,
+    staleTime: 5 * 60_000,
+  });
+
   // Ô đề bài cao sẵn và tự giãn theo nội dung (đề thường dài, không bắt admin tự kéo)
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
@@ -388,6 +441,7 @@ const PracticeExamFormModal: React.FC<{
     setTitle(editing?.title ?? '');
     setDescription(editing?.description ?? '');
     setExamType(editing?.examType ?? 'WRITING');
+    setCertificateId(editing?.certificateId ?? '');
   }, [open, editing]);
 
   const titleError = !title.trim() ? 'Tiêu đề là bắt buộc' : title.trim().length > 255 ? 'Tối đa 255 ký tự' : '';
@@ -406,6 +460,7 @@ const PracticeExamFormModal: React.FC<{
       title: title.trim(),
       description: description.trim(),
       examType,
+      certificateId: certificateId || undefined,
       // Form không còn ô "Bộ đề" / "Khóa học liên quan": giữ nguyên giá trị cũ khi sửa để không bị xóa mất
       bankName: editing?.bankName ?? undefined,
       courseId: editing?.courseId ?? undefined,
@@ -456,7 +511,7 @@ const PracticeExamFormModal: React.FC<{
           />
         </Field>
 
-        <div className="max-w-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Kỹ năng" required>
             <div className="grid grid-cols-2 gap-2">
               {(['WRITING', 'SPEAKING'] as PracticeExamType[]).map((t) => (
@@ -476,6 +531,21 @@ const PracticeExamFormModal: React.FC<{
                 </button>
               ))}
             </div>
+          </Field>
+
+          <Field label="Chứng chỉ liên quan">
+            <select
+              value={certificateId}
+              onChange={(e) => setCertificateId(e.target.value)}
+              className={inputCls(false)}
+            >
+              <option value="">-- Không gắn chứng chỉ --</option>
+              {certificates.map((cert) => (
+                <option key={cert.certificateId} value={cert.certificateId}>
+                  {cert.name} ({cert.code})
+                </option>
+              ))}
+            </select>
           </Field>
         </div>
 

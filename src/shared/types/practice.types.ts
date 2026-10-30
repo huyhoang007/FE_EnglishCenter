@@ -16,6 +16,8 @@ export interface PracticeExam {
   examType: PracticeExamType;
   bankName: string | null;
   courseId: string | null;
+  certificateId?: string | null;
+  certificateName?: string | null;
   createdByUserId: string;
   createdAt: string;
   lastUpdated: string;
@@ -74,4 +76,19 @@ export interface PracticeExamPayload {
   examType: PracticeExamType;
   bankName?: string;
   courseId?: string;
+  certificateId?: string;
+}
+
+import type { CourseDto } from './catalog.types';
+import type { LearningPath } from './learningPath.types';
+
+export interface RecommendationResponse {
+  targetCertificateId: string | null;
+  targetCertificateName: string | null;
+  currentScore: number | null;
+  currentLevel: string | null;
+  targetScore: number | null;
+  courses: CourseDto[];
+  learningPaths: LearningPath[];
+  summary: string;
 }

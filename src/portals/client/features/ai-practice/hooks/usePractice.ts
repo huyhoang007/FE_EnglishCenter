@@ -13,14 +13,15 @@ import {
   getMyPracticeAnswersApi,
   getPracticeEvaluationApi,
   getPracticeExamsApi,
+  getRecommendationsApi,
   submitPracticeAnswerApi,
 } from '../services/practiceService';
 
-/** Kho đề (lọc theo loại + từ khóa) */
-export function usePracticeExams(type?: PracticeExamType, keyword?: string) {
+/** Kho đề (lọc theo loại + từ khóa + chứng chỉ) */
+export function usePracticeExams(type?: PracticeExamType, keyword?: string, certificateId?: string) {
   return useQuery({
-    queryKey: QUERY_KEYS.practice.list(type, keyword),
-    queryFn: async () => unwrapOrThrow(await getPracticeExamsApi(type, keyword)).data,
+    queryKey: QUERY_KEYS.practice.list(type, keyword, certificateId),
+    queryFn: async () => unwrapOrThrow(await getPracticeExamsApi(type, keyword, 0, 50, certificateId)).data,
   });
 }
 
@@ -62,5 +63,14 @@ export function useEvaluatePracticeAnswer() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.learningPath.myProgress });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.notification.all });
     },
+  });
+}
+
+/** Gợi ý khóa học và lộ trình phù hợp (TASK-DEV1 T8) */
+export function useRecommendations(enabled = true) {
+  return useQuery({
+    queryKey: QUERY_KEYS.practice.recommendations,
+    queryFn: async () => unwrapOrThrow(await getRecommendationsApi()),
+    enabled,
   });
 }

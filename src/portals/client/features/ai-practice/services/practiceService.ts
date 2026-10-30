@@ -17,6 +17,7 @@ import type {
   PracticeEvaluation,
   PracticeExam,
   PracticeExamType,
+  RecommendationResponse,
 } from '@/shared/types';
 
 const BASE = '/api/v1/practice-exams';
@@ -29,9 +30,16 @@ export const getPracticeExamsApi = (
   keyword?: string,
   page = 0,
   size = 50,
+  certificateId?: string,
 ): Promise<ApiResponse<PageResponse<PracticeExam>>> =>
   apiGet<PageResponse<PracticeExam>>(BASE, {
-    params: { type: type || undefined, keyword: keyword || undefined, page, size },
+    params: {
+      type: type || undefined,
+      keyword: keyword || undefined,
+      certificateId: certificateId || undefined,
+      page,
+      size,
+    },
   });
 
 export const getPracticeExamApi = (examId: string): Promise<ApiResponse<PracticeExam>> =>
@@ -53,3 +61,6 @@ export const getPracticeEvaluationApi = (evaluationId: string): Promise<ApiRespo
 
 export const getMyPracticeAnswersApi = (): Promise<ApiResponse<PracticeAnswer[]>> =>
   apiGet<PracticeAnswer[]>(`${BASE}/me/answers`);
+
+export const getRecommendationsApi = (): Promise<ApiResponse<RecommendationResponse>> =>
+  apiGet<RecommendationResponse>('/me/recommendations');

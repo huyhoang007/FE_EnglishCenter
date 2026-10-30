@@ -21,6 +21,7 @@ const ADMIN_BASE = '/api/v1/admin/practice-exams';
 export interface AdminPracticeExamFilter {
   type?: PracticeExamType | '';
   keyword?: string;
+  certificateId?: string;
   page?: number;
   size?: number;
 }
@@ -32,6 +33,7 @@ export const getPracticeExamsApi = (
     params: {
       type: filter.type || undefined,
       keyword: filter.keyword?.trim() || undefined,
+      certificateId: filter.certificateId || undefined,
       page: filter.page ?? 0,
       size: filter.size ?? 10,
     },

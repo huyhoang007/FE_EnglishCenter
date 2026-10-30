@@ -121,9 +121,11 @@ export const QUERY_KEYS = {
     certificates: ['learning-path', 'certificates'] as const,
   },
   practice: {
-    list: (type?: string, keyword?: string) => ['practice', 'list', type ?? 'all', keyword ?? ''] as const,
+    list: (type?: string, keyword?: string, certificateId?: string) =>
+      ['practice', 'list', type ?? 'all', keyword ?? '', certificateId ?? 'all'] as const,
     detail: (id: string) => ['practice', 'detail', id] as const,
     myAnswers: ['practice', 'my-answers'] as const,
     evaluation: (id: string) => ['practice', 'evaluation', id] as const,
+    recommendations: ['practice', 'recommendations'] as const,
   },
 } as const;
