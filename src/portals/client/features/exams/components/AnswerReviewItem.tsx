@@ -6,7 +6,13 @@
 import React from 'react';
 import { CheckCircle2, Hourglass, MessageSquareText, XCircle } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
-import { QUESTION_TYPE_LABEL, type AnswerResult } from '@/shared/types';
+import {
+  QUESTION_TYPE_LABEL,
+  type AnswerResult,
+  type EssayAiEvaluation,
+  type PracticeEvaluation,
+} from '@/shared/types';
+import { EvaluationResult } from '@/portals/client/features/ai-practice/components/EvaluationResult';
 import { cn } from '@/shared/utils/cn';
 import { parseMatching } from '../utils/examRoom';
 
@@ -57,7 +63,12 @@ export const AnswerReviewItem: React.FC<AnswerReviewItemProps> = ({ answer, isSc
           </p>
         )}
         {answer.explanation && <p className="text-slate-500 italic">{answer.explanation}</p>}
-        {answer.mentorFeedback && (
+        {answer.aiEvaluation && (
+          <div className="pt-1">
+            <EvaluationResult evaluation={toPracticeEvaluation(answer, answer.aiEvaluation)} />
+          </div>
+        )}
+        {answer.mentorFeedback && !answer.aiEvaluation && (
           <p className="rounded-xl bg-ai-tint text-slate-700 px-3 py-2 flex gap-2">
             <MessageSquareText className="w-4 h-4 text-ai shrink-0 mt-0.5" />
             <span>
@@ -69,6 +80,28 @@ export const AnswerReviewItem: React.FC<AnswerReviewItemProps> = ({ answer, isSc
     </div>
   );
 };
+
+/** Kết quả AI chấm câu Writing / Speaking → dạng thẻ kết quả của Luyện tập AI để dùng lại EvaluationResult */
+const toPracticeEvaluation = (answer: AnswerResult, e: EssayAiEvaluation): PracticeEvaluation => ({
+  evaluationId: answer.questionId,
+  answerId: answer.questionId,
+  practiceExamId: '',
+  examTitle: `Câu ${answer.displayNumber}`,
+  examType: e.skill,
+  bandScore: e.bandScore,
+  certificateName: e.certificateName,
+  minScore: e.minScore,
+  maxScore: e.maxScore,
+  cefrLevel: e.cefrLevel,
+  taskAchievement: e.taskAchievement,
+  coherenceCohesion: e.coherenceCohesion,
+  lexicalResource: e.lexicalResource,
+  grammaticalAccuracy: e.grammaticalAccuracy,
+  feedback: e.feedback,
+  suggestions: e.suggestions ?? [],
+  model: e.model ?? 'claude',
+  evaluatedAt: e.evaluatedAt ?? answer.gradedDate ?? '',
+});
 
 const StudentAnswer: React.FC<{ answer: AnswerResult }> = ({ answer }) => {
   if (answer.selectedOptionText) return <>{answer.selectedOptionText}</>;

@@ -56,12 +56,15 @@ export const ExamEditorView: React.FC = () => {
   const [droppedFile, setDroppedFile] = useState<File | undefined>();
   const [isDropping, setDropping] = useState(false);
 
+  // Đề luyện tập AI được quản lý ở trang AI Practice
+  const isPractice = data?.exam.examScope === 'practice';
+  const listRoute = isPractice ? ADMIN_ROUTES.practiceExams : ADMIN_ROUTES.exams;
   const backLink = (
     <Link
-      to={ADMIN_ROUTES.exams}
+      to={listRoute}
       className={cn('inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900 rounded', FOCUS_RING)}
     >
-      <ArrowLeft className="w-4 h-4" /> Danh sách đề thi
+      <ArrowLeft className="w-4 h-4" /> {isPractice ? 'Danh sách đề luyện tập' : 'Danh sách đề thi'}
     </Link>
   );
 
@@ -95,7 +98,7 @@ export const ExamEditorView: React.FC = () => {
     actions.remove.mutate(undefined, {
       onSuccess: () => {
         toast.success('Đã xóa đề');
-        navigate(ADMIN_ROUTES.exams);
+        navigate(listRoute);
       },
       onError,
     });

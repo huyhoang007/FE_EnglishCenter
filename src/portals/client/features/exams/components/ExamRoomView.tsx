@@ -62,7 +62,7 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
     setActiveQuestionId(questionId);
     questionRefs.current[questionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  const renderQuestions = (questions: ExamQuestion[]) =>
+  const renderQuestions = (questions: ExamQuestion[], sectionType?: string) =>
     questions.map((q) => (
       <QuestionItem
         key={q.questionId}
@@ -76,6 +76,7 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
           room.setAnswer(q.questionId, v);
         }}
         isActive={activeQuestionId === q.questionId}
+        sectionType={sectionType}
       />
     ));
 
@@ -109,7 +110,7 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
         <div className="space-y-4 min-w-0">
           {exam.sections.map((section) => (
             <SectionBlock key={section.sectionId} section={section}>
-              {renderQuestions(section.questions ?? [])}
+              {renderQuestions(section.questions ?? [], section.sectionType)}
             </SectionBlock>
           ))}
           {(exam.unsectionedQuestions ?? []).length > 0 && (
@@ -226,27 +227,48 @@ const FollowingPanel: React.FC<{ ariaLabel: string; children: React.ReactNode }>
   );
 };
 
+/** Tách hướng dẫn và tiêu chí chấm ("Scoring criteria ...") để tiêu chí dài không chiếm chỗ đề bài */
+const splitInstructions = (text?: string | null): { guide: string; criteria: string } => {
+  if (!text) return { guide: '', criteria: '' };
+  const index = text.search(/scoring criteria/i);
+  return index < 0
+    ? { guide: text.trim(), criteria: '' }
+    : { guide: text.slice(0, index).trim(), criteria: text.slice(index).trim() };
+};
+
 const SectionBlock: React.FC<{ section: ExamSection; children: React.ReactNode }> = ({ section, children }) => {
-  const hasMaterial = Boolean(section.passageText || section.audioUrl);
+  // Có đoạn đọc: đoạn đọc bên trái, câu hỏi bên phải. Chỉ có file nghe: thanh nghe ở trên, câu hỏi bên dưới
+  const hasPassage = Boolean(section.passageText);
+  const { guide, criteria } = splitInstructions(section.instructions);
   return (
     <Card noPadding className="rounded-3xl overflow-hidden">
-      <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/60 flex items-center gap-2">
-        <Badge variant="ai" size="sm">{section.sectionType}</Badge>
-        <span className="font-bold text-sm text-slate-800 min-w-0 [overflow-wrap:anywhere]">{section.title}</span>
-        {section.instructions && (
-          <span className="text-xs text-slate-500 hidden md:inline min-w-0 [overflow-wrap:anywhere]">· {section.instructions}</span>
+      <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/60 space-y-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <Badge variant="ai" size="sm" className="shrink-0">
+            {section.sectionType}
+          </Badge>
+          <span className="font-bold text-sm text-slate-800 min-w-0 flex-1 [overflow-wrap:anywhere]">{section.title}</span>
+        </div>
+        {guide && <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line [overflow-wrap:anywhere]">{guide}</p>}
+        {criteria && (
+          <details className="text-xs text-slate-500">
+            <summary className="cursor-pointer font-semibold text-primary select-none">Xem tiêu chí chấm điểm</summary>
+            <p className="mt-1 leading-relaxed whitespace-pre-line [overflow-wrap:anywhere]">{criteria}</p>
+          </details>
         )}
       </div>
-      <div className={hasMaterial ? 'grid lg:grid-cols-2' : ''}>
-        {hasMaterial && (
-          <div className="p-5 lg:border-r border-slate-200 lg:max-h-[70vh] lg:overflow-y-auto space-y-4">
-            {section.audioUrl && <audio controls src={section.audioUrl} className="w-full" />}
-            {section.passageText && (
-              <p className="text-[14px] leading-[1.75] text-slate-700 whitespace-pre-line [overflow-wrap:anywhere]">{section.passageText}</p>
-            )}
+      {section.audioUrl && (
+        <div className="px-5 pt-4">
+          <audio controls src={section.audioUrl} className="w-full" />
+        </div>
+      )}
+      <div className={hasPassage ? 'grid lg:grid-cols-2' : ''}>
+        {hasPassage && (
+          <div className="p-5 lg:border-r border-slate-200 lg:max-h-[70vh] lg:overflow-y-auto">
+            <p className="text-[14px] leading-[1.75] text-slate-700 whitespace-pre-line [overflow-wrap:anywhere]">{section.passageText}</p>
           </div>
         )}
-        <div className="p-5 space-y-4">{children}</div>
+        <div className="p-5 space-y-4 min-w-0">{children}</div>
       </div>
     </Card>
   );

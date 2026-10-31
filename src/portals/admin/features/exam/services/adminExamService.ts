@@ -34,6 +34,9 @@ const BASE = '/api/v1/admin/exams';
 export interface AdminExamFilter {
   keyword?: string;
   status?: ExamStatus | '';
+  /** Không truyền: mọi đề trừ đề luyện tập AI (practice) */
+  examScope?: ExamScope;
+  certificateId?: string;
   page?: number;
   size?: number;
 }
@@ -89,6 +92,8 @@ export const getAdminExamsApi = (filter: AdminExamFilter = {}): Promise<ApiRespo
     params: {
       keyword: filter.keyword?.trim() || undefined,
       status: filter.status || undefined,
+      examScope: filter.examScope || undefined,
+      certificateId: filter.certificateId || undefined,
       page: filter.page ?? 0,
       size: filter.size ?? 10,
     },
@@ -155,6 +160,6 @@ export interface AiImportResponse {
   prompts?: AiPracticeDraft[];
 }
 
-/** AI đọc cả bộ đề có thể mất vài phút khi Gemini chậm */
+/** AI (Claude) đọc cả bộ đề có thể mất vài phút */
 export const aiImportApi = (payload: AiImportRequest): Promise<ApiResponse<AiImportResponse>> =>
   apiPost<AiImportResponse>('/api/v1/admin/ai-import', payload, { timeout: 300_000 });

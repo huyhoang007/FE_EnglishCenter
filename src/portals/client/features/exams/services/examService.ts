@@ -7,7 +7,8 @@
  *   GET  /api/v1/attempts/{attemptId}                                    → AttemptDetail
  *   PUT  /api/v1/attempts/{attemptId}/answers                            → AttemptDetail (autosave)
  *   POST /api/v1/attempts/{attemptId}/submit                             → AttemptResult (5013 đã nộp, 5014 hết giờ)
- *   GET  /api/v1/me/exam-attempts?page=                                  → PageResponse<AttemptSummary>
+ *   GET  /api/v1/me/exam-attempts?page=&examScope=                       → PageResponse<AttemptSummary>
+ *   POST /api/v1/attempts/{attemptId}/ai-grade                           → AttemptResult (đề luyện tập: AI chấm Writing/Speaking)
  *   GET  /api/v1/me/exam-attempts/{attemptId}/result                     → AttemptResult
  *   GET  /api/v1/me/proficiency?certificateId=                           → Proficiency[] (năng lực theo bài kiểm tra đầu vào)
  */
@@ -84,8 +85,18 @@ export const submitAttemptApi = (
 ): Promise<ApiResponse<AttemptResult>> =>
   apiPost<AttemptResult>(`/api/v1/attempts/${attemptId}/submit`, answers.length > 0 ? { answers } : undefined);
 
-export const getMyAttemptsApi = (page = 0, size = 10): Promise<ApiResponse<PageResponse<AttemptSummary>>> =>
-  apiGet<PageResponse<AttemptSummary>>('/api/v1/me/exam-attempts', { params: { page, size } });
+export const getMyAttemptsApi = (
+  page = 0,
+  size = 10,
+  examScope?: ExamScope,
+): Promise<ApiResponse<PageResponse<AttemptSummary>>> =>
+  apiGet<PageResponse<AttemptSummary>>('/api/v1/me/exam-attempts', { params: { page, size, examScope } });
+
+/** AI chấm mỗi câu Writing / Speaking mất 10 - 60 giây phía BE */
+const AI_GRADE_TIMEOUT_MS = 300_000;
+
+export const aiGradeAttemptApi = (attemptId: string): Promise<ApiResponse<AttemptResult>> =>
+  apiPost<AttemptResult>(`/api/v1/attempts/${attemptId}/ai-grade`, undefined, { timeout: AI_GRADE_TIMEOUT_MS });
 
 export const getAttemptResultApi = (attemptId: string): Promise<ApiResponse<AttemptResult>> =>
   apiGet<AttemptResult>(`/api/v1/me/exam-attempts/${attemptId}/result`);

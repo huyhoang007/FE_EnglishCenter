@@ -63,4 +63,4 @@ export const getMyPracticeAnswersApi = (): Promise<ApiResponse<PracticeAnswer[]>
   apiGet<PracticeAnswer[]>(`${BASE}/me/answers`);
 
 export const getRecommendationsApi = (): Promise<ApiResponse<RecommendationResponse>> =>
-  apiGet<RecommendationResponse>('/me/recommendations');
+  apiGet<RecommendationResponse>('/api/v1/me/recommendations');

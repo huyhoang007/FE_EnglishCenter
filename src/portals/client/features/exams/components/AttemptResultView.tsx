@@ -4,11 +4,26 @@
  * Điểm tổng, điểm theo section, từng câu kèm đáp án và nhận xét.
  * Hiển thị theo cấu hình show_score / show_answers của đề (backend đã lọc sẵn).
  * API: GET /api/v1/me/exam-attempts/{attemptId}/result
+ * Đề luyện tập AI (examScope = practice): còn câu Writing / Speaking chưa chấm thì tự gọi
+ * POST /api/v1/attempts/{attemptId}/ai-grade để AI chấm, rồi hiện nhận xét AI của từng câu.
  */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Clock, Gauge, Hourglass, MinusCircle, Target, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookOpen,
+  Check,
+  Clock,
+  Gauge,
+  Hourglass,
+  Loader2,
+  MinusCircle,
+  RotateCcw,
+  Sparkles,
+  Target,
+  XCircle,
+} from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
@@ -16,9 +31,10 @@ import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
 import { ATTEMPT_STATUS_LABEL } from '@/shared/types';
 import { useCertificateScale } from '../hooks/useCertificateScale';
-import { useAttemptResult, useExamDetail } from '../hooks/useExams';
+import { useAiGradeAttempt, useAttemptResult, useExamDetail, useStartAttempt } from '../hooks/useExams';
 import { formatDuration } from '../utils/examRoom';
 import { AnswerReviewItem } from './AnswerReviewItem';
+import { PracticeLevelCard } from './PracticeLevelCard';
 import { CertificateScoreCard } from './CertificateScoreCard';
 import { TestRecommendations } from '@/portals/client/features/ai-practice/components/TestRecommendations';
 
@@ -32,8 +48,24 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
   // Kết quả không kèm tên chứng chỉ → lấy từ thông tin đề để chọn thang điểm
   const examDetail = useExamDetail(data?.attempt.examId ?? '');
   const scale = useCertificateScale(examDetail.data?.exam.certificateId, examDetail.data?.exam.certificateName);
+  const isPractice = examDetail.data?.exam.examScope === 'practice';
+  const aiGrade = useAiGradeAttempt(attemptId);
+  const startAttempt = useStartAttempt();
 
-  const backButton = (
+  // Đề luyện tập: nộp xong còn câu Writing / Speaking chưa chấm → tự nhờ AI chấm (1 lần, lỗi thì bấm "Chấm lại")
+  const aiRequestedRef = useRef(false);
+  const needsAiGrading = isPractice && data?.attempt.pendingManualGrading === true;
+  useEffect(() => {
+    if (!needsAiGrading || aiRequestedRef.current) return;
+    aiRequestedRef.current = true;
+    aiGrade.mutate();
+  }, [needsAiGrading, aiGrade]);
+
+  const backButton = isPractice ? (
+    <Button variant="ghost" size="sm" leftIcon={ArrowLeft} onClick={() => navigate(`${CLIENT_ROUTES.practice}?tab=history`)}>
+      Luyện tập AI
+    </Button>
+  ) : (
     <Button variant="ghost" size="sm" leftIcon={ArrowLeft} onClick={() => navigate(CLIENT_ROUTES.examHistory)}>
       Lịch sử thi
     </Button>
@@ -64,20 +96,23 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
     <div className="space-y-5">
       {backButton}
 
-      <Card className="grid md:grid-cols-[auto,1fr] gap-6 items-center">
-        <div className="rounded-3xl border-2 border-primary/30 bg-gradient-to-br from-blue-50 to-white p-6 text-center min-w-[180px]">
-          <p className="text-[10px] font-extrabold uppercase tracking-widest text-primary">Điểm</p>
-          {data.scoreVisible ? (
-            <>
-              <p className="text-5xl font-extrabold text-slate-900 tabular-nums mt-2">{attempt.score}</p>
-              <p className="text-sm text-slate-400 font-bold">
-                / {attempt.maxScore} · {attempt.percentage}%
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-slate-500 mt-3">Đề không công bố điểm</p>
-          )}
-        </div>
+      <Card className={isPractice ? 'space-y-3' : 'grid md:grid-cols-[auto,1fr] gap-6 items-center'}>
+        {/* Đề luyện tập: không hiện điểm thô (23.77/73), chỉ band + CEFR ở thẻ bên dưới */}
+        {!isPractice && (
+          <div className="rounded-3xl border-2 border-primary/30 bg-gradient-to-br from-blue-50 to-white p-6 text-center min-w-[180px]">
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-primary">Điểm</p>
+            {data.scoreVisible ? (
+              <>
+                <p className="text-5xl font-extrabold text-slate-900 tabular-nums mt-2">{attempt.score}</p>
+                <p className="text-sm text-slate-400 font-bold">
+                  / {attempt.maxScore} · {attempt.percentage}%
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500 mt-3">Đề không công bố điểm</p>
+            )}
+          </div>
+        )}
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-extrabold text-slate-900">{attempt.examTitle}</h1>
@@ -86,33 +121,77 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
             >
               {ATTEMPT_STATUS_LABEL[attempt.status]}
             </Badge>
-            {attempt.passed === true && <Badge variant="success">Đạt</Badge>}
-            {attempt.passed === false && <Badge variant="danger">Chưa đạt</Badge>}
+            {!isPractice && attempt.passed === true && <Badge variant="success">Đạt</Badge>}
+            {!isPractice && attempt.passed === false && <Badge variant="danger">Chưa đạt</Badge>}
           </div>
-          {isPending && (
+          {isPending && !isPractice && (
             <p className="text-sm text-ai font-semibold flex items-center gap-1.5">
               <Hourglass className="w-4 h-4" /> Phần Writing/Speaking đang chờ mentor chấm, điểm sẽ cập nhật sau.
             </p>
+          )}
+          {isPending && isPractice && aiGrade.isError && (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-status-danger font-semibold">{aiGrade.error.message}</p>
+              <Button size="sm" variant="outline" leftIcon={RotateCcw} onClick={() => aiGrade.mutate()}>
+                Chấm lại
+              </Button>
+            </div>
+          )}
+          {isPending && isPractice && !aiGrade.isError && (
+            <p className="text-sm text-ai font-semibold flex items-center gap-1.5">
+              <Loader2 className="w-4 h-4 animate-spin" /> AI đang chấm phần Writing / Speaking (mỗi câu 10 - 60
+              giây), vui lòng không tắt trang…
+            </p>
+          )}
+          {isPractice && !isPending && (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" leftIcon={BookOpen} onClick={() => navigate('/courses')}>
+                Xem khóa học phù hợp
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                leftIcon={Sparkles}
+                isLoading={startAttempt.isPending}
+                onClick={() => startAttempt.mutate(attempt.examId)}
+              >
+                Làm lại đề này
+              </Button>
+            </div>
+          )}
+          {startAttempt.isError && (
+            <p className="text-sm text-status-danger font-semibold">{startAttempt.error.message}</p>
           )}
           {isPlacement && (
             <Button size="sm" variant="secondary" leftIcon={Gauge} onClick={() => navigate(CLIENT_ROUTES.examPlacement)}>
               Xem năng lực của tôi
             </Button>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Stat icon={Check} label="Đúng" value={data.correctCount ?? '—'} />
-            <Stat icon={XCircle} label="Sai" value={data.incorrectCount ?? '—'} />
-            <Stat icon={MinusCircle} label="Bỏ trống" value={data.unansweredCount} />
-            <Stat icon={Clock} label="Thời gian" value={formatDuration(attempt.timeSpentSeconds ?? 0)} />
-          </div>
+          {isPractice ? (
+            <p className="text-xs text-slate-500 inline-flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" /> Thời gian làm bài {formatDuration(attempt.timeSpentSeconds ?? 0)}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Stat icon={Check} label="Đúng" value={data.correctCount ?? '—'} />
+              <Stat icon={XCircle} label="Sai" value={data.incorrectCount ?? '—'} />
+              <Stat icon={MinusCircle} label="Bỏ trống" value={data.unansweredCount} />
+              <Stat icon={Clock} label="Thời gian" value={formatDuration(attempt.timeSpentSeconds ?? 0)} />
+            </div>
+          )}
         </div>
       </Card>
 
-      {data.scoreVisible && scale.kind !== 'raw' && (data.sectionScores ?? []).length > 0 && (
+      {isPractice && data.practiceLevel && <PracticeLevelCard level={data.practiceLevel} />}
+
+      {/* Đề luyện tập: gợi ý khóa học / lộ trình ngay sau trình độ, trước phần xem lại bài */}
+      {isPractice && !isPending && <TestRecommendations />}
+
+      {!isPractice && data.scoreVisible && scale.kind !== 'raw' && (data.sectionScores ?? []).length > 0 && (
         <CertificateScoreCard scale={scale} sections={data.sectionScores ?? []} />
       )}
 
-      {data.sectionScores && data.sectionScores.length > 0 && (
+      {!isPractice && data.sectionScores && data.sectionScores.length > 0 && (
         <Card>
           <h2 className="font-extrabold text-slate-900 mb-3 flex items-center gap-2">
             <Target className="w-4 h-4 text-primary" /> Điểm theo phần
@@ -130,7 +209,9 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
                 <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                   <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, s.percentage)}%` }} />
                 </div>
-                {s.pendingManualGrading && <p className="text-xs text-ai font-semibold">Chờ mentor chấm</p>}
+                {s.pendingManualGrading && (
+                  <p className="text-xs text-ai font-semibold">{isPractice ? 'Chờ AI chấm' : 'Chờ mentor chấm'}</p>
+                )}
               </div>
             ))}
           </div>
@@ -148,7 +229,7 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
       </Card>
 
       {/* Gợi ý khóa học & lộ trình học phù hợp sau khi có kết quả thi (TASK-DEV1 T8) */}
-      <TestRecommendations />
+      {!isPractice && <TestRecommendations />}
     </div>
   );
 };

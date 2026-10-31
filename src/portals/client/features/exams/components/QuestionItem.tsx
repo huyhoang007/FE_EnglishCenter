@@ -2,6 +2,7 @@
  * QuestionItem — hiển thị 1 câu hỏi theo loại và nhận câu trả lời (Dev 3)
  * -----------------------------------------------------------
  * Không bao giờ nhận đáp án đúng: backend đã ẩn isCorrect, đáp án điền từ và cặp nối.
+ * Câu tự luận thuộc phần SPEAKING: ghi âm → chuyển thành chữ (bản phiên âm là bài làm để AI chấm).
  */
 
 import React from 'react';
@@ -9,6 +10,8 @@ import { CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { QUESTION_TYPE_LABEL, type ExamQuestion } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
+import { useSpeechToText } from '@/portals/client/features/ai-practice/hooks/useSpeechToText';
+import { SpeakingRecorder } from '@/portals/client/features/ai-practice/components/SpeakingRecorder';
 import { countWords, parseMatching, type DraftAnswer } from '../utils/examRoom';
 
 interface QuestionItemProps {
@@ -16,10 +19,12 @@ interface QuestionItemProps {
   value?: DraftAnswer;
   onChange: (value: DraftAnswer) => void;
   isActive: boolean;
+  /** Loại section chứa câu (LISTENING / READING / WRITING / SPEAKING…) */
+  sectionType?: string;
 }
 
 export const QuestionItem = React.forwardRef<HTMLDivElement, QuestionItemProps>(
-  ({ question, value, onChange, isActive }, ref) => (
+  ({ question, value, onChange, isActive, sectionType }, ref) => (
     <div
       ref={ref}
       id={`question-${question.questionId}`}
@@ -45,7 +50,7 @@ export const QuestionItem = React.forwardRef<HTMLDivElement, QuestionItemProps>(
       {question.imageUrl && <img src={question.imageUrl} alt="" className="ml-9 mb-3 rounded-xl max-h-64" />}
       {question.audioUrl && <audio controls src={question.audioUrl} className="ml-9 mb-3 w-[calc(100%-2.25rem)]" />}
       <div className="ml-9">
-        <AnswerInput question={question} value={value} onChange={onChange} />
+        <AnswerInput question={question} value={value} onChange={onChange} sectionType={sectionType} />
       </div>
     </div>
   ),
@@ -55,7 +60,7 @@ QuestionItem.displayName = 'QuestionItem';
 const inputClass =
   'w-full px-3 py-2 rounded-input border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary';
 
-const AnswerInput: React.FC<Omit<QuestionItemProps, 'isActive'>> = ({ question, value, onChange }) => {
+const AnswerInput: React.FC<Omit<QuestionItemProps, 'isActive'>> = ({ question, value, onChange, sectionType }) => {
   switch (question.questionType) {
     case 'multiple_choice':
     case 'true_false':
@@ -125,13 +130,16 @@ const AnswerInput: React.FC<Omit<QuestionItemProps, 'isActive'>> = ({ question, 
       );
     }
     case 'essay':
+      if ((sectionType ?? '').toUpperCase().includes('SPEAK')) {
+        return <SpeakingAnswer value={value} onChange={onChange} />;
+      }
       return (
         <div className="space-y-1.5">
           <textarea
             value={value?.answerText ?? ''}
             onChange={(e) => onChange({ answerText: e.target.value })}
             rows={8}
-            placeholder="Viết bài của bạn (Speaking: dán link file ghi âm)…"
+            placeholder="Viết bài của bạn…"
             className={cn(inputClass, 'resize-y leading-relaxed')}
           />
           <p className="text-[11px] text-slate-400 text-right">{countWords(value?.answerText ?? '')} từ</p>
@@ -140,6 +148,46 @@ const AnswerInput: React.FC<Omit<QuestionItemProps, 'isActive'>> = ({ question, 
     default:
       return null;
   }
+};
+
+/** Câu Speaking: chỉ nhận ghi âm; giọng nói được chuyển thành chữ và nối vào bài làm */
+const SpeakingAnswer: React.FC<Pick<QuestionItemProps, 'value' | 'onChange'>> = ({ value, onChange }) => {
+  const transcript = value?.answerText ?? '';
+  // Giữ bản mới nhất để nối đoạn vừa nói vào cuối (callback của nhận dạng giọng nói chạy sau nhiều lần render)
+  const transcriptRef = React.useRef(transcript);
+  transcriptRef.current = transcript;
+  const stt = useSpeechToText((text) => {
+    const prev = transcriptRef.current;
+    onChange({ answerText: prev.trim() ? `${prev.trimEnd()} ${text}` : text });
+  });
+
+  return (
+    <div className="space-y-1.5">
+      <SpeakingRecorder
+        isSupported={stt.isSupported}
+        isRecording={stt.isRecording}
+        seconds={stt.seconds}
+        interimText={stt.interimText}
+        error={stt.error}
+        disabled={false}
+        hasTranscript={Boolean(transcript.trim())}
+        onStart={stt.start}
+        onStop={stt.stop}
+        onReset={() => {
+          stt.stop();
+          onChange({ answerText: null });
+        }}
+      />
+      <textarea
+        value={transcript}
+        readOnly
+        rows={6}
+        placeholder="Bản phiên âm bài nói của bạn sẽ hiện ở đây…"
+        className={cn(inputClass, 'resize-y leading-relaxed bg-slate-50')}
+      />
+      <p className="text-[11px] text-slate-400 text-right">{countWords(transcript)} từ</p>
+    </div>
+  );
 };
 
 export default QuestionItem;

@@ -1,19 +1,38 @@
 "use client";
 
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Target, Award } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
+import { getProfile } from '@/shared/api/domainApi';
+import { fetchCertificates } from '@/shared/api/certificateService';
+import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import { CEFR_LABEL } from '@/portals/client/features/exams/components/PracticeLevelCard';
 
 export const ProfilePage = () => {
-  const { user, profile } = useAuthStore();
+  const authUser = useAuthStore((s) => s.user);
+  // Trình độ đổi sau mỗi lần làm test → luôn đọc hồ sơ mới nhất từ BE (GET /api/v1/account/me)
+  const profileQuery = useQuery({
+    queryKey: QUERY_KEYS.account.profile,
+    queryFn: getProfile,
+    enabled: Boolean(authUser),
+    initialData: authUser || undefined,
+  });
+  const { data: certificates = [] } = useQuery({
+    queryKey: QUERY_KEYS.catalog.certificates,
+    queryFn: fetchCertificates,
+    staleTime: 5 * 60_000,
+  });
 
-  const isUser = user?.role === 'USER';
-  const currentLevel = profile?.currentLevel;
-  const currentScore = profile?.currentScore;
+  const user = profileQuery.data ?? authUser;
+  const currentLevel = user?.currentLevel;
+  const currentScore = user?.currentScore;
+  const targetCertificate = certificates.find((c) => c.certificateId === user?.targetCertificateId);
+  const formatScore = (n: number) => (n <= 10 ? Number(n).toFixed(1) : String(Math.round(n)));
 
   return (
     <div className="space-y-6">
@@ -29,6 +48,15 @@ export const ProfilePage = () => {
             <div className="text-sm text-slate-500">Email</div>
             <div className="font-medium text-slate-900">{user?.email}</div>
           </div>
+          {targetCertificate && (
+            <div className="space-y-2">
+              <div className="text-sm text-slate-500">Mục tiêu</div>
+              <div className="font-medium text-slate-900">
+                {targetCertificate.certificateName}
+                {user?.targetScore !== null && user?.targetScore !== undefined ? ` · ${user.targetScore}` : ''}
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -40,23 +68,32 @@ export const ProfilePage = () => {
         </h2>
 
         {currentLevel ? (
-          <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center">
                 <Award className="w-6 h-6" />
               </div>
               <div>
                 <div className="font-bold text-slate-900 text-lg">
-                  {currentLevel} {currentScore ? `· ${currentScore}` : ''}
+                  Trình độ {currentLevel}
+                  {CEFR_LABEL[currentLevel] ? ` · ${CEFR_LABEL[currentLevel]}` : ''}
                 </div>
                 <div className="text-sm text-slate-500 mt-0.5">
-                  Trình độ CEFR được đánh giá từ bài kiểm tra miễn phí hoặc bài thi khách quan
+                  {currentScore !== null && currentScore !== undefined
+                    ? `${targetCertificate?.certificateName ?? 'Điểm'} ${formatScore(Number(currentScore))} · `
+                    : ''}
+                  theo bài test gần nhất
                 </div>
               </div>
             </div>
-            <Badge variant="success" size="sm">
-              Đã đánh giá
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="success" size="sm">
+                Đã đánh giá
+              </Badge>
+              <Button variant="outline" size="sm" onClick={() => (window.location.href = CLIENT_ROUTES.practice)}>
+                Làm test lại
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="text-center py-8 rounded-xl bg-slate-50 border border-slate-200 border-dashed">

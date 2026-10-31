@@ -6,7 +6,8 @@
  * Dùng chung cho Client (làm bài), Mentor (chấm tay) và Admin (quản lý đề).
  */
 
-export type ExamScope = 'trial' | 'course';
+/** practice: đề luyện tập AI nhiều kỹ năng (trang Luyện tập AI) */
+export type ExamScope = 'trial' | 'course' | 'practice';
 export type ExamType = 'quiz' | 'midterm' | 'final' | 'placement_test';
 export type ExamStatus = 'draft' | 'published' | 'archived';
 export type QuestionType = 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay';
@@ -185,9 +186,55 @@ export interface AnswerResult {
   explanation?: string;
   mentorFeedback?: string;
   gradedDate?: string;
+  /** Đề luyện tập: kết quả AI chấm câu Writing / Speaking */
+  aiEvaluation?: EssayAiEvaluation;
+}
+
+/** Điểm + nhận xét của 1 tiêu chí AI chấm */
+export interface AiCriterionScore {
+  band: number;
+  comment: string;
+}
+
+/** Kết quả AI chấm 1 câu Writing / Speaking, theo thang của chứng chỉ mục tiêu [minScore, maxScore] */
+export interface EssayAiEvaluation {
+  skill: 'WRITING' | 'SPEAKING';
+  bandScore: number;
+  cefrLevel?: string;
+  certificateName: string;
+  minScore: number;
+  maxScore: number;
+  taskAchievement: AiCriterionScore;
+  coherenceCohesion: AiCriterionScore;
+  lexicalResource: AiCriterionScore;
+  grammaticalAccuracy: AiCriterionScore;
+  feedback: string;
+  suggestions: string[];
+  model?: string;
+  evaluatedAt?: string;
+}
+
+/** Trình độ từ đề luyện tập theo chứng chỉ mục tiêu (cũng là giá trị lưu vào hồ sơ) */
+export interface PracticeLevel {
+  certificateName: string;
+  overallScore: number;
+  minScore: number;
+  maxScore: number;
+  step: number;
+  /** A1 – C2 */
+  cefrLevel: string;
+  skills: {
+    skill: 'LISTENING' | 'READING' | 'WRITING' | 'SPEAKING' | 'OTHER';
+    score: number;
+    maxScore: number;
+    cefrLevel?: string;
+    percentage: number;
+  }[];
 }
 
 export interface AttemptResult {
+  /** Chỉ có ở đề luyện tập đã chấm xong */
+  practiceLevel?: PracticeLevel;
   attempt: AttemptSummary;
   correctCount?: number;
   incorrectCount?: number;

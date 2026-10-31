@@ -6,7 +6,9 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useNavigate } from 'react-router-dom';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import type { ExamScope } from '@/shared/types';
 import {
+  aiGradeAttemptApi,
   getAttemptResultApi,
   getExamDetailApi,
   getExamsApi,
@@ -48,11 +50,26 @@ export function useStartAttempt() {
   });
 }
 
-export function useMyAttempts(page: number) {
+export function useMyAttempts(page: number, examScope?: ExamScope, size = 10, enabled = true) {
   return useQuery({
-    queryKey: QUERY_KEYS.exam.myAttempts(page),
-    queryFn: async () => unwrapExam(await getMyAttemptsApi(page)),
+    queryKey: QUERY_KEYS.exam.myAttempts(page, examScope),
+    queryFn: async () => unwrapExam(await getMyAttemptsApi(page, size, examScope)),
     placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** Đề luyện tập: nhờ AI chấm Writing / Speaking rồi cập nhật kết quả, lịch sử, hồ sơ trình độ, chuông thông báo. */
+export function useAiGradeAttempt(attemptId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrapExam(await aiGradeAttemptApi(attemptId)),
+    onSuccess: (result) => {
+      queryClient.setQueryData(QUERY_KEYS.exam.result(attemptId), result);
+      queryClient.invalidateQueries({ queryKey: ['exam', 'my-attempts'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.account.profile });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.notification.all });
+    },
   });
 }
 

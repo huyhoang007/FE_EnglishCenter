@@ -1,126 +1,92 @@
 /**
- * PracticeView — Phòng luyện đề Writing/Speaking có AI chấm (Dev 5 — TASK-D5-04)
+ * PracticeView — Luyện tập AI / Test trình độ (Dev 5)
  * -----------------------------------------------------------
- * Tab "Kho đề":
- *   1. Chọn đề trong danh sách (lọc Writing/Speaking, tìm theo tên)
- *   2. Writing: gõ bài vào ô. Speaking: CHỈ ghi âm — trình duyệt chuyển giọng nói thành chữ
- *      (Web Speech API), ô phiên âm chỉ đọc, không gõ / dán được. Muốn làm lại thì "Ghi lại từ đầu".
- *      Trình duyệt không hỗ trợ ghi âm (Firefox, Safari cũ) thì không làm được đề Speaking.
- *   3. Bấm "Nộp bài & AI chấm" → gọi submit rồi ai-evaluate (mất 10 - 60 giây)
- *   4. Hiện kết quả 4 tiêu chí bên phải
- *   Nếu AI chấm lỗi (502/5016) thì bài đã nộp vẫn được giữ → bấm "Chấm lại" không phải nộp lại.
- * Tab "Lịch sử": các bài đã làm, xem lại kết quả hoặc chấm bài chưa chấm.
+ * Đề luyện tập dùng chung module Exam (examScope = practice): mỗi đề gồm nhiều phần thi
+ * Listening / Reading (tự chấm theo đáp án) và Writing / Speaking (AI - Claude chấm theo thang chứng chỉ mục tiêu).
  *
- * Lưu nháp & mất mạng:
- *   - Bài làm / phiên âm tự lưu nháp vào máy (localStorage) theo học viên + đề, mở lại đề thì khôi phục.
- *     Nộp bài thành công thì xóa nháp.
- *   - Mất mạng: hiện cảnh báo, khóa nút nộp, dừng ghi âm (phần đã nói vẫn giữ). Writing vẫn viết tiếp được.
- *     Có mạng lại thì báo để học viên nộp bài / bấm "Ghi âm tiếp".
+ * Tab "Kho đề": vào trang là hiện ngay các đề theo mục tiêu của học viên (đề của chứng chỉ mục tiêu
+ *   + đề không gắn chứng chỉ). Chip "Mục tiêu" có nút Sửa để đổi chứng chỉ / điểm mục tiêu.
+ *   Bấm đề → xác nhận → vào phòng làm bài (ExamRoomView, có đồng hồ, tự lưu, Speaking ghi âm → phiên âm).
+ *   Nộp bài → trang kết quả: điểm từng phần + AI tự chấm Writing / Speaking kèm nhận xét.
+ * Tab "Lịch sử làm bài": các lượt đã làm, bấm để xem lại kết quả (hoặc làm tiếp lượt đang dở).
  *
- * URL hỗ trợ ?examId=... để mở sẵn 1 đề (dùng từ trang Lộ trình học),
- * ?tab=history để mở sẵn tab Lịch sử (dùng khi bấm thông báo kết quả chấm).
+ * Learner (USER) dùng trang này làm Test trình độ miễn phí: tối đa 3 lượt (BE chặn mã 6029).
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import {
-  AlertTriangle,
-  FileText,
-  History,
-  Loader2,
-  Mic,
-  PenLine,
-  RotateCcw,
-  Search,
-  Sparkles,
-  Save,
-  Square,
-  Wand2,
-  Wifi,
-  WifiOff,
-  Eye,
-  EyeOff,
-  Target,
-} from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, Clock, FileQuestion, History, Layers, Pencil, Search, Sparkles, Target, X } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/shared/components/Toast';
 import { getProfile, updateProfile } from '@/shared/api/domainApi';
+import { fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
 import { TargetGoalFields, type TargetGoal } from '@/shared/components/TargetGoalFields';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
-import { cn, countWords } from '@/shared/utils';
+import { EmptyState, ErrorState, Skeleton } from '@/shared/components/Feedback';
+import { cn } from '@/shared/utils';
 import { useRole } from '@/portals/client/features/auth';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
-import { getErrorMessage } from '@/shared/api/axiosClient';
-import type {
-  PracticeAnswer,
-  PracticeEvaluation,
-  PracticeExam,
-  PracticeExamType,
-} from '@/shared/types';
-import {
-  useEvaluatePracticeAnswer,
-  useMyPracticeAnswers,
-  usePracticeEvaluation,
-  usePracticeExams,
-  useSubmitPracticeAnswer,
-} from '../hooks/usePractice';
-import { useSpeechToText } from '../hooks/useSpeechToText';
-import { practiceDraftKey, readPracticeDraft, usePracticeDraftAutosave } from '../hooks/usePracticeDraft';
-import { useOnlineStatus } from '../hooks/useOnlineStatus';
-import { EvaluationResult } from './EvaluationResult';
+import { ATTEMPT_STATUS_LABEL, type AttemptSummary, type ExamSummary } from '@/shared/types';
+import { useExamList, useMyAttempts, useStartAttempt } from '@/portals/client/features/exams/hooks/useExams';
 import { TestRecommendations } from './TestRecommendations';
 
-/** BE yêu cầu bài làm 50 - 20000 ký tự */
-const MIN_CHARS = 50;
-const MAX_CHARS = 20000;
-
 type Tab = 'bank' | 'history';
-type TypeFilter = 'ALL' | PracticeExamType;
-/** idle: chưa làm gì, submitting: đang nộp, evaluating: AI đang chấm */
-type Phase = 'idle' | 'submitting' | 'evaluating';
+
+/** Learner (USER) được 3 lượt test miễn phí (tính cả đề thi) */
+const LEARNER_FREE_ATTEMPTS = 3;
 
 export const PracticeView: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const role = useRole();
   // Learner (USER) dùng trang này làm Test trình độ (Free), Student dùng để Luyện tập AI
   const isStudent = role === 'STUDENT' || role === 'USER';
   const isLearner = role === 'USER';
 
   const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'history' ? 'history' : 'bank');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
-  const [filterByTargetCert, setFilterByTargetCert] = useState(true);
   const [keywordInput, setKeywordInput] = useState('');
   const [keyword, setKeyword] = useState('');
+  /** Đề đang chờ xác nhận bắt đầu làm */
+  const [confirmExam, setConfirmExam] = useState<ExamSummary | null>(null);
 
-  const [selectedExamId, setSelectedExamId] = useState<string | null>(searchParams.get('examId'));
-  const [content, setContent] = useState('');
-  /** Bài đã nộp nhưng AI chấm lỗi → giữ lại để chấm lại */
-  const [pendingAnswerId, setPendingAnswerId] = useState<string | null>(null);
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [error, setError] = useState<string | null>(null);
-  /** Kết quả vừa chấm xong */
-  const [evaluation, setEvaluation] = useState<PracticeEvaluation | null>(null);
-  /** Kết quả đang xem lại từ tab Lịch sử */
   const queryClient = useQueryClient();
   const authUser = useAuthStore((s) => s.user);
   const toast = useToast();
 
-  // Profile Query for mandatory goal modal (TASK DEV1 - T2)
+  /* ---------------- Mục tiêu học tập ---------------- */
   const profileQuery = useQuery({
     queryKey: QUERY_KEYS.account.profile,
     queryFn: getProfile,
     enabled: isStudent,
     initialData: authUser || undefined,
   });
+  const { data: certificates = [] } = useQuery({
+    queryKey: QUERY_KEYS.catalog.certificates,
+    queryFn: fetchCertificates,
+    staleTime: 5 * 60_000,
+  });
 
   const targetCertificateId = profileQuery.data?.targetCertificateId ?? authUser?.targetCertificateId ?? null;
-  const showGoalModal = isStudent && !profileQuery.isLoading && !targetCertificateId;
+  const targetScore = profileQuery.data?.targetScore ?? authUser?.targetScore ?? null;
+  const targetCertificate = certificates.find((c) => c.certificateId === targetCertificateId) ?? null;
+
+  // Chưa có mục tiêu → bắt buộc chọn (TASK DEV1 - T2); có rồi thì mở lại được bằng nút "Sửa mục tiêu"
+  const isGoalRequired = isStudent && !profileQuery.isLoading && !targetCertificateId;
+  const [isEditingGoal, setEditingGoal] = useState(false);
+  const isGoalModalOpen = isGoalRequired || isEditingGoal;
 
   const [modalGoal, setModalGoal] = useState<TargetGoal>({ certificateId: '', score: '' });
   const [goalModalError, setGoalModalError] = useState<string | null>(null);
+
+  const openEditGoal = () => {
+    setModalGoal({ certificateId: targetCertificateId ?? '', score: targetScore ?? '' });
+    setGoalModalError(null);
+    setEditingGoal(true);
+  };
 
   const saveGoalMutation = useMutation({
     mutationFn: () => {
@@ -139,185 +105,43 @@ export const PracticeView: React.FC = () => {
         ...prev,
         user: prev.user ? { ...prev.user, ...updated } : null,
       }));
+      // Gợi ý khóa học / lộ trình đổi theo mục tiêu mới
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.practice.recommendations });
+      setEditingGoal(false);
     },
     onError: (err: Error) => {
       setGoalModalError(err.message || 'Lưu mục tiêu thất bại');
     },
   });
 
-  const [viewEvaluationId, setViewEvaluationId] = useState<string | null>(null);
-
-  /* ---------------- Data (hooks) ---------------- */
-  const effectiveCertId = filterByTargetCert && targetCertificateId ? targetCertificateId : undefined;
-  const examsQuery = usePracticeExams(
-    typeFilter === 'ALL' ? undefined : typeFilter,
+  /* ---------------- Dữ liệu ---------------- */
+  // Có mục tiêu: đề của chứng chỉ mục tiêu + đề dùng chung (BE gộp khi examScope = practice)
+  const examsQuery = useExamList({
+    examScope: 'practice',
+    certificateId: targetCertificateId ?? undefined,
     keyword,
-    effectiveCertId,
-  );
-  const exams: PracticeExam[] = examsQuery.data ?? [];
-  const selectedExam = exams.find((e) => e.practiceExamId === selectedExamId) ?? null;
-
-  const historyQuery = useMyPracticeAnswers(isStudent);
-  const usedAttempts = isLearner ? (historyQuery.data?.length ?? 0) : 0;
-  const remainingAttempts = isLearner ? Math.max(0, 3 - usedAttempts) : Infinity;
-  const isLimitReached = isLearner && remainingAttempts <= 0;
-  const viewedEvaluationQuery = usePracticeEvaluation(viewEvaluationId);
-  const submitMutation = useSubmitPracticeAnswer();
-  const evaluateMutation = useEvaluatePracticeAnswer();
-
-  const shownEvaluation = evaluation ?? viewedEvaluationQuery.data ?? null;
-
-  // Speaking: mỗi đoạn nói đã nhận dạng xong được nối vào cuối ô bài làm
-  const stt = useSpeechToText((text) => {
-    setContent((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text));
-    setPendingAnswerId(null);
+    size: 50,
   });
+  const exams = examsQuery.data?.data ?? [];
 
-  /* ---------------- Lưu nháp ---------------- */
-  const userId = useAuthStore((s) => s.user?.id);
-  const draftKey = isStudent && userId && selectedExamId ? practiceDraftKey(userId, selectedExamId) : null;
-  /** Thời điểm của bản nháp vừa khôi phục (để báo cho học viên) */
-  const [restoredAt, setRestoredAt] = useState<string | null>(null);
+  const historyQuery = useMyAttempts(0, 'practice', 50, isStudent);
+  const attempts = historyQuery.data?.data ?? [];
+  // Learner: BE đếm mọi lượt test (đề luyện tập + đề thi)
+  const learnerAttemptsQuery = useMyAttempts(0, undefined, 1, isLearner);
+  const usedAttempts = learnerAttemptsQuery.data?.totalElements ?? 0;
+  const remainingAttempts = Math.max(0, LEARNER_FREE_ATTEMPTS - usedAttempts);
+  const isLimitReached = isLearner && remainingAttempts <= 0;
 
-  // Mở đề (hoặc tải lại trang) → khôi phục nháp của đề đó. Phải đặt TRƯỚC hook tự lưu.
-  useEffect(() => {
-    setRestoredAt(null);
-    if (!draftKey) return;
-    const draft = readPracticeDraft(draftKey);
-    if (draft?.content.trim()) {
-      setContent(draft.content);
-      setRestoredAt(draft.savedAt);
-    }
-  }, [draftKey]);
+  const startAttempt = useStartAttempt();
 
-  const draft = usePracticeDraftAutosave(draftKey, content);
-
-  /* ---------------- Trạng thái mạng ---------------- */
-  const isOnline = useOnlineStatus();
-  const wasOfflineRef = useRef(false);
-  /** Vừa có mạng lại (hiện thông báo vài giây) */
-  const [backOnline, setBackOnline] = useState(false);
-  const stopRecording = stt.stop;
-
-  useEffect(() => {
-    if (!isOnline) {
-      // Nhận dạng giọng nói cần mạng → dừng hẳn, phần đã nói vẫn nằm trong ô phiên âm
-      stopRecording();
-      wasOfflineRef.current = true;
-      setBackOnline(false);
-      return undefined;
-    }
-    if (!wasOfflineRef.current) return undefined;
-    wasOfflineRef.current = false;
-    setBackOnline(true);
-    const id = window.setTimeout(() => setBackOnline(false), 6000);
-    return () => window.clearTimeout(id);
-  }, [isOnline, stopRecording]);
-
-  /* ---------------- Actions ---------------- */
-  const resetWorkspace = () => {
-    setContent('');
-    setPendingAnswerId(null);
-    setEvaluation(null);
-    setViewEvaluationId(null);
-    setError(null);
-  };
-
-  const handleSelectExam = (examId: string) => {
-    // Bấm lại đúng đề đang làm thì giữ nguyên bài (tránh xóa trắng rồi ghi đè nháp)
-    if (phase !== 'idle' || examId === selectedExamId) return;
-    stt.stop();
-    setSelectedExamId(examId);
-    resetWorkspace();
-  };
-
-  /** Chấm 1 bài đã nộp */
-  const runEvaluate = async (answerId: string) => {
-    setPhase('evaluating');
-    setError(null);
-    setViewEvaluationId(null);
-    try {
-      const result = await evaluateMutation.mutateAsync(answerId);
-      setEvaluation(result);
-      setPendingAnswerId(null);
-    } catch (err) {
-      setPendingAnswerId(answerId);
-      setError(getErrorMessage(err));
-    } finally {
-      setPhase('idle');
-    }
-  };
-
-  /** Nộp bài (nếu chưa nộp) rồi gọi AI chấm */
-  const handleSubmitAndEvaluate = async () => {
-    if (!selectedExam) return;
-    stt.stop();
-    if (pendingAnswerId) {
-      await runEvaluate(pendingAnswerId);
-      return;
-    }
-    setPhase('submitting');
-    setError(null);
-    setEvaluation(null);
-    setViewEvaluationId(null);
-    try {
-      const answer = await submitMutation.mutateAsync({
-        examId: selectedExam.practiceExamId,
-        content: content.trim(),
-      });
-      // Bài đã lưu trên BE (kể cả nếu AI chấm lỗi vẫn chấm lại được từ Lịch sử) → xóa nháp
-      draft.discard();
-      setRestoredAt(null);
-      await runEvaluate(answer.answerId);
-    } catch (err) {
-      setError(getErrorMessage(err));
-      setPhase('idle');
-    }
-  };
-
-  /** Tab lịch sử: xem kết quả bài đã chấm */
-  const handleViewEvaluation = (answer: PracticeAnswer) => {
-    if (!answer.evaluationId) return;
-    setError(null);
-    setEvaluation(null);
-    setViewEvaluationId(answer.evaluationId);
-  };
-
-  /** Speaking: xóa phiên âm cũ để ghi lại từ đầu */
-  const handleResetRecording = () => {
-    stt.stop();
-    setContent('');
-    setPendingAnswerId(null);
-    setRestoredAt(null);
-  };
-
-  /** Bỏ bản nháp vừa khôi phục, làm lại từ đầu */
-  const handleDiscardDraft = () => {
-    stt.stop();
-    draft.discard();
-    setContent('');
-    setPendingAnswerId(null);
-    setRestoredAt(null);
-  };
-
-  /* ---------------- Render ---------------- */
-  const isSpeaking = selectedExam?.examType === 'SPEAKING';
-  const charCount = content.trim().length;
-  const wordCount = content.trim() ? countWords(content) : 0;
-  const canSubmit =
-    isStudent &&
-    isOnline &&
-    !!selectedExam &&
-    !isLimitReached &&
-    phase === 'idle' &&
-    !stt.isRecording &&
-    charCount >= MIN_CHARS &&
-    charCount <= MAX_CHARS;
+  /** Lượt đang làm dở của đề (bắt đầu lại sẽ vào tiếp lượt đó, không tốn thêm lượt) */
+  const inProgressOf = (examId: string) =>
+    attempts.find((a) => a.examId === examId && a.status === 'in_progress');
 
   return (
     <div className="space-y-6">
-      {/* Modal chọn mục tiêu bắt buộc (TASK DEV1 - T2) */}
-      {showGoalModal && (
+      {/* Modal chọn / sửa mục tiêu (TASK DEV1 - T2) */}
+      {isGoalModalOpen && (
         <div
           role="dialog"
           aria-modal="true"
@@ -328,12 +152,27 @@ export const PracticeView: React.FC = () => {
               <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#0052CC] flex items-center justify-center shrink-0">
                 <Target className="w-6 h-6" />
               </div>
-              <div>
-                <h2 className="text-xl font-extrabold text-slate-900">Chọn mục tiêu học tập</h2>
+              <div className="flex-1">
+                <h2 className="text-xl font-extrabold text-slate-900">
+                  {isGoalRequired ? 'Chọn mục tiêu học tập' : 'Sửa mục tiêu học tập'}
+                </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Bước bắt buộc để cá nhân hóa bài kiểm tra và lộ trình học của bạn
+                  {isGoalRequired
+                    ? 'Bước bắt buộc để cá nhân hóa bài kiểm tra và lộ trình học của bạn'
+                    : 'Kho đề, thang điểm AI chấm và gợi ý khóa học sẽ đổi theo mục tiêu mới'}
                 </p>
               </div>
+              {!isGoalRequired && (
+                <button
+                  type="button"
+                  onClick={() => setEditingGoal(false)}
+                  disabled={saveGoalMutation.isPending}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg self-start"
+                  aria-label="Đóng"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
             </div>
 
             {goalModalError && (
@@ -363,7 +202,7 @@ export const PracticeView: React.FC = () => {
                 disabled={!modalGoal.certificateId || modalGoal.score === '' || saveGoalMutation.isPending}
                 onClick={() => saveGoalMutation.mutate()}
               >
-                Lưu mục tiêu & Bắt đầu
+                {isGoalRequired ? 'Lưu mục tiêu & Bắt đầu' : 'Lưu mục tiêu'}
               </Button>
             </div>
           </div>
@@ -377,24 +216,39 @@ export const PracticeView: React.FC = () => {
           {isLearner ? 'Test trình độ miễn phí' : 'Luyện đề với AI'}
         </div>
         <h1 className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          {isLearner ? 'Kiểm tra trình độ Writing & Speaking' : 'Phòng luyện Writing & Speaking'}
+          {isLearner ? 'Kiểm tra trình độ 4 kỹ năng' : 'Phòng luyện đề 4 kỹ năng'}
         </h1>
         <p className="mt-1.5 text-sm text-slate-600 max-w-2xl">
-          Chọn đề, viết bài (Writing) hoặc ghi âm bài nói (Speaking) và nhận điểm theo thang của chứng chỉ mục tiêu
-          (IELTS, TOEIC, VSTEP…) kèm level CEFR và nhận xét bằng tiếng Việt.
+          Làm đề Listening, Reading, Writing, Speaking. Reading / Listening chấm ngay theo đáp án; Writing / Speaking
+          được AI chấm theo thang của chứng chỉ mục tiêu kèm level CEFR và nhận xét bằng tiếng Việt.
         </p>
-        {isLearner && (
-          <div className="mt-3 flex items-center gap-2">
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {isStudent && targetCertificateId && (
+            <span className="inline-flex items-center gap-2 pl-3 pr-1 h-8 rounded-full bg-purple-50 border border-purple-200 text-xs font-bold text-purple-700">
+              <Target className="w-3.5 h-3.5" />
+              Mục tiêu: {targetCertificate?.certificateName ?? 'Chứng chỉ'}
+              {targetScore !== null && targetScore !== undefined ? ` · ${targetScore}` : ''}
+              <button
+                type="button"
+                onClick={openEditGoal}
+                className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-white text-purple-700 hover:bg-purple-100 transition-colors"
+              >
+                <Pencil className="w-3 h-3" /> Sửa
+              </button>
+            </span>
+          )}
+          {isLearner && (
             <Badge variant={isLimitReached ? 'danger' : 'primary'} size="sm">
-              Còn {remainingAttempts}/3 lượt test miễn phí
+              Còn {remainingAttempts}/{LEARNER_FREE_ATTEMPTS} lượt test miễn phí
             </Badge>
-          </div>
-        )}
+          )}
+        </div>
       </header>
 
       {/* ============== TABS ============== */}
       <div className="inline-flex p-1 rounded-full bg-slate-100">
-        <TabButton active={tab === 'bank'} onClick={() => setTab('bank')} icon={FileText}>
+        <TabButton active={tab === 'bank'} onClick={() => setTab('bank')} icon={Layers}>
           Kho đề
         </TabButton>
         {isStudent && (
@@ -410,48 +264,12 @@ export const PracticeView: React.FC = () => {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start">
         {/* ============== CỘT TRÁI ============== */}
         <div className="space-y-5 min-w-0">
           {tab === 'bank' ? (
             <>
-              {/* Bộ lọc */}
-              <Card className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap gap-2">
-                    {(['ALL', 'WRITING', 'SPEAKING'] as TypeFilter[]).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setTypeFilter(t)}
-                        className={cn(
-                          'px-3 py-1.5 rounded-full text-xs font-bold border transition-colors',
-                          typeFilter === t
-                            ? 'bg-[#0052CC] border-[#0052CC] text-white'
-                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
-                        )}
-                      >
-                        {t === 'ALL' ? 'Tất cả' : t === 'WRITING' ? 'Writing' : 'Speaking'}
-                      </button>
-                    ))}
-                  </div>
-
-                  {targetCertificateId && (
-                    <button
-                      type="button"
-                      onClick={() => setFilterByTargetCert(!filterByTargetCert)}
-                      className={cn(
-                        'px-3 py-1.5 rounded-full text-xs font-bold border transition-colors inline-flex items-center gap-1.5',
-                        filterByTargetCert
-                          ? 'bg-purple-50 border-purple-300 text-purple-700'
-                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100',
-                      )}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      {filterByTargetCert ? 'Đề theo mục tiêu của bạn' : 'Xem tất cả chứng chỉ'}
-                    </button>
-                  )}
-                </div>
+              <Card>
                 <form
                   className="flex gap-2"
                   onSubmit={(e) => {
@@ -468,222 +286,251 @@ export const PracticeView: React.FC = () => {
                       className="flex-1 text-sm outline-none bg-transparent"
                     />
                   </div>
-                  <Button type="submit" variant="outline" size="md">
+                  <Button type="submit" variant="outline">
                     Tìm
                   </Button>
                 </form>
               </Card>
 
-              {/* Danh sách đề */}
-              <ExamList
-                exams={exams}
-                isLoading={examsQuery.isLoading}
-                errorMessage={examsQuery.isError ? getErrorMessage(examsQuery.error) : null}
-                selectedExamId={selectedExamId}
-                onSelect={handleSelectExam}
-              />
-
-              {/* Khu làm bài */}
-              {selectedExam && (
-                <Card noPadding>
-                  <div className="p-5 border-b border-slate-100 space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      <ExamTypeBadge type={selectedExam.examType} />
-                      {selectedExam.certificateName && (
-                        <Badge variant="ai" size="sm">
-                          {selectedExam.certificateName}
-                        </Badge>
-                      )}
-                      {selectedExam.bankName && (
-                        <Badge variant="neutral" size="sm">
-                          {selectedExam.bankName}
-                        </Badge>
-                      )}
-                    </div>
-                    <h2 className="font-extrabold text-slate-900">{selectedExam.title}</h2>
-                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                      {selectedExam.description}
-                    </p>
-                  </div>
-
-                  <div className="p-5">
-                    {isLimitReached && (
-                      <div className="mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900">
-                        <div className="flex items-start gap-3">
-                          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                          <div className="space-y-1">
-                            <p className="text-sm font-bold">
-                              Bạn đã dùng hết 3 lượt test miễn phí
-                            </p>
-                            <p className="text-xs text-amber-800">
-                              Để tiếp tục làm bài không giới hạn và nhận lộ trình học tập chuyên sâu, hãy đăng ký các khóa học của trung tâm.
-                            </p>
-                            <div className="pt-2">
-                              <Link
-                                to="/courses"
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs shadow-sm hover:from-blue-700 hover:to-indigo-700 transition-colors"
-                              >
-                                Mua khóa học để luyện tập không giới hạn →
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {isStudent && (
-                      <DraftNetworkNotice
-                        isOnline={isOnline}
-                        backOnline={backOnline}
-                        isSpeaking={isSpeaking}
-                        restoredAt={restoredAt}
-                        onDiscardDraft={handleDiscardDraft}
-                      />
-                    )}
-                    {isSpeaking && isStudent && (
-                      <SpeakingRecorder
-                        isSupported={stt.isSupported}
-                        isRecording={stt.isRecording}
-                        seconds={stt.seconds}
-                        interimText={stt.interimText}
-                        error={stt.error}
-                        disabled={phase !== 'idle' || !isOnline}
-                        hasTranscript={content.trim().length > 0}
-                        onStart={stt.start}
-                        onStop={stt.stop}
-                        onReset={handleResetRecording}
-                      />
-                    )}
-                    <textarea
-                      value={content}
-                      onChange={(e) => {
-                        setContent(e.target.value);
-                        // Sửa bài sau khi nộp lỗi → coi như bài mới
-                        setPendingAnswerId(null);
-                      }}
-                      disabled={!isStudent || phase !== 'idle' || stt.isRecording}
-                      // Speaking: ô phiên âm chỉ đọc, không gõ / dán / kéo thả chữ vào được
-                      readOnly={isSpeaking}
-                      onPaste={isSpeaking ? (e) => e.preventDefault() : undefined}
-                      onDrop={isSpeaking ? (e) => e.preventDefault() : undefined}
-                      rows={12}
-                      maxLength={MAX_CHARS}
-                      placeholder={
-                        isSpeaking
-                          ? 'Bấm "Bắt đầu ghi âm" và nói bằng tiếng Anh — phiên âm bài nói sẽ tự hiện ở đây…'
-                          : 'Viết bài của bạn tại đây…'
-                      }
-                      className={cn(
-                        'w-full rounded-input border border-slate-200 p-3.5 text-sm text-slate-800 leading-relaxed resize-y focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 disabled:bg-slate-50',
-                        isSpeaking && 'bg-slate-50 cursor-default',
-                      )}
+              {examsQuery.isLoading ? (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-44 rounded-card" />
+                  ))}
+                </div>
+              ) : examsQuery.isError ? (
+                <ErrorState message={examsQuery.error?.message} onRetry={() => examsQuery.refetch()} />
+              ) : exams.length === 0 ? (
+                <EmptyState
+                  title={keyword ? 'Không tìm thấy đề phù hợp' : 'Chưa có đề luyện tập nào'}
+                  description={
+                    keyword
+                      ? 'Thử từ khóa khác.'
+                      : targetCertificate
+                        ? `Chưa có đề cho ${targetCertificate.certificateName}. Mentor hoặc Admin cần tạo đề trước.`
+                        : 'Mentor hoặc Admin cần tạo đề trước.'
+                  }
+                />
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {exams.map((exam) => (
+                    <PracticeExamCard
+                      key={exam.examId}
+                      exam={exam}
+                      isInProgress={Boolean(inProgressOf(exam.examId))}
+                      onSelect={() => setConfirmExam(exam)}
                     />
-
-                    <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <p className="text-xs text-slate-500">
-                        <span className="font-bold text-slate-800 tabular-nums">{wordCount}</span> từ ·{' '}
-                        <span className="tabular-nums">{charCount}</span> ký tự
-                        {charCount < MIN_CHARS && (
-                          <span className="ml-2 text-amber-600">(tối thiểu {MIN_CHARS} ký tự)</span>
-                        )}
-                        {isStudent && draft.lastSavedAt && charCount > 0 && !pendingAnswerId && !evaluation && (
-                          <span className="ml-2 inline-flex items-center gap-1 text-slate-400">
-                            <Save className="w-3 h-3" />
-                            Đã lưu nháp {formatClock(draft.lastSavedAt)}
-                          </span>
-                        )}
-                      </p>
-                      <Button
-                        variant="ai"
-                        size="md"
-                        leftIcon={Wand2}
-                        isLoading={phase !== 'idle'}
-                        disabled={!canSubmit}
-                        onClick={handleSubmitAndEvaluate}
-                      >
-                        {phase === 'submitting'
-                          ? 'Đang nộp bài…'
-                          : phase === 'evaluating'
-                            ? 'AI đang chấm…'
-                            : pendingAnswerId
-                              ? 'Chấm lại'
-                              : 'Nộp bài & AI chấm'}
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
+                  ))}
+                </div>
               )}
             </>
           ) : (
             <HistoryList
-              answers={historyQuery.data ?? []}
+              attempts={attempts}
               isLoading={historyQuery.isLoading}
-              errorMessage={historyQuery.isError ? getErrorMessage(historyQuery.error) : null}
-              busy={phase !== 'idle'}
-              onView={handleViewEvaluation}
-              onEvaluate={(a) => runEvaluate(a.answerId)}
+              error={historyQuery.isError ? historyQuery.error : null}
+              onRetry={() => historyQuery.refetch()}
+              onOpen={(a) =>
+                navigate(
+                  a.status === 'in_progress' ? CLIENT_ROUTES.examAttempt(a.attemptId) : CLIENT_ROUTES.examResult(a.attemptId),
+                )
+              }
             />
           )}
         </div>
 
-        {/* ============== CỘT PHẢI: KẾT QUẢ ============== */}
-        <div className="lg:sticky lg:top-[112px] space-y-4">
-          {viewedEvaluationQuery.isError && (
-            <Card className="bg-red-50 border-red-200 text-sm text-red-700">
-              {getErrorMessage(viewedEvaluationQuery.error)}
-            </Card>
-          )}
-
-          {error && (
-            <Card className="bg-red-50 border-red-200">
-              <p className="text-sm font-bold text-red-700 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                Không thành công
-              </p>
-              <p className="mt-1 text-sm text-red-700">{error}</p>
-              {pendingAnswerId && tab === 'bank' && (
-                <p className="mt-2 text-xs text-red-600">
-                  Bài của bạn đã được lưu. Bấm "Chấm lại" để thử chấm lần nữa.
-                </p>
-              )}
-            </Card>
-          )}
-
-          {phase === 'evaluating' || viewedEvaluationQuery.isFetching ? (
-            <Card className="text-center py-10">
-              <Loader2 className="w-8 h-8 mx-auto text-violet-600 animate-spin" />
-              {phase === 'evaluating' ? (
-                <>
-                  <p className="mt-3 font-bold text-slate-900">AI đang chấm bài…</p>
-                  <p className="mt-1 text-sm text-slate-500">Thường mất 10 - 60 giây, đừng tải lại trang.</p>
-                </>
-              ) : (
-                <p className="mt-3 text-sm text-slate-500">Đang tải kết quả…</p>
-              )}
-            </Card>
-          ) : shownEvaluation ? (
-            <div className="space-y-6">
-              <EvaluationResult evaluation={shownEvaluation} />
-              <TestRecommendations />
-            </div>
-          ) : (
-            <Card className="text-center py-10 border-dashed">
-              <Sparkles className="w-8 h-8 mx-auto text-slate-300" />
-              <p className="mt-3 text-sm text-slate-500">
-                {tab === 'bank'
-                  ? 'Chọn đề và nộp bài để xem kết quả AI chấm tại đây.'
-                  : 'Chọn "Xem kết quả" ở một bài đã chấm.'}
-              </p>
-            </Card>
-          )}
+        {/* ============== CỘT PHẢI ============== */}
+        <div className="space-y-5">
+          <Card className="space-y-2.5">
+            <h2 className="font-extrabold text-slate-900 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-ai" /> Cách chấm điểm
+            </h2>
+            <ul className="text-sm text-slate-600 space-y-1.5">
+              <li>• Listening / Reading: chấm ngay theo đáp án khi nộp bài.</li>
+              <li>• Writing: AI chấm 4 tiêu chí theo thang chứng chỉ mục tiêu.</li>
+              <li>• Speaking: bấm ghi âm và nói tiếng Anh, hệ thống chuyển thành chữ để AI chấm.</li>
+              <li>• Bài làm tự lưu; hết giờ hệ thống tự nộp.</li>
+            </ul>
+          </Card>
         </div>
       </div>
+
+      {/* Gợi ý khóa học / lộ trình theo mục tiêu + trình độ: để toàn chiều ngang cho thẻ không bị bóp */}
+      {isStudent && <TestRecommendations />}
+
+      {/* ============== XÁC NHẬN BẮT ĐẦU ============== */}
+      {confirmExam && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !startAttempt.isPending && setConfirmExam(null)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-primary">
+                {confirmExam.certificateName ?? 'Đề luyện tập'}
+              </p>
+              <h3 className="text-xl font-extrabold text-slate-900 mt-1">{confirmExam.examTitle}</h3>
+              {confirmExam.description && <p className="text-sm text-slate-500 mt-1">{confirmExam.description}</p>}
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs text-slate-600">
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-slate-400" /> {confirmExam.durationMinutes} phút
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <FileQuestion className="w-3.5 h-3.5 text-slate-400" /> {confirmExam.totalQuestions} câu
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-slate-400" /> {confirmExam.totalParts} phần
+              </span>
+            </div>
+            <p className="text-sm text-slate-600">
+              {inProgressOf(confirmExam.examId)
+                ? 'Bạn đang làm dở đề này — vào tiếp lượt cũ, đồng hồ vẫn chạy.'
+                : 'Đồng hồ bắt đầu chạy khi vào phòng làm bài. Bài làm tự lưu, hết giờ hệ thống tự nộp.'}
+              {isLearner && !inProgressOf(confirmExam.examId) && (
+                <b> Lượt này dùng 1 trong {remainingAttempts} lượt test miễn phí còn lại.</b>
+              )}
+            </p>
+            {!isStudent && <p className="text-sm text-amber-700 font-semibold">Đăng nhập để làm bài.</p>}
+            {startAttempt.isError && (
+              <p className="text-sm text-status-danger font-semibold">{startAttempt.error.message}</p>
+            )}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setConfirmExam(null)} disabled={startAttempt.isPending}>
+                Để sau
+              </Button>
+              <Button
+                leftIcon={Sparkles}
+                isLoading={startAttempt.isPending}
+                disabled={!isStudent || (isLimitReached && !inProgressOf(confirmExam.examId))}
+                onClick={() => startAttempt.mutate(confirmExam.examId)}
+              >
+                {inProgressOf(confirmExam.examId) ? 'Làm tiếp' : 'Bắt đầu làm bài'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-/* ============================================================
- *  Sub components
- * ============================================================ */
+/* =========================================================
+ * Thẻ đề luyện tập
+ * ========================================================= */
+const PracticeExamCard: React.FC<{ exam: ExamSummary; isInProgress: boolean; onSelect: () => void }> = ({
+  exam,
+  isInProgress,
+  onSelect,
+}) => (
+  <Card
+    hoverable
+    className="cursor-pointer flex flex-col gap-3"
+    onClick={onSelect}
+    role="button"
+    aria-label={`Làm đề ${exam.examTitle}`}
+  >
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Badge variant={exam.certificateName ? 'ai' : 'neutral'} size="sm">
+        {exam.certificateName ?? 'Mọi mục tiêu'}
+      </Badge>
+      {isInProgress && (
+        <Badge variant="warning" size="sm">
+          Đang làm dở
+        </Badge>
+      )}
+    </div>
+    <div>
+      <h3 className="font-extrabold text-slate-900 leading-snug">{exam.examTitle}</h3>
+      {exam.description && <p className="text-sm text-slate-500 mt-1 line-clamp-2">{exam.description}</p>}
+    </div>
+    <div className="mt-auto grid grid-cols-3 gap-2 text-xs text-slate-600 border-t border-slate-100 pt-3">
+      <span className="inline-flex items-center gap-1.5">
+        <Clock className="w-3.5 h-3.5 text-slate-400" />
+        {exam.durationMinutes} phút
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <FileQuestion className="w-3.5 h-3.5 text-slate-400" />
+        {exam.totalQuestions} câu
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <Layers className="w-3.5 h-3.5 text-slate-400" />
+        {exam.totalParts} phần
+      </span>
+    </div>
+  </Card>
+);
+
+/* =========================================================
+ * Lịch sử làm bài
+ * ========================================================= */
+const HistoryList: React.FC<{
+  attempts: AttemptSummary[];
+  isLoading: boolean;
+  error: Error | null;
+  onRetry: () => void;
+  onOpen: (attempt: AttemptSummary) => void;
+}> = ({ attempts, isLoading, error, onRetry, onOpen }) => {
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 rounded-card" />
+        ))}
+      </div>
+    );
+  }
+  if (error) return <ErrorState message={error.message} onRetry={onRetry} />;
+  if (attempts.length === 0) {
+    return <EmptyState title="Chưa có bài làm nào" description="Chọn một đề trong Kho đề để bắt đầu luyện tập." />;
+  }
+  return (
+    <div className="space-y-3">
+      {attempts.map((a) => (
+        <Card
+          key={a.attemptId}
+          hoverable
+          className="cursor-pointer flex flex-wrap items-center gap-3"
+          onClick={() => onOpen(a)}
+          role="button"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-slate-900 truncate">{a.examTitle}</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Lượt #{a.attemptNumber} · {new Date(a.startTime).toLocaleString('vi-VN')}
+            </p>
+          </div>
+          {a.status === 'in_progress' ? (
+            <Badge variant="warning" size="sm">
+              Đang làm dở
+            </Badge>
+          ) : a.pendingManualGrading ? (
+            <Badge variant="ai" size="sm" icon={Sparkles}>
+              Chờ AI chấm
+            </Badge>
+          ) : (
+            <Badge variant={a.status === 'graded' ? 'success' : 'neutral'} size="sm">
+              {ATTEMPT_STATUS_LABEL[a.status]}
+            </Badge>
+          )}
+          {a.score !== undefined && a.score !== null && a.status !== 'in_progress' && (
+            <span className="text-sm font-extrabold text-slate-900 tabular-nums">
+              {a.score}/{a.maxScore}
+              {a.percentage !== undefined && a.percentage !== null && (
+                <span className="text-xs text-slate-400 font-bold"> · {a.percentage}%</span>
+              )}
+            </span>
+          )}
+        </Card>
+      ))}
+    </div>
+  );
+};
 
 const TabButton: React.FC<{
   active: boolean;
@@ -703,285 +550,5 @@ const TabButton: React.FC<{
     {children}
   </button>
 );
-
-/** Định dạng giây → mm:ss */
-const formatDuration = (sec: number) =>
-  `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
-
-/** "20:15:03" theo giờ máy */
-const formatClock = (iso: string) =>
-  new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-/** Cảnh báo mất mạng / vừa có mạng lại / đã khôi phục bản nháp */
-const DraftNetworkNotice: React.FC<{
-  isOnline: boolean;
-  backOnline: boolean;
-  isSpeaking: boolean;
-  restoredAt: string | null;
-  onDiscardDraft: () => void;
-}> = ({ isOnline, backOnline, isSpeaking, restoredAt, onDiscardDraft }) => (
-  <>
-    {!isOnline && (
-      <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
-        <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
-        <span>
-          <span className="font-bold">Đang mất kết nối mạng.</span> Bài làm đã được lưu nháp trên máy này, không bị
-          mất.{' '}
-          {isSpeaking
-            ? 'Ghi âm tạm dừng (phần đã nói vẫn được giữ) — có mạng lại hãy bấm "Ghi âm tiếp".'
-            : 'Bạn vẫn viết tiếp được, có mạng lại hãy bấm nộp bài.'}
-        </span>
-      </div>
-    )}
-    {isOnline && backOnline && (
-      <div className="mb-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2">
-        <Wifi className="w-4 h-4 shrink-0 mt-0.5" />
-        <span>
-          Đã có mạng trở lại.{' '}
-          {isSpeaking ? 'Bấm "Ghi âm tiếp" để nói tiếp phần còn lại.' : 'Bạn có thể nộp bài.'}
-        </span>
-      </div>
-    )}
-    {restoredAt && (
-      <div className="mb-3 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-2">
-          <Save className="w-4 h-4 shrink-0" />
-          Đã khôi phục bản nháp lưu lúc {formatClock(restoredAt)} {new Date(restoredAt).toLocaleDateString('vi-VN')}.
-        </span>
-        <button type="button" onClick={onDiscardDraft} className="font-bold hover:underline shrink-0">
-          Bỏ nháp
-        </button>
-      </div>
-    )}
-  </>
-);
-
-/** Thanh ghi âm cho đề Speaking — nhận dạng giọng nói trên trình duyệt */
-const SpeakingRecorder: React.FC<{
-  isSupported: boolean;
-  isRecording: boolean;
-  seconds: number;
-  interimText: string;
-  error: string | null;
-  disabled: boolean;
-  hasTranscript: boolean;
-  onStart: () => void;
-  onStop: () => void;
-  onReset: () => void;
-}> = ({
-  isSupported,
-  isRecording,
-  seconds,
-  interimText,
-  error,
-  disabled,
-  hasTranscript,
-  onStart,
-  onStop,
-  onReset,
-}) => {
-  if (!isSupported) {
-    return (
-      <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-        Trình duyệt này chưa hỗ trợ ghi âm và chuyển giọng nói thành chữ. Hãy mở trang bằng Chrome hoặc Edge
-        để làm đề Speaking.
-      </div>
-    );
-  }
-  return (
-    <div
-      className={cn(
-        'mb-3 p-3 rounded-lg border',
-        isRecording ? 'bg-red-50 border-red-200' : 'bg-violet-50/60 border-violet-200',
-      )}
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        {isRecording ? (
-          <Button variant="danger" size="sm" leftIcon={Square} onClick={onStop}>
-            Dừng ghi âm
-          </Button>
-        ) : (
-          <>
-            <Button variant="ai" size="sm" leftIcon={Mic} disabled={disabled} onClick={onStart}>
-              {hasTranscript ? 'Ghi âm tiếp' : 'Bắt đầu ghi âm'}
-            </Button>
-            {hasTranscript && (
-              <Button variant="outline" size="sm" leftIcon={RotateCcw} disabled={disabled} onClick={onReset}>
-                Ghi lại từ đầu
-              </Button>
-            )}
-          </>
-        )}
-        {isRecording ? (
-          <span className="inline-flex items-center gap-2 text-sm font-bold text-red-600">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
-            Đang ghi · <span className="tabular-nums">{formatDuration(seconds)}</span>
-          </span>
-        ) : (
-          <span className="text-xs text-slate-600">
-            Nói bằng tiếng Anh, hệ thống tự chuyển thành chữ. Phần thi nói chỉ nhận ghi âm, không gõ chữ.
-          </span>
-        )}
-      </div>
-      {isRecording && interimText && (
-        <p className="mt-2 text-sm italic text-slate-500">{interimText}…</p>
-      )}
-      {error && <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>}
-    </div>
-  );
-};
-
-const ExamTypeBadge: React.FC<{ type: PracticeExamType }> = ({ type }) =>
-  type === 'SPEAKING' ? (
-    <Badge variant="ai" size="sm" icon={Mic}>
-      Speaking
-    </Badge>
-  ) : (
-    <Badge variant="primary" size="sm" icon={PenLine}>
-      Writing
-    </Badge>
-  );
-
-const ExamList: React.FC<{
-  exams: PracticeExam[];
-  isLoading: boolean;
-  errorMessage: string | null;
-  selectedExamId: string | null;
-  onSelect: (examId: string) => void;
-}> = ({ exams, isLoading, errorMessage, selectedExamId, onSelect }) => {
-  if (isLoading) {
-    return (
-      <Card className="flex justify-center py-8 text-slate-400">
-        <Loader2 className="w-6 h-6 animate-spin" />
-      </Card>
-    );
-  }
-  if (errorMessage) {
-    return <Card className="text-sm text-red-600">{errorMessage}</Card>;
-  }
-  if (exams.length === 0) {
-    return (
-      <Card className="text-sm text-slate-500 text-center py-8">
-        Chưa có đề luyện tập nào. Mentor hoặc Admin cần tạo đề trước.
-      </Card>
-    );
-  }
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {exams.map((exam) => (
-        <button
-          key={exam.practiceExamId}
-          type="button"
-          onClick={() => onSelect(exam.practiceExamId)}
-          className={cn(
-            'text-left p-4 rounded-card border bg-white transition-all',
-            exam.practiceExamId === selectedExamId
-              ? 'border-[#0052CC] ring-2 ring-[#0052CC]/15'
-              : 'border-slate-200 hover:border-slate-300',
-          )}
-        >
-          <div className="flex flex-wrap gap-1.5">
-            <ExamTypeBadge type={exam.examType} />
-            {exam.certificateName && (
-              <Badge variant="ai" size="sm">
-                {exam.certificateName}
-              </Badge>
-            )}
-            {exam.bankName && (
-              <Badge variant="neutral" size="sm">
-                {exam.bankName}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-2 font-bold text-slate-900 line-clamp-1">{exam.title}</p>
-          <p className="mt-1 text-xs text-slate-500 line-clamp-2">{exam.description}</p>
-        </button>
-      ))}
-    </div>
-  );
-};
-
-const HistoryList: React.FC<{
-  answers: PracticeAnswer[];
-  isLoading: boolean;
-  errorMessage: string | null;
-  busy: boolean;
-  onView: (a: PracticeAnswer) => void;
-  onEvaluate: (a: PracticeAnswer) => void;
-}> = ({ answers, isLoading, errorMessage, busy, onView, onEvaluate }) => {
-  // Bài làm đang mở xem nội dung (mỗi lúc 1 bài)
-  const [openAnswerId, setOpenAnswerId] = useState<string | null>(null);
-  if (isLoading) {
-    return (
-      <Card className="flex justify-center py-8 text-slate-400">
-        <Loader2 className="w-6 h-6 animate-spin" />
-      </Card>
-    );
-  }
-  if (errorMessage) {
-    return <Card className="text-sm text-red-600">{errorMessage}</Card>;
-  }
-  if (answers.length === 0) {
-    return <Card className="text-sm text-slate-500 text-center py-8">Bạn chưa làm bài nào.</Card>;
-  }
-  return (
-    <Card noPadding>
-      <ul className="divide-y divide-slate-100">
-        {answers.map((a) => (
-          <li key={a.answerId} className="p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <ExamTypeBadge type={a.examType} />
-                  {a.status === 'EVALUATED' ? (
-                    <Badge variant="success" size="sm">
-                      Đã chấm
-                    </Badge>
-                  ) : (
-                    <Badge variant="warning" size="sm">
-                      Chưa chấm
-                    </Badge>
-                  )}
-                </div>
-                <p className="mt-1.5 font-bold text-slate-900 truncate">{a.examTitle}</p>
-                <p className="text-xs text-slate-500">
-                  {new Date(a.submittedAt).toLocaleString('vi-VN')} · {a.wordCount} từ
-                </p>
-              </div>
-              {a.status === 'EVALUATED' && a.bandScore != null && (
-                <span className="text-2xl font-extrabold text-[#0052CC] tabular-nums">
-                  {Number(a.bandScore) > 10 ? Math.round(Number(a.bandScore)) : Number(a.bandScore).toFixed(1)}
-                </span>
-              )}
-              {a.status === 'EVALUATED' ? (
-                <Button variant="outline" size="sm" onClick={() => onView(a)}>
-                  Xem kết quả
-                </Button>
-              ) : (
-                <Button variant="ai" size="sm" leftIcon={Wand2} disabled={busy} onClick={() => onEvaluate(a)}>
-                  AI chấm
-                </Button>
-              )}
-            </div>
-            <Button
-              variant="secondary"
-              size="md"
-              leftIcon={openAnswerId === a.answerId ? EyeOff : Eye}
-              onClick={() => setOpenAnswerId((id) => (id === a.answerId ? null : a.answerId))}
-              className="mt-3 w-full sm:w-auto"
-            >
-              {openAnswerId === a.answerId ? 'Ẩn bài làm' : 'Xem bài làm'}
-            </Button>
-            {openAnswerId === a.answerId && (
-              <p className="mt-2 max-h-72 overflow-y-auto rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                {a.content || 'Bài làm trống.'}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
-    </Card>
-  );
-};
 
 export default PracticeView;

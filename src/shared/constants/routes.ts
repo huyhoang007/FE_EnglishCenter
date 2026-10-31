@@ -74,4 +74,6 @@ export const ADMIN_ROUTES = {
   /* Dev 3: quản lý đề thi */
   exams: '/admin/exams',
   examEditor: (examId: string = ':examId') => `/admin/exams/${examId}`,
+  /* Dev 5: đề luyện tập AI (exam_scope = practice) */
+  practiceExams: '/admin/practice-exams',
 } as const;

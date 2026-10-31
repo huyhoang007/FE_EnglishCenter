@@ -1,72 +1,59 @@
 /**
  * PracticeExamManagementView — Admin quản lý kho đề luyện tập AI (route `/admin/practice-exams`)
  * -----------------------------------------------------------
- * Dev 5 — TASK-D5-04. Đề Writing / Speaking để học viên tự luyện và được AI (Gemini) chấm
- * theo 4 tiêu chí IELTS. API: xem services/adminPracticeExamService.ts
+ * Đề luyện tập dùng chung module Exam (exam_scope = practice): một đề gồm nhiều phần thi
+ * Listening / Reading (tự chấm theo đáp án) và Writing / Speaking (AI - Claude chấm khi học viên nộp).
+ *   - "Tạo đề luyện tập": thêm từng phần thi + file đề của kỹ năng đó → AI đọc → tạo 1 lần
+ *   - Sửa câu hỏi / đáp án, xuất bản, lưu trữ: trang soạn đề của module Exam
+ * API: GET /api/v1/admin/exams?examScope=practice, xem thêm exam/services/adminExamService.ts
  *
  * Layout giữ nguyên AdminLayout: StatCard → title bar → filter bar → bảng → modal,
  * bo góc 16-24px, viền slate-200/80, màu nhấn #0052CC (giống Certificates / Courses).
  */
 
-import React, { useLayoutEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import {
-  Award,
-  FileText,
-  Mic,
-  PenLine,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Search,
-  Sparkles,
-  Trash2,
-  X,
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { Award, CheckCircle2, Eye, EyeOff, FileText, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { StatCard } from '@/portals/admin/components/StatCard';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
 import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
-import { getErrorMessage } from '@/shared/api/axiosClient';
+import { getErrorMessage, unwrapOrThrow } from '@/shared/api/axiosClient';
 import { fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
-import { cn } from '@/shared/utils';
+import { ADMIN_ROUTES } from '@/shared/constants/routes';
 import { formatDate } from '@/shared/utils/format';
-import type { PracticeExam, PracticeExamPayload, PracticeExamType } from '@/shared/types';
+import type { ExamStatus, ExamSummary } from '@/shared/types';
+import { useAdminExams } from '@/portals/admin/features/exam/hooks/useAdminExams';
 import {
-  useAdminPracticeExams,
-  useDeletePracticeExam,
-  useSavePracticeExam,
-} from './hooks/useAdminPracticeExams';
-import { PracticeAiImportModal } from './components/PracticeAiImportModal';
+  deleteExamApi,
+  publishExamApi,
+  unpublishExamApi,
+} from '@/portals/admin/features/exam/services/adminExamService';
+import { ExamStatusPill } from '@/portals/admin/features/exam/components/ExamStatusPill';
+import { CreatePracticeExamModal } from './components/CreatePracticeExamModal';
+import { ModalShell } from './components/PracticeFormParts';
 
 const PAGE_SIZE = 10;
-/** Chiều cao tối thiểu ô "Đề bài" (px) — đề Writing/Speaking thường dài */
-const DESCRIPTION_MIN_HEIGHT = 320;
-
-const TYPE_LABEL: Record<PracticeExamType, string> = {
-  WRITING: 'Writing',
-  SPEAKING: 'Speaking',
-};
 
 /* =========================================================
  * View
  * ========================================================= */
 export const PracticeExamManagementView: React.FC = () => {
   const toast = useToast();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [type, setType] = useState<PracticeExamType | ''>('');
+  const [status, setStatus] = useState<ExamStatus | ''>('');
   const [certificateFilter, setCertificateFilter] = useState<string>('');
   const [keywordInput, setKeywordInput] = useState('');
   const [keyword, setKeyword] = useState('');
   const [page, setPage] = useState(0);
 
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editing, setEditing] = useState<PracticeExam | null>(null);
-  const [deleting, setDeleting] = useState<PracticeExam | null>(null);
-  // Dev 3: tạo đề từ file PDF / Word bằng AI
-  const [isAiImportOpen, setAiImportOpen] = useState(false);
+  const [isCreateOpen, setCreateOpen] = useState(false);
+  const [deleting, setDeleting] = useState<ExamSummary | null>(null);
 
   const { data: certificates = [] } = useQuery({
     queryKey: QUERY_KEYS.catalog.certificates,
@@ -74,22 +61,47 @@ export const PracticeExamManagementView: React.FC = () => {
     staleTime: 5 * 60_000,
   });
 
-  const listQuery = useAdminPracticeExams({
-    type,
+  const listQuery = useAdminExams({
+    examScope: 'practice',
     keyword,
+    status,
     certificateId: certificateFilter || undefined,
     page,
     size: PAGE_SIZE,
   });
-  // Thống kê theo kỹ năng: chỉ cần totalElements
-  const writingQuery = useAdminPracticeExams({ type: 'WRITING', page: 0, size: 1 });
-  const speakingQuery = useAdminPracticeExams({ type: 'SPEAKING', page: 0, size: 1 });
-  const deleteMutation = useDeletePracticeExam();
+  // Thống kê: chỉ cần totalElements
+  const allQuery = useAdminExams({ examScope: 'practice', page: 0, size: 1 });
+  const publishedQuery = useAdminExams({ examScope: 'practice', status: 'published', page: 0, size: 1 });
+  const draftQuery = useAdminExams({ examScope: 'practice', status: 'draft', page: 0, size: 1 });
 
   const exams = listQuery.data?.data ?? [];
-  const writingTotal = writingQuery.data?.totalElements ?? 0;
-  const speakingTotal = speakingQuery.data?.totalElements ?? 0;
-  const hasFilter = Boolean(type || keyword || certificateFilter);
+  const total = allQuery.data?.totalElements ?? 0;
+  const publishedTotal = publishedQuery.data?.totalElements ?? 0;
+  const draftTotal = draftQuery.data?.totalElements ?? 0;
+  const hasFilter = Boolean(status || keyword || certificateFilter);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['exam'] });
+
+  /** Xuất bản / ẩn đề ngay trên bảng */
+  const toggleMutation = useMutation({
+    mutationFn: async (exam: ExamSummary) =>
+      unwrapOrThrow(await (exam.status === 'published' ? unpublishExamApi : publishExamApi)(exam.examId)),
+    onSuccess: (detail) => {
+      toast.success(detail.exam.status === 'published' ? 'Đã xuất bản đề cho học viên' : 'Đã ẩn đề (về nháp)');
+      invalidate();
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (examId: string) => unwrapOrThrow(await deleteExamApi(examId)),
+    onSuccess: () => {
+      toast.success('Đã xóa đề luyện tập');
+      setDeleting(null);
+      invalidate();
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
 
   /* ---------- Debounce keyword (giống Courses) ---------- */
   const timerRef = React.useRef<number | undefined>(undefined);
@@ -103,27 +115,11 @@ export const PracticeExamManagementView: React.FC = () => {
   };
 
   const resetFilters = () => {
-    setType('');
+    setStatus('');
     setCertificateFilter('');
     setKeywordInput('');
     setKeyword('');
     setPage(0);
-  };
-
-  const openCreate = () => {
-    setEditing(null);
-    setIsFormOpen(true);
-  };
-
-  const handleConfirmDelete = () => {
-    if (!deleting) return;
-    deleteMutation.mutate(deleting.practiceExamId, {
-      onSuccess: () => {
-        toast.success('Đã xóa đề luyện tập');
-        setDeleting(null);
-      },
-      onError: (err) => toast.error(getErrorMessage(err)),
-    });
   };
 
   return (
@@ -132,33 +128,33 @@ export const PracticeExamManagementView: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         <StatCard
           title="Tổng đề luyện tập"
-          value={(writingTotal + speakingTotal).toLocaleString('vi-VN')}
-          subtext="AI chấm tự động"
+          value={total.toLocaleString('vi-VN')}
+          subtext="Nhiều kỹ năng, AI chấm"
           icon={Sparkles}
           colorScheme="purple"
-          trendPoints={[2, 3, 3, 4, 5, 5, 6, writingTotal + speakingTotal || 6]}
+          trendPoints={[2, 3, 3, 4, 5, 5, 6, total || 6]}
         />
         <StatCard
-          title="Writing"
-          value={writingTotal.toLocaleString('vi-VN')}
-          subtext="Đề viết"
-          icon={PenLine}
-          colorScheme="blue"
-          trendPoints={[1, 2, 2, 3, 3, 4, 4, writingTotal || 4]}
-        />
-        <StatCard
-          title="Speaking"
-          value={speakingTotal.toLocaleString('vi-VN')}
-          subtext="Đề nói (nộp bản phiên âm)"
-          icon={Mic}
+          title="Đã xuất bản"
+          value={publishedTotal.toLocaleString('vi-VN')}
+          subtext="Học viên đang thấy"
+          icon={CheckCircle2}
           colorScheme="emerald"
-          trendPoints={[1, 1, 2, 2, 3, 3, 4, speakingTotal || 4]}
+          trendPoints={[1, 2, 2, 3, 3, 4, 4, publishedTotal || 4]}
+        />
+        <StatCard
+          title="Nháp"
+          value={draftTotal.toLocaleString('vi-VN')}
+          subtext="Chưa xuất bản"
+          icon={FileText}
+          colorScheme="blue"
+          trendPoints={[1, 1, 2, 2, 3, 3, 4, draftTotal || 4]}
         />
         <StatCard
           title="Đang hiển thị"
           value={(listQuery.data?.totalElements ?? 0).toLocaleString('vi-VN')}
           subtext={hasFilter ? 'Sau khi lọc' : 'Tất cả'}
-          icon={FileText}
+          icon={Search}
           colorScheme="amber"
           trendPoints={[3, 4, 4, 5, 5, 6, 6, listQuery.data?.totalElements || 6]}
         />
@@ -169,23 +165,19 @@ export const PracticeExamManagementView: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Đề luyện tập AI</h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Kho đề Writing / Speaking để học viên tự luyện, AI chấm theo 4 tiêu chí IELTS.
+            Mỗi đề gồm nhiều phần thi: Reading / Listening tự chấm theo đáp án, Writing / Speaking do AI chấm theo thang
+            chứng chỉ mục tiêu của học viên.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="md" leftIcon={Sparkles} onClick={() => setAiImportOpen(true)} className="font-bold">
-            Tạo từ file
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            leftIcon={Plus}
-            onClick={openCreate}
-            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold shadow-xs"
-          >
-            Tạo đề luyện tập
-          </Button>
-        </div>
+        <Button
+          variant="primary"
+          size="md"
+          leftIcon={Plus}
+          onClick={() => setCreateOpen(true)}
+          className="bg-[#0052CC] hover:bg-[#0040A8] font-bold shadow-xs"
+        >
+          Tạo đề luyện tập
+        </Button>
       </div>
 
       {/* ============ 3. FILTER BAR ============ */}
@@ -197,24 +189,25 @@ export const PracticeExamManagementView: React.FC = () => {
               type="text"
               value={keywordInput}
               onChange={(e) => applyKeyword(e.target.value)}
-              placeholder="Tìm theo tiêu đề hoặc đề bài…"
+              placeholder="Tìm theo tiêu đề hoặc mô tả…"
               className="bg-transparent outline-none w-full text-slate-700 text-sm placeholder:text-slate-400"
               aria-label="Tìm đề luyện tập"
             />
           </div>
 
           <select
-            value={type}
+            value={status}
             onChange={(e) => {
-              setType(e.target.value as PracticeExamType | '');
+              setStatus(e.target.value as ExamStatus | '');
               setPage(0);
             }}
             className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
-            aria-label="Lọc theo kỹ năng"
+            aria-label="Lọc theo trạng thái"
           >
-            <option value="">Tất cả kỹ năng</option>
-            <option value="WRITING">Writing</option>
-            <option value="SPEAKING">Speaking</option>
+            <option value="">Tất cả trạng thái</option>
+            <option value="published">Đã xuất bản</option>
+            <option value="draft">Nháp</option>
+            <option value="archived">Lưu trữ</option>
           </select>
 
           <select
@@ -229,7 +222,7 @@ export const PracticeExamManagementView: React.FC = () => {
             <option value="">Tất cả chứng chỉ</option>
             {certificates.map((cert) => (
               <option key={cert.certificateId} value={cert.certificateId}>
-                {cert.name}
+                {cert.certificateName}
               </option>
             ))}
           </select>
@@ -260,16 +253,16 @@ export const PracticeExamManagementView: React.FC = () => {
         hasFilter ? (
           <EmptyState
             title="Không tìm thấy đề phù hợp"
-            description="Thử đổi kỹ năng hoặc xoá bớt từ khoá."
+            description="Thử đổi trạng thái, chứng chỉ hoặc xoá bớt từ khoá."
             actionLabel="Đặt lại bộ lọc"
             onAction={resetFilters}
           />
         ) : (
           <EmptyState
             title="Chưa có đề luyện tập nào"
-            description="Tạo đề Writing / Speaking đầu tiên để học viên luyện và được AI chấm."
+            description="Tạo đề đầu tiên: thêm từng phần thi và tải file đề của kỹ năng đó lên, AI sẽ đọc giúp."
             actionLabel="Tạo đề luyện tập"
-            onAction={openCreate}
+            onAction={() => setCreateOpen(true)}
           />
         )
       ) : (
@@ -279,28 +272,23 @@ export const PracticeExamManagementView: React.FC = () => {
               <thead>
                 <tr className="bg-slate-50/70 border-b border-slate-200/80 text-slate-500 font-extrabold text-[10px] uppercase tracking-wider text-left">
                   <th className="py-3.5 px-4 font-bold">Đề luyện tập</th>
-                  <th className="py-3.5 px-3 font-bold">Kỹ năng</th>
                   <th className="py-3.5 px-3 font-bold">Chứng chỉ</th>
-                  <th className="py-3.5 px-3 font-bold">Ngày tạo</th>
+                  <th className="py-3.5 px-3 font-bold text-right">Phần thi</th>
+                  <th className="py-3.5 px-3 font-bold text-right">Câu hỏi</th>
+                  <th className="py-3.5 px-3 font-bold text-right">Lượt làm</th>
+                  <th className="py-3.5 px-3 font-bold">Trạng thái</th>
                   <th className="py-3.5 px-3 font-bold">Cập nhật</th>
                   <th className="py-3.5 px-4 font-bold text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {exams.map((exam) => (
-                  <tr key={exam.practiceExamId} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3 px-4 max-w-[380px]">
-                      <span className="font-bold text-slate-900 block truncate">{exam.title}</span>
-                      <span className="text-[10px] text-slate-400 block truncate">{exam.description}</span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <Badge
-                        variant={exam.examType === 'WRITING' ? 'primary' : 'success'}
-                        size="sm"
-                        icon={exam.examType === 'WRITING' ? PenLine : Mic}
-                      >
-                        {TYPE_LABEL[exam.examType]}
-                      </Badge>
+                  <tr key={exam.examId} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="py-3 px-4 max-w-[340px]">
+                      <span className="font-bold text-slate-900 block truncate">{exam.examTitle}</span>
+                      <span className="text-[10px] text-slate-400 block truncate">
+                        {exam.durationMinutes} phút{exam.description ? ` · ${exam.description}` : ''}
+                      </span>
                     </td>
                     <td className="py-3 px-3">
                       {exam.certificateName ? (
@@ -308,11 +296,14 @@ export const PracticeExamManagementView: React.FC = () => {
                           {exam.certificateName}
                         </Badge>
                       ) : (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-slate-400">Mọi mục tiêu</span>
                       )}
                     </td>
-                    <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
-                      {exam.createdAt ? formatDate(exam.createdAt) : '—'}
+                    <td className="py-3 px-3 text-right tabular-nums text-slate-700">{exam.totalParts}</td>
+                    <td className="py-3 px-3 text-right tabular-nums text-slate-700">{exam.totalQuestions}</td>
+                    <td className="py-3 px-3 text-right tabular-nums text-slate-700">{exam.totalAttempts ?? 0}</td>
+                    <td className="py-3 px-3">
+                      <ExamStatusPill status={exam.status} />
                     </td>
                     <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
                       {exam.lastUpdated ? formatDate(exam.lastUpdated) : '—'}
@@ -321,16 +312,25 @@ export const PracticeExamManagementView: React.FC = () => {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditing(exam);
-                            setIsFormOpen(true);
-                          }}
+                          onClick={() => navigate(ADMIN_ROUTES.examEditor(exam.examId))}
                           className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                          title="Sửa đề"
-                          aria-label="Sửa đề"
+                          title="Soạn đề: sửa câu hỏi, đáp án, phần thi"
+                          aria-label="Soạn đề"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
+                        {exam.status !== 'archived' && (
+                          <button
+                            type="button"
+                            onClick={() => toggleMutation.mutate(exam)}
+                            disabled={toggleMutation.isPending}
+                            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40"
+                            title={exam.status === 'published' ? 'Ẩn đề (về nháp)' : 'Xuất bản cho học viên'}
+                            aria-label={exam.status === 'published' ? 'Ẩn đề' : 'Xuất bản'}
+                          >
+                            {exam.status === 'published' ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setDeleting(exam)}
@@ -354,12 +354,7 @@ export const PracticeExamManagementView: React.FC = () => {
       )}
 
       {/* ============ MODALS ============ */}
-      <PracticeExamFormModal
-        open={isFormOpen}
-        editing={editing}
-        onClose={() => setIsFormOpen(false)}
-        onSaved={() => toast.success(editing ? 'Đã cập nhật đề luyện tập' : 'Đã tạo đề luyện tập mới')}
-      />
+      {isCreateOpen && <CreatePracticeExamModal onClose={() => setCreateOpen(false)} />}
 
       {deleting && (
         <ModalShell onClose={() => setDeleting(null)}>
@@ -375,255 +370,26 @@ export const PracticeExamManagementView: React.FC = () => {
             </button>
           </div>
           <p className="text-sm text-slate-700 pt-4">
-            Xóa đề <span className="font-bold">{deleting.title}</span>? Đề đã có học viên nộp bài thì không xóa được
-            (để giữ lịch sử chấm của học viên).
+            Xóa đề <span className="font-bold">{deleting.examTitle}</span>? Đề đã có học viên làm bài thì không xóa được
+            (để giữ lịch sử của học viên) — hãy ẩn hoặc lưu trữ đề ở trang soạn đề.
           </p>
           <div className="flex justify-end gap-2 pt-5">
             <Button variant="ghost" size="md" onClick={() => setDeleting(null)}>
               Đóng
             </Button>
-            <Button variant="danger" size="md" isLoading={deleteMutation.isPending} onClick={handleConfirmDelete}>
+            <Button
+              variant="danger"
+              size="md"
+              isLoading={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate(deleting.examId)}
+            >
               Xác nhận xóa
             </Button>
           </div>
         </ModalShell>
       )}
-
-      {isAiImportOpen && <PracticeAiImportModal onClose={() => setAiImportOpen(false)} />}
     </div>
   );
 };
-
-/* =========================================================
- * Modal: Create / Edit practice exam
- * ========================================================= */
-const PracticeExamFormModal: React.FC<{
-  open: boolean;
-  editing: PracticeExam | null;
-  onClose: () => void;
-  onSaved: () => void;
-}> = ({ open, editing, onClose, onSaved }) => {
-  const toast = useToast();
-  const saveMutation = useSavePracticeExam();
-
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [examType, setExamType] = useState<PracticeExamType>('WRITING');
-  const [certificateId, setCertificateId] = useState<string>('');
-  const [touched, setTouched] = useState(false);
-
-  const { data: certificates = [] } = useQuery({
-    queryKey: QUERY_KEYS.catalog.certificates,
-    queryFn: fetchCertificates,
-    staleTime: 5 * 60_000,
-  });
-
-  // Ô đề bài cao sẵn và tự giãn theo nội dung (đề thường dài, không bắt admin tự kéo)
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const el = descriptionRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.max(el.scrollHeight, DESCRIPTION_MIN_HEIGHT)}px`;
-  }, [description, open]);
-
-  // Nạp dữ liệu đề đang sửa (1 lần cho mỗi lần mở)
-  const loadedFor = React.useRef<string | null>(null);
-  React.useEffect(() => {
-    if (!open) {
-      loadedFor.current = null;
-      return;
-    }
-    const id = editing?.practiceExamId ?? 'new';
-    if (loadedFor.current === id) return;
-    loadedFor.current = id;
-    setTouched(false);
-    setTitle(editing?.title ?? '');
-    setDescription(editing?.description ?? '');
-    setExamType(editing?.examType ?? 'WRITING');
-    setCertificateId(editing?.certificateId ?? '');
-  }, [open, editing]);
-
-  const titleError = !title.trim() ? 'Tiêu đề là bắt buộc' : title.trim().length > 255 ? 'Tối đa 255 ký tự' : '';
-  const descriptionError = !description.trim()
-    ? 'Đề bài là bắt buộc'
-    : description.trim().length > 5000
-      ? 'Tối đa 5000 ký tự'
-      : '';
-  const hasError = Boolean(titleError || descriptionError);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setTouched(true);
-    if (hasError) return;
-    const payload: PracticeExamPayload = {
-      title: title.trim(),
-      description: description.trim(),
-      examType,
-      certificateId: certificateId || undefined,
-      // Form không còn ô "Bộ đề" / "Khóa học liên quan": giữ nguyên giá trị cũ khi sửa để không bị xóa mất
-      bankName: editing?.bankName ?? undefined,
-      courseId: editing?.courseId ?? undefined,
-    };
-    saveMutation.mutate(
-      { practiceExamId: editing?.practiceExamId, payload },
-      {
-        onSuccess: () => {
-          onSaved();
-          onClose();
-        },
-        onError: (err) => toast.error(getErrorMessage(err)),
-      },
-    );
-  };
-
-  if (!open) return null;
-
-  return (
-    <ModalShell onClose={onClose} maxWidth="max-w-2xl">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">
-              {editing ? 'Cập nhật đề luyện tập' : 'Tạo đề luyện tập mới'}
-            </h3>
-            <p className="text-xs text-slate-500">
-              {editing ? editing.title : 'Đề bài sẽ được gửi kèm bài làm cho AI chấm'}
-            </p>
-          </div>
-        </div>
-        <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg" aria-label="Đóng">
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-        <Field label="Tiêu đề" required error={touched ? titleError : ''}>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="VD: Writing Task 2 - Technology"
-            className={inputCls(Boolean(touched && titleError))}
-          />
-        </Field>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Kỹ năng" required>
-            <div className="grid grid-cols-2 gap-2">
-              {(['WRITING', 'SPEAKING'] as PracticeExamType[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setExamType(t)}
-                  className={cn(
-                    'h-10 rounded-xl border text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors',
-                    examType === t
-                      ? 'border-[#0052CC] bg-blue-50 text-[#0052CC]'
-                      : 'border-slate-200 text-slate-500 hover:bg-slate-50',
-                  )}
-                >
-                  {t === 'WRITING' ? <PenLine className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                  {TYPE_LABEL[t]}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          <Field label="Chứng chỉ liên quan">
-            <select
-              value={certificateId}
-              onChange={(e) => setCertificateId(e.target.value)}
-              className={inputCls(false)}
-            >
-              <option value="">-- Không gắn chứng chỉ --</option>
-              {certificates.map((cert) => (
-                <option key={cert.certificateId} value={cert.certificateId}>
-                  {cert.name} ({cert.code})
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
-        <Field label="Đề bài" required error={touched ? descriptionError : ''}>
-          <textarea
-            ref={descriptionRef}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={
-              examType === 'WRITING'
-                ? 'VD: Some people think technology makes life easier. Others disagree. Discuss both views and give your opinion.'
-                : 'VD: Describe a place you like to visit. You should say: where it is, how often you go there… (học viên nộp bản phiên âm câu trả lời)'
-            }
-            style={{ minHeight: DESCRIPTION_MIN_HEIGHT }}
-            className={cn(inputCls(Boolean(touched && descriptionError)), 'h-auto py-2 leading-relaxed resize-none overflow-hidden')}
-          />
-          <p className="text-[10px] text-slate-400 text-right mt-1">{description.trim().length}/5000</p>
-        </Field>
-
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            Huỷ
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            isLoading={saveMutation.isPending}
-            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
-          >
-            {editing ? 'Lưu thay đổi' : 'Tạo đề'}
-          </Button>
-        </div>
-      </form>
-    </ModalShell>
-  );
-};
-
-/* =========================================================
- * Shared form atoms (giống CertificateManagementView)
- * ========================================================= */
-const inputCls = (invalid: boolean) =>
-  cn(
-    'w-full h-10 px-3 rounded-xl border text-sm outline-none transition-colors bg-white',
-    'placeholder:text-slate-300 disabled:bg-slate-50 disabled:text-slate-400',
-    invalid ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-[#0052CC]',
-  );
-
-const Field: React.FC<{
-  label: string;
-  required?: boolean;
-  error?: string;
-  children: React.ReactNode;
-}> = ({ label, required, error, children }) => (
-  <div>
-    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-      {label} {required && <span className="text-rose-500">*</span>}
-    </label>
-    {children}
-    {error && <p className="text-[11px] text-rose-500 mt-1">{error}</p>}
-  </div>
-);
-
-const ModalShell: React.FC<{
-  children: React.ReactNode;
-  onClose: () => void;
-  maxWidth?: string;
-}> = ({ children, onClose, maxWidth = 'max-w-lg' }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose} role="presentation">
-    <div
-      className={cn('bg-white rounded-3xl w-full p-6 shadow-2xl border border-slate-100', 'max-h-[90vh] overflow-y-auto', maxWidth)}
-      onClick={(e) => e.stopPropagation()}
-      role="dialog"
-      aria-modal="true"
-    >
-      {children}
-    </div>
-  </div>
-);
 
 export default PracticeExamManagementView;

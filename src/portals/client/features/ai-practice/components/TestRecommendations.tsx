@@ -18,6 +18,9 @@ interface TestRecommendationsProps {
   className?: string;
 }
 
+/** Thang ≤ 10 (IELTS, VSTEP…) hiện 1 chữ số thập phân, thang lớn (TOEIC) hiện số nguyên */
+const formatScore = (value: number) => (Number(value) <= 10 ? Number(value).toFixed(1) : String(Math.round(Number(value))));
+
 export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ className = '' }) => {
   const navigate = useNavigate();
   const { data: recommendations, isLoading } = useRecommendations();
@@ -60,12 +63,12 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
               <h3 className="text-lg font-bold text-slate-900">Gợi ý dành riêng cho bạn</h3>
               {targetCertificateName && (
                 <Badge variant="primary" size="sm">
-                  {targetCertificateName} {targetScore ? `· Mục tiêu ${targetScore}` : ''}
+                  {targetCertificateName} {targetScore ? `· Mục tiêu ${formatScore(targetScore)}` : ''}
                 </Badge>
               )}
               {currentLevel && (
                 <Badge variant="ai" size="sm">
-                  Trình độ: {currentLevel} {currentScore ? `(${currentScore})` : ''}
+                  Trình độ: {currentLevel} {currentScore ? `(${formatScore(currentScore)})` : ''}
                 </Badge>
               )}
             </div>
@@ -77,7 +80,7 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
       {/* 1. Khóa học phù hợp với trình độ của bạn */}
       {hasCourses && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-primary" />
               <h4 className="text-base font-bold text-slate-900">
@@ -92,20 +95,21 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Số cột theo chiều rộng khung chứa (không theo màn hình) để thẻ không bị bóp khi đặt trong cột hẹp */}
+          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
             {courses.slice(0, 3).map((course) => (
               <div
                 key={course.courseId}
                 className="group flex flex-col justify-between rounded-xl bg-white border border-slate-200 hover:border-primary/40 hover:shadow-md transition-all p-4"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <span className="text-xs font-bold text-primary px-2 py-0.5 rounded bg-primary/5 border border-primary/10">
                       {course.certificateName || 'Khóa học'}
                     </span>
                     {course.targetScore && (
-                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
-                        <Target className="w-3 h-3" /> Mục tiêu {course.targetScore}
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1 whitespace-nowrap">
+                        <Target className="w-3 h-3" /> Mục tiêu {formatScore(course.targetScore)}
                       </span>
                     )}
                   </div>
@@ -119,8 +123,8 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
                   )}
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
-                  <div className="text-sm font-bold text-slate-900">
+                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 mt-auto">
+                  <div className="text-sm font-bold text-slate-900 whitespace-nowrap">
                     {course.price && Number(course.price) > 0
                       ? `${Number(course.price).toLocaleString('vi-VN')} đ`
                       : 'Miễn phí'}
@@ -143,7 +147,7 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
       {/* 2. Lộ trình gợi ý để đạt điểm mục tiêu */}
       {hasPaths && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Compass className="w-5 h-5 text-indigo-600" />
               <h4 className="text-base font-bold text-slate-900">
@@ -158,7 +162,7 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
             {learningPaths.slice(0, 2).map((path) => (
               <div
                 key={path.learningPathId}
@@ -180,7 +184,7 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
                   )}
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
+                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 mt-auto">
                   <span className="text-xs text-slate-500">
                     {path.enrolledCount || 0} học viên đang theo học
                   </span>
