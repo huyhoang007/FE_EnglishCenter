@@ -43,7 +43,7 @@ import {
   Target,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { useToast } from '@/shared/components/Toast';
 import { getProfile, updateProfile } from '@/shared/api/domainApi';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { TargetGoalFields, type TargetGoal } from '@/shared/components/TargetGoalFields';
@@ -106,6 +106,7 @@ export const PracticeView: React.FC = () => {
   /** Kết quả đang xem lại từ tab Lịch sử */
   const queryClient = useQueryClient();
   const authUser = useAuthStore((s) => s.user);
+  const toast = useToast();
 
   // Profile Query for mandatory goal modal (TASK DEV1 - T2)
   const profileQuery = useQuery({

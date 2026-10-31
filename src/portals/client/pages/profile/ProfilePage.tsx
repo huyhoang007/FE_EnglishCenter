@@ -1,7 +1,6 @@
 "use client";
 
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { BookOpen, Target, Award } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
@@ -10,7 +9,6 @@ import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
 
 export const ProfilePage = () => {
-  const { t } = useTranslation();
   const { user, profile } = useAuthStore();
 
   const isUser = user?.role === 'USER';
