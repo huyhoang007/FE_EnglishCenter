@@ -2,8 +2,8 @@
  * RegisterPage — Trang đăng ký tài khoản (luồng email)
  * -----------------------------------------------------------
  * Bao bọc RegisterForm trong layout responsive.
- * Đăng ký thành công → hệ thống gửi email chứa link đặt mật khẩu
- * (trang /set-password) → tài khoản mới được kích hoạt.
+ * Đăng ký thành công → hệ thống gửi email chứa link xác minh
+ * (trang /activate) → tài khoản mới được kích hoạt.
  */
 
 import React, { useEffect } from 'react';

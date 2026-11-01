@@ -8,8 +8,8 @@
  *   - login() / register() / activate() / logout()
  *   - fetchMyProfile()
  *
- * Lưu ý luồng mới: đăng ký bằng email KHÔNG auto-login — register() chỉ gửi
- * email kích hoạt; activate() (trang /set-password) mới set phiên đăng nhập.
+ * Lưu ý luồng mới: đăng ký KHÔNG auto-login — register() tạo tài khoản (kèm mật khẩu
+ * người dùng chọn) + gửi email kích hoạt; activate() (trang /activate) mới set phiên đăng nhập.
  *
  * Trạng thái được lưu vào localStorage để giữ phiên khi reload trang.
  */
@@ -47,10 +47,10 @@ interface AuthState {
 
   /** Actions */
   login: (payload: LoginRequest) => Promise<AuthUser>;
-  /** Đăng ký bằng email: chỉ tạo tài khoản + gửi email kích hoạt, không set phiên. */
+  /** Đăng ký (kèm mật khẩu): tạo tài khoản chưa kích hoạt + gửi email kích hoạt, không set phiên. */
   register: (payload: RegisterRequest) => Promise<void>;
-  /** Đặt mật khẩu qua link email → kích hoạt + tự đăng nhập (set phiên như login). */
-  activate: (token: string, password: string) => Promise<AuthUser>;
+  /** Bấm link email → xác minh + kích hoạt + tự đăng nhập (set phiên như login). */
+  activate: (token: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   /** Lấy lại thông tin user mới nhất từ BE */
   fetchMyProfile: () => Promise<AuthUser | null>;
@@ -128,10 +128,10 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      activate: async (token, password) => {
+      activate: async (token) => {
         set({ isLoading: true, error: null });
         try {
-          const res = await activateApi(token, password);
+          const res = await activateApi(token);
           if (!res.success || !res.data) {
             set({ isLoading: false, error: res.message });
             throw new Error(res.message);

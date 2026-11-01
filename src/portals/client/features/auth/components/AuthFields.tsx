@@ -1,7 +1,7 @@
 /**
- * AuthFields — các ô nhập dùng chung cho form đăng ký / đặt mật khẩu
+ * AuthFields — các ô nhập dùng chung cho form đăng ký
  * -----------------------------------------------------------
- * Tách từ RegisterForm cũ để SetPasswordPage dùng lại đúng giao diện.
+ * Dùng bởi RegisterForm (ô mật khẩu có nút hiện/ẩn).
  */
 
 import React from 'react';

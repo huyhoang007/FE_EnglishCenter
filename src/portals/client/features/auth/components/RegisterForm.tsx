@@ -1,15 +1,17 @@
 ﻿/**
- * RegisterForm — Form đăng ký tài khoản mới (luồng email)
+ * RegisterForm — Form đăng ký tài khoản mới
  * -----------------------------------------------------------
  * Tuân thủ DTO Backend (RegisterRequest):
  *   - Họ và tên (fullName) - Bắt buộc
  *   - Email (email) - Bắt buộc
+ *   - Mật khẩu (password) - Bắt buộc, tối thiểu 6 ký tự
+ *   - Xác nhận mật khẩu (confirm) - Phải khớp (chỉ kiểm tra phía FE)
  *   - Số điện thoại (phone) - Tùy chọn, 10-11 chữ số
  *   - Đồng ý điều khoản (agree)
  *
- * KHÔNG còn ô mật khẩu: sau khi đăng ký, hệ thống gửi email chứa link
- * đặt mật khẩu (trang /set-password). Submit thành công → màn hình
- * "Vui lòng kiểm tra email" + nút gửi lại email.
+ * Sau khi đăng ký, hệ thống gửi email chứa link XÁC MINH tài khoản
+ * (trang /activate). Submit thành công → màn hình "Vui lòng kiểm tra
+ * email" + nút gửi lại email.
  */
 
 import React, { useState } from 'react';
@@ -28,7 +30,7 @@ import {
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { resendActivationApi } from '@/shared/auth/authService';
 import { cn } from '@/shared/utils';
-import { Field } from './AuthFields';
+import { Field, PasswordField } from './AuthFields';
 
 export const RegisterForm: React.FC = () => {
   const { register, isLoading, error, clearError } = useAuthStore();
@@ -37,9 +39,13 @@ export const RegisterForm: React.FC = () => {
     fullName: '',
     email: '',
     phone: '',
+    password: '',
+    confirm: '',
     agree: false,
   });
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [emailSent, setEmailSent] = useState<string | null>(null);
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
@@ -47,6 +53,9 @@ export const RegisterForm: React.FC = () => {
 
   const set = <K extends keyof typeof form>(key: K, val: (typeof form)[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
+
+  const clearFieldError = (key: string) =>
+    setFieldErrors((p) => (p[key] ? { ...p, [key]: '' } : p));
 
   const validate = (): boolean => {
     const next: Record<string, string> = {};
@@ -57,6 +66,14 @@ export const RegisterForm: React.FC = () => {
     if (!form.email.trim()) next.email = 'Vui lòng nhập email';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
       next.email = 'Email không đúng định dạng';
+
+    if (!form.password) next.password = 'Vui lòng nhập mật khẩu';
+    else if (form.password.length < 6)
+      next.password = 'Mật khẩu tối thiểu 6 ký tự';
+
+    if (!form.confirm) next.confirm = 'Vui lòng xác nhận mật khẩu';
+    else if (form.confirm !== form.password)
+      next.confirm = 'Mật khẩu xác nhận không khớp';
 
     if (form.phone.trim() && !/^[0-9]{10,11}$/.test(form.phone.trim())) {
       next.phone = 'Số điện thoại phải từ 10 đến 11 chữ số';
@@ -78,6 +95,7 @@ export const RegisterForm: React.FC = () => {
       await register({
         fullName: form.fullName.trim(),
         email: form.email.trim(),
+        password: form.password,
         phone: form.phone.trim() ? form.phone.trim() : undefined,
       });
       setResendState('idle');
@@ -115,8 +133,8 @@ export const RegisterForm: React.FC = () => {
           <p className="mt-2 text-sm text-slate-500 leading-relaxed">
             Chúng tôi đã gửi link kích hoạt tới{' '}
             <span className="font-semibold text-slate-700">{emailSent}</span>.
-            Bấm vào link trong email để <strong>đặt mật khẩu</strong> và bắt đầu
-            hành trình học tập.
+            Bấm vào link trong email để <strong>xác minh và kích hoạt</strong>{' '}
+            tài khoản, rồi bắt đầu hành trình học tập.
           </p>
           <p className="mt-1.5 text-xs text-slate-400">
             Link hết hạn sau 24 giờ. Kiểm tra cả thư mục Spam nếu chưa thấy.
@@ -190,7 +208,7 @@ export const RegisterForm: React.FC = () => {
             Bắt đầu hành trình mới
           </h1>
           <p className="mt-1.5 text-white/75 text-sm max-w-xl">
-            Đăng ký bằng email — chúng tôi sẽ gửi link để bạn đặt mật khẩu và kích hoạt tài khoản trong vòng một phút.
+            Tạo tài khoản với email và mật khẩu — chúng tôi sẽ gửi link để bạn xác minh và kích hoạt tài khoản trong vòng một phút.
           </p>
         </div>
       </div>
@@ -214,8 +232,7 @@ export const RegisterForm: React.FC = () => {
               value={form.fullName}
               onChange={(v) => {
                 set('fullName', v);
-                if (fieldErrors.fullName)
-                  setFieldErrors((p) => ({ ...p, fullName: '' }));
+                clearFieldError('fullName');
               }}
               placeholder="Nguyễn Văn A"
               error={fieldErrors.fullName}
@@ -229,8 +246,7 @@ export const RegisterForm: React.FC = () => {
               value={form.email}
               onChange={(v) => {
                 set('email', v);
-                if (fieldErrors.email)
-                  setFieldErrors((p) => ({ ...p, email: '' }));
+                clearFieldError('email');
               }}
               placeholder="you@englishhub.vn"
               error={fieldErrors.email}
@@ -247,19 +263,50 @@ export const RegisterForm: React.FC = () => {
             value={form.phone}
             onChange={(v) => {
               set('phone', v);
-              if (fieldErrors.phone)
-                setFieldErrors((p) => ({ ...p, phone: '' }));
+              clearFieldError('phone');
             }}
             placeholder="0912345678 (tùy chọn)"
             error={fieldErrors.phone}
             autoComplete="tel"
           />
 
-          {/* Info banner: mật khẩu đặt qua email */}
+          {/* Row 3: password + confirm */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <PasswordField
+              id="password"
+              label="Mật khẩu *"
+              value={form.password}
+              onChange={(v) => {
+                set('password', v);
+                clearFieldError('password');
+              }}
+              placeholder="Tối thiểu 6 ký tự"
+              error={fieldErrors.password}
+              show={showPassword}
+              onToggle={() => setShowPassword((s) => !s)}
+              autoComplete="new-password"
+            />
+            <PasswordField
+              id="confirm"
+              label="Xác nhận mật khẩu *"
+              value={form.confirm}
+              onChange={(v) => {
+                set('confirm', v);
+                clearFieldError('confirm');
+              }}
+              placeholder="Nhập lại mật khẩu"
+              error={fieldErrors.confirm}
+              show={showConfirm}
+              onToggle={() => setShowConfirm((s) => !s)}
+              autoComplete="new-password"
+            />
+          </div>
+
+          {/* Info banner: kích hoạt qua email */}
           <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm">
             <Mail className="w-4 h-4 mt-0.5 shrink-0" />
             <span className="leading-relaxed">
-              Bạn sẽ nhận được <strong>email chứa link đặt mật khẩu</strong> sau khi đăng ký.
+              Bạn sẽ nhận được <strong>email chứa link xác minh tài khoản</strong> sau khi đăng ký.
               Tài khoản chỉ được kích hoạt khi bạn hoàn tất bước này.
             </span>
           </div>
@@ -271,8 +318,7 @@ export const RegisterForm: React.FC = () => {
               checked={form.agree}
               onChange={(e) => {
                 set('agree', e.target.checked);
-                if (fieldErrors.agree)
-                  setFieldErrors((p) => ({ ...p, agree: '' }));
+                clearFieldError('agree');
               }}
               className="mt-0.5 w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500/30 cursor-pointer"
             />

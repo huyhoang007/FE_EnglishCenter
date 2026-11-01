@@ -5,20 +5,25 @@ import { toUser } from './apiTypes';
 
 function ok<T>(data: T, message = 'Success'): ApiResponse<T> { return { success: true, message, data }; }
 
+// Gmail SMTP delivery can exceed the shared 15-second API timeout.
+const ACTIVATION_EMAIL_TIMEOUT_MS = 60_000;
+
 export async function loginRequest(email: string, password: string) {
   const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/login', { email, password });
   if (!data.result) throw new Error(data.message || 'Đăng nhập thất bại');
   return ok({ ...data.result, user: toUser(data.result.user) }, data.message);
 }
 
-/** Đăng ký bằng email: tạo tài khoản CHƯA kích hoạt + gửi email chứa link đặt mật khẩu. */
-export async function registerRequest(payload: { email: string; fullName: string; phone?: string }) {
-  const { data } = await axiosClient.post<BeResponse<UserDto>>('/api/v1/auth/register', payload);
+/** Đăng ký: tạo tài khoản CHƯA kích hoạt với mật khẩu người dùng nhập + gửi email chứa link xác minh. */
+export async function registerRequest(payload: { email: string; password: string; fullName: string; phone?: string }) {
+  const { data } = await axiosClient.post<BeResponse<UserDto>>('/api/v1/auth/register', payload, {
+    timeout: ACTIVATION_EMAIL_TIMEOUT_MS,
+  });
   if (!data.result) throw new Error(data.message || 'Đăng ký thất bại');
   return ok(toUser(data.result), data.message);
 }
 
-/** Kiểm tra token kích hoạt từ link email (trang /set-password). */
+/** Kiểm tra token kích hoạt từ link email (trang /activate). */
 export async function verifyActivationTokenRequest(token: string) {
   const { data } = await axiosClient.post<BeResponse<{ email: string; fullName: string }>>(
     '/api/v1/auth/verify-activation-token', { token });
@@ -26,16 +31,18 @@ export async function verifyActivationTokenRequest(token: string) {
   return ok(data.result, data.message);
 }
 
-/** Hoàn tất kích hoạt: đặt mật khẩu bằng token từ link email → trả phiên JWT (auto-login). */
-export async function activateAccountRequest(token: string, password: string) {
-  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/activate', { token, password });
+/** Hoàn tất kích hoạt: xác minh token từ link email → kích hoạt + trả phiên JWT (auto-login). */
+export async function activateAccountRequest(token: string) {
+  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/activate', { token });
   if (!data.result) throw new Error(data.message || 'Kích hoạt tài khoản thất bại');
   return ok({ ...data.result, user: toUser(data.result.user) }, data.message);
 }
 
 /** Gửi lại email kích hoạt cho tài khoản chưa active (luôn thành công phía client). */
 export async function resendActivationRequest(email: string) {
-  const { data } = await axiosClient.post<BeResponse<null>>('/api/v1/auth/resend-activation', { email });
+  const { data } = await axiosClient.post<BeResponse<null>>('/api/v1/auth/resend-activation', { email }, {
+    timeout: ACTIVATION_EMAIL_TIMEOUT_MS,
+  });
   return ok(null, data.message || 'Đã gửi lại email kích hoạt');
 }
 

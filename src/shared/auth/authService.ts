@@ -36,25 +36,26 @@ export const loginApi = async (payload: LoginRequest): Promise<AuthResponse> => 
 };
 
 /**
- * Đăng ký bằng email — KHÔNG auto-login nữa.
- * Backend tạo tài khoản chưa kích hoạt và gửi email chứa link đặt mật khẩu;
- * người dùng hoàn tất tại trang /set-password (activateApi).
+ * Đăng ký — KHÔNG auto-login.
+ * Backend tạo tài khoản chưa kích hoạt (mật khẩu người dùng nhập luôn ở bước này)
+ * và gửi email chứa link xác minh; người dùng bấm link tại trang /activate (activateApi).
  */
 export const registerApi = async (payload: RegisterRequest): Promise<ApiResponse<null>> => {
   try {
     const cleanPhone = payload.phone?.trim() ? payload.phone.trim() : undefined;
     await registerRequest({
       email: payload.email.trim(),
+      password: payload.password,
       fullName: payload.fullName.trim(),
       phone: cleanPhone,
     });
-    return successResponse(null, 'Vui lòng kiểm tra email để đặt mật khẩu và kích hoạt tài khoản');
+    return successResponse(null, 'Vui lòng kiểm tra email để kích hoạt tài khoản');
   } catch (error) {
     return errorResponse(getErrorMessage(error, 'Đăng ký tài khoản thất bại.'), 'REGISTER_FAILED');
   }
 };
 
-/** Kiểm tra token kích hoạt từ link email (trang /set-password). */
+/** Kiểm tra token kích hoạt từ link email (trang /activate). */
 export const verifyActivationTokenApi = async (token: string): Promise<ApiResponse<ActivationInfo>> => {
   try {
     const res = await verifyActivationTokenRequest(token);
@@ -64,10 +65,10 @@ export const verifyActivationTokenApi = async (token: string): Promise<ApiRespon
   }
 };
 
-/** Đặt mật khẩu + kích hoạt tài khoản; thành công trả phiên JWT (auto-login). */
-export const activateApi = async (token: string, password: string): Promise<AuthResponse> => {
+/** Kích hoạt tài khoản qua link email (mật khẩu đã đặt lúc đăng ký); thành công trả phiên JWT (auto-login). */
+export const activateApi = async (token: string): Promise<AuthResponse> => {
   try {
-    const res = await activateAccountRequest(token, password);
+    const res = await activateAccountRequest(token);
     const data = res.data;
     return successResponse({ ...data, user: data.user } as AuthData, res.message || 'Kích hoạt tài khoản thành công');
   } catch (error) {

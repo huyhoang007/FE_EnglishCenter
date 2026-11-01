@@ -3,8 +3,8 @@
  * -----------------------------------------------------------
  * Bao gồm:
  *   /login             → LoginPage (full-bleed)
- *   /register          → RegisterPage (full-bleed, gửi email kích hoạt)
- *   /set-password      → SetPasswordPage (đặt mật khẩu qua link email)
+ *   /register          → RegisterPage (full-bleed, email + mật khẩu, gửi email kích hoạt)
+ *   /activate          → ActivatePage (xác minh email qua link kích hoạt)
  *   /                  → redirect tới Gold Flow course
  *   /courses/:id       → CourseDetailPage
  *   /exams             → ExamListPage (ngân hàng đề — Dev 3)
@@ -36,7 +36,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ClientLayout } from '@/portals/client/layouts/ClientLayout';
 import LoginPage from '@/portals/client/pages/auth/LoginPage';
 import RegisterPage from '@/portals/client/pages/auth/RegisterPage';
-import SetPasswordPage from '@/portals/client/pages/auth/SetPasswordPage';
+import ActivatePage from '@/portals/client/pages/auth/ActivatePage';
 import CourseDetailPage from '@/portals/client/pages/courses/CourseDetailPage';
 import CourseMarketplacePage from '@/portals/client/pages/courses/CourseMarketplacePage';
 import ExamRoomPage from '@/portals/client/pages/exams/ExamRoomPage';
@@ -195,7 +195,7 @@ const ClientRoutesComponent: React.FC = () => {
         {/* Auth — full-bleed */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/set-password" element={<SetPasswordPage />} />
+        <Route path="/activate" element={<ActivatePage />} />
 
         {/* Workspace pages inside ClientLayout */}
         <Route element={<ClientLayout />}>

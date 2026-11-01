@@ -1,11 +1,11 @@
 /**
- * SetPasswordPage — Trang đặt mật khẩu qua link kích hoạt email
+ * ActivatePage — Trang kích hoạt tài khoản qua link kích hoạt email
  * -----------------------------------------------------------
- * Luồng: người dùng bấm link /set-password?token=... trong email
+ * Luồng: người dùng bấm link /activate?token=... trong email
  *   1. Verify token (BE trả email + họ tên nếu hợp lệ)
- *   2. Nhập mật khẩu mới + xác nhận (min 6 ký tự)
- *   3. Activate → BE kích hoạt tài khoản và trả phiên JWT → tự đăng nhập
- *      và chuyển về /my-learning
+ *   2. Bấm nút xác nhận → Activate → BE kích hoạt tài khoản và trả phiên
+ *      JWT → tự đăng nhập và chuyển về /my-learning
+ * (Mật khẩu đã được đặt ở bước đăng ký — trang này chỉ xác minh email.)
  * Token sai/hết hạn → màn hình báo lỗi + hướng dẫn đăng ký lại.
  */
 
@@ -15,8 +15,8 @@ import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
-  KeyRound,
   Loader2,
+  MailCheck,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -24,11 +24,10 @@ import { useAuthStore } from '@/portals/client/features/auth';
 import { verifyActivationTokenApi } from '@/shared/auth';
 import type { ActivationInfo } from '@/shared/types';
 import { cn } from '@/shared/utils';
-import { PasswordField } from '@/portals/client/features/auth/components/AuthFields';
 
 type Phase = 'verifying' | 'form' | 'invalid' | 'done';
 
-const SetPasswordPage: React.FC = () => {
+const ActivatePage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') ?? '';
@@ -38,12 +37,6 @@ const SetPasswordPage: React.FC = () => {
   const [phase, setPhase] = useState<Phase>('verifying');
   const [info, setInfo] = useState<ActivationInfo | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
-
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -70,25 +63,13 @@ const SetPasswordPage: React.FC = () => {
     };
   }, [token]);
 
-  const validate = (): boolean => {
-    const next: Record<string, string> = {};
-    if (!password) next.password = 'Vui lòng nhập mật khẩu';
-    else if (password.length < 6) next.password = 'Mật khẩu tối thiểu 6 ký tự';
-
-    if (!confirm) next.confirm = 'Vui lòng xác nhận mật khẩu';
-    else if (confirm !== password) next.confirm = 'Mật khẩu xác nhận không khớp';
-
-    setFieldErrors(next);
-    return Object.keys(next).length === 0;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
-    if (!validate() || !token) return;
+    if (!token) return;
 
     try {
-      await activate(token, password);
+      await activate(token);
       setPhase('done');
       setTimeout(() => navigate('/my-learning', { replace: true }), 900);
     } catch {
@@ -124,21 +105,21 @@ const SetPasswordPage: React.FC = () => {
           {/* Header */}
           <div className="px-8 pt-9 pb-6 bg-gradient-to-br from-brand-600 via-indigo-600 to-indigo-800 text-white">
             <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center">
-              <KeyRound className="w-5 h-5 text-amber-300" />
+              <MailCheck className="w-5 h-5 text-amber-300" />
             </div>
             <h1 className="mt-4 text-xl sm:text-2xl font-extrabold tracking-tight">
               {phase === 'done'
                 ? 'Kích hoạt thành công!'
                 : phase === 'invalid'
                   ? 'Link không hợp lệ'
-                  : 'Đặt mật khẩu của bạn'}
+                  : 'Xác minh email của bạn'}
             </h1>
             <p className="mt-1.5 text-white/75 text-sm">
               {phase === 'form' && info
                 ? `Xin chào ${info.fullName} — hoàn tất bước cuối để bắt đầu học tại EnglishHub.`
                 : phase === 'invalid'
                   ? 'Vui lòng kiểm tra lại đường dẫn trong email.'
-                  : 'Bảo mật tài khoản của bạn với mật khẩu mới.'}
+                  : 'Bấm nút bên dưới để kích hoạt tài khoản.'}
             </p>
           </div>
 
@@ -175,7 +156,7 @@ const SetPasswordPage: React.FC = () => {
               </div>
             )}
 
-            {/* ===== Form ===== */}
+            {/* ===== Confirm activation ===== */}
             {phase === 'form' && (
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                 {error && (
@@ -195,37 +176,6 @@ const SetPasswordPage: React.FC = () => {
                   </div>
                 )}
 
-                <PasswordField
-                  id="password"
-                  label="Mật khẩu mới *"
-                  value={password}
-                  onChange={(v) => {
-                    setPassword(v);
-                    if (fieldErrors.password)
-                      setFieldErrors((p) => ({ ...p, password: '' }));
-                  }}
-                  placeholder="Tối thiểu 6 ký tự"
-                  error={fieldErrors.password}
-                  show={showPassword}
-                  onToggle={() => setShowPassword((s) => !s)}
-                  autoComplete="new-password"
-                />
-                <PasswordField
-                  id="confirm"
-                  label="Xác nhận mật khẩu *"
-                  value={confirm}
-                  onChange={(v) => {
-                    setConfirm(v);
-                    if (fieldErrors.confirm)
-                      setFieldErrors((p) => ({ ...p, confirm: '' }));
-                  }}
-                  placeholder="Nhập lại mật khẩu"
-                  error={fieldErrors.confirm}
-                  show={showConfirm}
-                  onToggle={() => setShowConfirm((s) => !s)}
-                  autoComplete="new-password"
-                />
-
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -243,7 +193,7 @@ const SetPasswordPage: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <KeyRound className="w-4 h-4" />
+                      <MailCheck className="w-4 h-4" />
                       Kích hoạt & Đăng nhập
                       <ArrowRight className="w-4 h-4" />
                     </>
@@ -273,4 +223,4 @@ const SetPasswordPage: React.FC = () => {
   );
 };
 
-export default SetPasswordPage;
+export default ActivatePage;

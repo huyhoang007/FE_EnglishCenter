@@ -51,20 +51,22 @@ export type CurrentLevel =
   | 'ADVANCED';
 
 /**
- * Payload đăng ký tài khoản mới (luồng email):
- * chỉ khai email + họ tên (+ SĐT). Mật khẩu được đặt qua link kích hoạt
- * ở trang /set-password — backend KHÔNG nhận password ở bước này nữa.
+ * Payload đăng ký tài khoản mới:
+ * email + họ tên (+ SĐT) + mật khẩu. Sau khi đăng ký, backend gửi email
+ * chứa link xác minh — người dùng bấm link ở trang /activate để kích hoạt tài khoản.
  */
 export interface RegisterRequest {
   fullName: string;
   email: string;
+  /** Mật khẩu người dùng tự chọn (tối thiểu 6 ký tự). */
+  password: string;
   /** Số điện thoại (tuỳ chọn) — backend `RegisterRequest` có `phone` (10-11 số). */
   phone?: string;
   targetExam?: TargetExam;
   currentLevel?: CurrentLevel;
 }
 
-/** Kết quả kiểm tra token kích hoạt (GET thông tin cho trang /set-password) */
+/** Kết quả kiểm tra token kích hoạt (thông tin cho trang /activate) */
 export interface ActivationInfo {
   email: string;
   fullName: string;
