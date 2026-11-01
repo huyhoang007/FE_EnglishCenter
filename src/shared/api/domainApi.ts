@@ -11,10 +11,32 @@ export async function loginRequest(email: string, password: string) {
   return ok({ ...data.result, user: toUser(data.result.user) }, data.message);
 }
 
-export async function registerRequest(payload: { email: string; password: string; fullName: string; phone?: string }) {
+/** Đăng ký bằng email: tạo tài khoản CHƯA kích hoạt + gửi email chứa link đặt mật khẩu. */
+export async function registerRequest(payload: { email: string; fullName: string; phone?: string }) {
   const { data } = await axiosClient.post<BeResponse<UserDto>>('/api/v1/auth/register', payload);
   if (!data.result) throw new Error(data.message || 'Đăng ký thất bại');
   return ok(toUser(data.result), data.message);
+}
+
+/** Kiểm tra token kích hoạt từ link email (trang /set-password). */
+export async function verifyActivationTokenRequest(token: string) {
+  const { data } = await axiosClient.post<BeResponse<{ email: string; fullName: string }>>(
+    '/api/v1/auth/verify-activation-token', { token });
+  if (!data.result) throw new Error(data.message || 'Link kích hoạt không hợp lệ');
+  return ok(data.result, data.message);
+}
+
+/** Hoàn tất kích hoạt: đặt mật khẩu bằng token từ link email → trả phiên JWT (auto-login). */
+export async function activateAccountRequest(token: string, password: string) {
+  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/activate', { token, password });
+  if (!data.result) throw new Error(data.message || 'Kích hoạt tài khoản thất bại');
+  return ok({ ...data.result, user: toUser(data.result.user) }, data.message);
+}
+
+/** Gửi lại email kích hoạt cho tài khoản chưa active (luôn thành công phía client). */
+export async function resendActivationRequest(email: string) {
+  const { data } = await axiosClient.post<BeResponse<null>>('/api/v1/auth/resend-activation', { email });
+  return ok(null, data.message || 'Đã gửi lại email kích hoạt');
 }
 
 export async function refreshRequest(refreshToken: string) {

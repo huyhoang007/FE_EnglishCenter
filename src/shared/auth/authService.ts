@@ -1,11 +1,14 @@
 import { errorResponse, successResponse, type ApiResponse } from '@/shared/types/apiResponse';
-import type { AuthData, AuthResponse, AuthUser, LoginRequest, RegisterRequest } from '@/shared/types/auth.types';
+import type { ActivationInfo, AuthData, AuthResponse, AuthUser, LoginRequest, RegisterRequest } from '@/shared/types/auth.types';
 import {
+  activateAccountRequest,
   changePasswordRequest,
   getProfile,
   loginRequest,
   logoutRequest,
   registerRequest,
+  resendActivationRequest,
+  verifyActivationTokenRequest,
   refreshRequest,
 } from '@/shared/api/domainApi';
 
@@ -32,21 +35,53 @@ export const loginApi = async (payload: LoginRequest): Promise<AuthResponse> => 
   }
 };
 
-export const registerApi = async (payload: RegisterRequest): Promise<AuthResponse> => {
-  if (payload.confirmPassword && payload.password !== payload.confirmPassword) {
-    return errorResponse('Mật khẩu xác nhận không khớp', 'PASSWORD_MISMATCH');
-  }
+/**
+ * Đăng ký bằng email — KHÔNG auto-login nữa.
+ * Backend tạo tài khoản chưa kích hoạt và gửi email chứa link đặt mật khẩu;
+ * người dùng hoàn tất tại trang /set-password (activateApi).
+ */
+export const registerApi = async (payload: RegisterRequest): Promise<ApiResponse<null>> => {
   try {
     const cleanPhone = payload.phone?.trim() ? payload.phone.trim() : undefined;
     await registerRequest({
       email: payload.email.trim(),
-      password: payload.password,
       fullName: payload.fullName.trim(),
       phone: cleanPhone,
     });
-    return loginApi({ email: payload.email.trim(), password: payload.password });
+    return successResponse(null, 'Vui lòng kiểm tra email để đặt mật khẩu và kích hoạt tài khoản');
   } catch (error) {
     return errorResponse(getErrorMessage(error, 'Đăng ký tài khoản thất bại.'), 'REGISTER_FAILED');
+  }
+};
+
+/** Kiểm tra token kích hoạt từ link email (trang /set-password). */
+export const verifyActivationTokenApi = async (token: string): Promise<ApiResponse<ActivationInfo>> => {
+  try {
+    const res = await verifyActivationTokenRequest(token);
+    return successResponse(res.data, res.message || 'Link hợp lệ');
+  } catch (error) {
+    return errorResponse(getErrorMessage(error, 'Link kích hoạt không hợp lệ hoặc đã hết hạn.'), 'ACTIVATION_TOKEN_INVALID');
+  }
+};
+
+/** Đặt mật khẩu + kích hoạt tài khoản; thành công trả phiên JWT (auto-login). */
+export const activateApi = async (token: string, password: string): Promise<AuthResponse> => {
+  try {
+    const res = await activateAccountRequest(token, password);
+    const data = res.data;
+    return successResponse({ ...data, user: data.user } as AuthData, res.message || 'Kích hoạt tài khoản thành công');
+  } catch (error) {
+    return errorResponse(getErrorMessage(error, 'Kích hoạt tài khoản thất bại.'), 'ACTIVATE_FAILED');
+  }
+};
+
+/** Gửi lại email kích hoạt (luồng pending registration). */
+export const resendActivationApi = async (email: string): Promise<ApiResponse<null>> => {
+  try {
+    await resendActivationRequest(email);
+    return successResponse(null, 'Đã gửi lại email kích hoạt. Vui lòng kiểm tra hộp thư.');
+  } catch (error) {
+    return errorResponse(getErrorMessage(error, 'Gửi lại email thất bại, vui lòng thử lại sau.'), 'RESEND_FAILED');
   }
 };
 

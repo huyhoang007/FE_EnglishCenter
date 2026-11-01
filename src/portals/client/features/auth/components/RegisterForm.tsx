@@ -1,58 +1,48 @@
 ﻿/**
- * RegisterForm — Form đăng ký tài khoản mới
+ * RegisterForm — Form đăng ký tài khoản mới (luồng email)
  * -----------------------------------------------------------
  * Tuân thủ DTO Backend (RegisterRequest):
  *   - Họ và tên (fullName) - Bắt buộc
  *   - Email (email) - Bắt buộc
  *   - Số điện thoại (phone) - Tùy chọn, 10-11 chữ số
- *   - Mật khẩu (password) - Bắt buộc, tối thiểu 6 ký tự
- *   - Xác nhận mật khẩu (confirmPassword) - Kiểm tra khớp mật khẩu
  *   - Đồng ý điều khoản (agree)
  *
- * Đăng ký thành công → tự động đăng nhập → chuyển hướng.
+ * KHÔNG còn ô mật khẩu: sau khi đăng ký, hệ thống gửi email chứa link
+ * đặt mật khẩu (trang /set-password). Submit thành công → màn hình
+ * "Vui lòng kiểm tra email" + nút gửi lại email.
  */
 
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   User,
   Mail,
   Phone,
-  Lock,
-  Eye,
-  EyeOff,
   UserPlus,
   Sparkles,
-  CheckCircle2,
+  MailCheck,
   AlertCircle,
   ArrowRight,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
-import type { UserRole } from '@/shared/types';
+import { resendActivationApi } from '@/shared/auth/authService';
 import { cn } from '@/shared/utils';
+import { Field } from './AuthFields';
 
-interface RegisterFormProps {
-  onSuccessRedirect?: (role: UserRole) => string;
-}
-
-export const RegisterForm: React.FC<RegisterFormProps> = ({
-  onSuccessRedirect = () => '/my-learning',
-}) => {
-  const navigate = useNavigate();
+export const RegisterForm: React.FC = () => {
   const { register, isLoading, error, clearError } = useAuthStore();
 
   const [form, setForm] = useState({
     fullName: '',
     email: '',
     phone: '',
-    password: '',
-    confirmPassword: '',
     agree: false,
   });
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [emailSent, setEmailSent] = useState<string | null>(null);
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [notice, setNotice] = useState<string | null>(null);
 
   const set = <K extends keyof typeof form>(key: K, val: (typeof form)[K]) =>
@@ -72,14 +62,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       next.phone = 'Số điện thoại phải từ 10 đến 11 chữ số';
     }
 
-    if (!form.password) next.password = 'Vui lòng nhập mật khẩu';
-    else if (form.password.length < 6)
-      next.password = 'Mật khẩu tối thiểu 6 ký tự';
-
-    if (!form.confirmPassword) next.confirmPassword = 'Vui lòng xác nhận mật khẩu';
-    else if (form.confirmPassword !== form.password)
-      next.confirmPassword = 'Mật khẩu xác nhận không khớp';
-
     if (!form.agree) next.agree = 'Bạn cần đồng ý điều khoản để tiếp tục';
 
     setFieldErrors(next);
@@ -93,22 +75,95 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     if (!validate()) return;
 
     try {
-      const user = await register({
+      await register({
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         phone: form.phone.trim() ? form.phone.trim() : undefined,
-        password: form.password,
-        confirmPassword: form.confirmPassword,
       });
-      setNotice(`Chào mừng ${user.fullName} đến với EnglishHub!`);
-      setTimeout(() => {
-        navigate(onSuccessRedirect(user.role), { replace: true });
-      }, 500);
+      setResendState('idle');
+      setEmailSent(form.email.trim());
     } catch {
       /* store error */
     }
   };
 
+  const handleResend = async () => {
+    if (!emailSent) return;
+    setResendState('sending');
+    setNotice(null);
+    const res = await resendActivationApi(emailSent);
+    if (res.success) {
+      setResendState('sent');
+      setNotice(res.message);
+    } else {
+      setResendState('failed');
+      setNotice(res.message);
+    }
+  };
+
+  /* =============== Màn hình "Đã gửi email kích hoạt" =============== */
+  if (emailSent) {
+    return (
+      <div className="w-full max-w-xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl shadow-brand-900/10 border border-slate-200/70">
+        <div className="relative px-8 sm:px-12 py-12 text-center">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+            <MailCheck className="w-8 h-8 text-emerald-600" />
+          </div>
+          <h2 className="mt-5 text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
+            Vui lòng kiểm tra email
+          </h2>
+          <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+            Chúng tôi đã gửi link kích hoạt tới{' '}
+            <span className="font-semibold text-slate-700">{emailSent}</span>.
+            Bấm vào link trong email để <strong>đặt mật khẩu</strong> và bắt đầu
+            hành trình học tập.
+          </p>
+          <p className="mt-1.5 text-xs text-slate-400">
+            Link hết hạn sau 24 giờ. Kiểm tra cả thư mục Spam nếu chưa thấy.
+          </p>
+
+          {notice && (
+            <div
+              className={cn(
+                'mt-5 flex items-start gap-2 p-3 rounded-xl text-sm text-left',
+                resendState === 'failed'
+                  ? 'bg-rose-50 border border-rose-200 text-rose-700'
+                  : 'bg-emerald-50 border border-emerald-200 text-emerald-700',
+              )}
+            >
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{notice}</span>
+            </div>
+          )}
+
+          <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendState === 'sending'}
+              className={cn(
+                'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all',
+                'border border-slate-200 text-slate-600 bg-slate-50 hover:bg-slate-100',
+                'disabled:opacity-60 disabled:cursor-not-allowed',
+              )}
+            >
+              <RefreshCw className={cn('w-4 h-4', resendState === 'sending' && 'animate-spin')} />
+              {resendState === 'sending' ? 'Đang gửi...' : 'Gửi lại email'}
+            </button>
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-semibold text-sm text-brand-600 hover:text-brand-700 hover:bg-brand-50 transition-colors"
+            >
+              Về trang đăng nhập
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* =============== Form đăng ký =============== */
   return (
     <div className="w-full max-w-2xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl shadow-brand-900/10 border border-slate-200/70">
       {/* ====== HEADER ====== */}
@@ -135,20 +190,13 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             Bắt đầu hành trình mới
           </h1>
           <p className="mt-1.5 text-white/75 text-sm max-w-xl">
-            Tạo tài khoản để tham gia các khóa học, luyện thi và trải nghiệm nền tảng học tập tại EnglishHub.
+            Đăng ký bằng email — chúng tôi sẽ gửi link để bạn đặt mật khẩu và kích hoạt tài khoản trong vòng một phút.
           </p>
         </div>
       </div>
 
       {/* ====== FORM BODY ====== */}
       <div className="px-8 sm:px-12 py-10">
-        {/* Notices */}
-        {notice && (
-          <div className="mb-5 flex items-start gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">
-            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-            <span>{notice}</span>
-          </div>
-        )}
         {error && (
           <div className="mb-5 flex items-start gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -207,38 +255,13 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             autoComplete="tel"
           />
 
-          {/* Row 3: password + confirm */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <PasswordField
-              id="password"
-              label="Mật khẩu *"
-              value={form.password}
-              onChange={(v) => {
-                set('password', v);
-                if (fieldErrors.password)
-                  setFieldErrors((p) => ({ ...p, password: '' }));
-              }}
-              placeholder="Tối thiểu 6 ký tự"
-              error={fieldErrors.password}
-              show={showPassword}
-              onToggle={() => setShowPassword((s) => !s)}
-              autoComplete="new-password"
-            />
-            <PasswordField
-              id="confirmPassword"
-              label="Xác nhận mật khẩu *"
-              value={form.confirmPassword}
-              onChange={(v) => {
-                set('confirmPassword', v);
-                if (fieldErrors.confirmPassword)
-                  setFieldErrors((p) => ({ ...p, confirmPassword: '' }));
-              }}
-              placeholder="Nhập lại mật khẩu"
-              error={fieldErrors.confirmPassword}
-              show={showConfirm}
-              onToggle={() => setShowConfirm((s) => !s)}
-              autoComplete="new-password"
-            />
+          {/* Info banner: mật khẩu đặt qua email */}
+          <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm">
+            <Mail className="w-4 h-4 mt-0.5 shrink-0" />
+            <span className="leading-relaxed">
+              Bạn sẽ nhận được <strong>email chứa link đặt mật khẩu</strong> sau khi đăng ký.
+              Tài khoản chỉ được kích hoạt khi bạn hoàn tất bước này.
+            </span>
           </div>
 
           {/* Agree */}
@@ -285,12 +308,12 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
             {isLoading ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Đang tạo tài khoản...
+                Đang gửi email đăng ký...
               </>
             ) : (
               <>
-                <UserPlus className="w-4 h-4" />
-                Tạo tài khoản
+                <Mail className="w-4 h-4" />
+                Đăng ký & nhận email kích hoạt
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -310,126 +333,5 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     </div>
   );
 };
-
-/* ============== Sub-components ============== */
-
-interface FieldProps {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  type?: string;
-  error?: string;
-  autoComplete?: string;
-  className?: string;
-}
-
-const Field: React.FC<FieldProps> = ({
-  id,
-  label,
-  icon: Icon,
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-  error,
-  autoComplete,
-  className,
-}) => (
-  <div className={className}>
-    <label
-      htmlFor={id}
-      className="block text-sm font-semibold text-slate-700 mb-1.5"
-    >
-      {label}
-    </label>
-    <div className="relative">
-      <Icon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        className={cn(
-          'w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border text-sm text-slate-800 placeholder:text-slate-400 transition-all',
-          'focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/10',
-          error
-            ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/10'
-            : 'border-slate-200 focus:border-brand-500',
-        )}
-      />
-    </div>
-    {error && (
-      <p className="mt-1.5 text-xs text-rose-600 font-medium">{error}</p>
-    )}
-  </div>
-);
-
-interface PasswordFieldProps {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  error?: string;
-  show: boolean;
-  onToggle: () => void;
-  autoComplete?: string;
-}
-
-const PasswordField: React.FC<PasswordFieldProps> = ({
-  id,
-  label,
-  value,
-  onChange,
-  placeholder,
-  error,
-  show,
-  onToggle,
-  autoComplete,
-}) => (
-  <div>
-    <label
-      htmlFor={id}
-      className="block text-sm font-semibold text-slate-700 mb-1.5"
-    >
-      {label}
-    </label>
-    <div className="relative">
-      <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-      <input
-        id={id}
-        type={show ? 'text' : 'password'}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        className={cn(
-          'w-full pl-10 pr-12 py-3 bg-slate-50 rounded-xl border text-sm text-slate-800 placeholder:text-slate-400 transition-all',
-          'focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/10',
-          error
-            ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/10'
-            : 'border-slate-200 focus:border-brand-500',
-        )}
-      />
-      <button
-        type="button"
-        onClick={onToggle}
-        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-        aria-label={show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-        tabIndex={-1}
-      >
-        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-      </button>
-    </div>
-    {error && (
-      <p className="mt-1.5 text-xs text-rose-600 font-medium">{error}</p>
-    )}
-  </div>
-);
 
 export default RegisterForm;

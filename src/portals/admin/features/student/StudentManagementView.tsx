@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { StatCard } from '@/portals/admin/components/StatCard';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
@@ -15,29 +15,23 @@ import {
   GraduationCap,
   Award,
   Search,
-  Plus,
   Download,
   RotateCcw,
   SlidersHorizontal,
   Edit2,
   Eye,
-  Trash2,
   Mail,
   Phone,
   Calendar,
   BookOpen,
-  CheckCircle2,
   X,
   AlertTriangle,
-  Check,
 } from 'lucide-react';
-import { getUsers, registerRequest, updateUserStatus } from '@/shared/api/domainApi';
+import { getUsers } from '@/shared/api/domainApi';
 import type { AuthUser } from '@/shared/types';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
 export const StudentManagementView: React.FC = () => {
-  const queryClient = useQueryClient();
-
   // Filters
   const [keyword, setKeyword] = useState('');
   const [courseFilter, setCourseFilter] = useState('');
@@ -47,18 +41,6 @@ export const StudentManagementView: React.FC = () => {
 
   // Modals
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
-
-  // New Student Form
-  const [newStudentForm, setNewStudentForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    courseName: 'IELTS Intensive 7.5+',
-    batch: 'Batch 2024-Q2',
-    targetScore: '7.5 IELTS',
-  });
 
   // Query Backend Students (roleName: 'STUDENT')
   const { data: usersData, isLoading } = useQuery({
@@ -121,44 +103,8 @@ export const StudentManagementView: React.FC = () => {
     setPage(0);
   };
 
-  const createStudentMutation = useMutation({
-    mutationFn: (payload: { email: string; fullName: string; phone?: string }) =>
-      registerRequest({
-        email: payload.email,
-        fullName: payload.fullName,
-        phone: payload.phone || undefined,
-        password: 'Student@123456',
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.accounts });
-      setIsAddOpen(false);
-      setSuccessToast(
-        `Đã ghi danh học viên ${newStudentForm.fullName} vào hệ thống thành công! (Mật khẩu mặc định: Student@123456)`
-      );
-      setNewStudentForm({
-        fullName: '',
-        email: '',
-        phone: '',
-        courseName: 'IELTS Intensive 7.5+',
-        batch: 'Batch 2025',
-        targetScore: '7.5 IELTS',
-      });
-      setTimeout(() => setSuccessToast(null), 4000);
-    },
-    onError: (err: any) => {
-      alert(err.message || 'Lỗi khi tạo tài khoản học viên');
-    },
-  });
-
-  const handleAddStudent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newStudentForm.fullName.trim() || !newStudentForm.email.trim()) return;
-    createStudentMutation.mutate({
-      fullName: newStudentForm.fullName.trim(),
-      email: newStudentForm.email.trim(),
-      phone: newStudentForm.phone.trim(),
-    });
-  };
+  // Học viên KHÔNG được tạo thủ công bởi admin: role STUDENT chỉ được gán tự động
+  // khi user (đã kích hoạt qua email) mua khóa học — xem EnrollmentService/upgrade flow.
 
   return (
     <div className="space-y-6">
@@ -219,16 +165,6 @@ export const StudentManagementView: React.FC = () => {
             className="font-bold border-slate-200"
           >
             Export Data
-          </Button>
-
-          <Button
-            variant="primary"
-            size="md"
-            leftIcon={Plus}
-            onClick={() => setIsAddOpen(true)}
-            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold shadow-xs"
-          >
-            Add New Student
           </Button>
         </div>
       </div>
@@ -295,14 +231,6 @@ export const StudentManagementView: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* Toast */}
-      {successToast && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{successToast}</span>
-        </div>
-      )}
 
       {/* ================= 4. TABLE SECTION (Matching 6.webp) ================= */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
@@ -530,139 +458,6 @@ export const StudentManagementView: React.FC = () => {
         </div>
       )}
 
-      {/* ================= MODAL: ADD NEW STUDENT ================= */}
-      {isAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Ghi danh học viên mới</h3>
-                  <p className="text-xs text-slate-500">Nhập thông tin tiếp nhận học viên</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddStudent} className="space-y-4">
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Họ và tên học viên <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newStudentForm.fullName}
-                    onChange={(e) =>
-                      setNewStudentForm({ ...newStudentForm, fullName: e.target.value })
-                    }
-                    placeholder="VD: Nguyễn Văn B"
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Email liên hệ <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={newStudentForm.email}
-                      onChange={(e) =>
-                        setNewStudentForm({ ...newStudentForm, email: e.target.value })
-                      }
-                      placeholder="student@gmail.com"
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Số điện thoại
-                    </label>
-                    <input
-                      type="tel"
-                      value={newStudentForm.phone}
-                      onChange={(e) =>
-                        setNewStudentForm({ ...newStudentForm, phone: e.target.value })
-                      }
-                      placeholder="0912345678"
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Chương trình học
-                    </label>
-                    <select
-                      value={newStudentForm.courseName}
-                      onChange={(e) =>
-                        setNewStudentForm({ ...newStudentForm, courseName: e.target.value })
-                      }
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC] bg-white"
-                    >
-                      <option value="IELTS Intensive 7.5+">IELTS Intensive 7.5+</option>
-                      <option value="TOEIC 4-Skills 800+">TOEIC 4-Skills 800+</option>
-                      <option value="VSTEP B2 — C1 Pathway">VSTEP B2 — C1 Pathway</option>
-                      <option value="IELTS Speaking & Writing Lab">IELTS Speaking Lab</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Mục tiêu điểm số
-                    </label>
-                    <input
-                      type="text"
-                      value={newStudentForm.targetScore}
-                      onChange={(e) =>
-                        setNewStudentForm({ ...newStudentForm, targetScore: e.target.value })
-                      }
-                      placeholder="VD: 7.0 IELTS"
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIsAddOpen(false)}
-                >
-                  Hủy
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  isLoading={createStudentMutation.isPending}
-                  className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
-                >
-                  Ghi danh học viên
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

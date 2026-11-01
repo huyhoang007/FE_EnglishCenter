@@ -5,8 +5,11 @@
  *   - user, accessToken, refreshToken
  *   - isAuthenticated
  *   - role (từ User entity do Backend trả về: ADMIN, MENTOR, STUDENT, USER, GUEST)
- *   - login() / register() / logout()
+ *   - login() / register() / activate() / logout()
  *   - fetchMyProfile()
+ *
+ * Lưu ý luồng mới: đăng ký bằng email KHÔNG auto-login — register() chỉ gửi
+ * email kích hoạt; activate() (trang /set-password) mới set phiên đăng nhập.
  *
  * Trạng thái được lưu vào localStorage để giữ phiên khi reload trang.
  */
@@ -15,12 +18,14 @@ import { create } from 'zustand';
 import { queryClient } from '@/shared/api/queryClient';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
+  activateApi,
   getMyProfileApi,
   loginApi,
   logoutApi,
   registerApi,
 } from '@/shared/auth/authService';
 import type {
+  AuthData,
   AuthUser,
   LoginRequest,
   RegisterRequest,
@@ -42,7 +47,10 @@ interface AuthState {
 
   /** Actions */
   login: (payload: LoginRequest) => Promise<AuthUser>;
-  register: (payload: RegisterRequest) => Promise<AuthUser>;
+  /** Đăng ký bằng email: chỉ tạo tài khoản + gửi email kích hoạt, không set phiên. */
+  register: (payload: RegisterRequest) => Promise<void>;
+  /** Đặt mật khẩu qua link email → kích hoạt + tự đăng nhập (set phiên như login). */
+  activate: (token: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   /** Lấy lại thông tin user mới nhất từ BE */
   fetchMyProfile: () => Promise<AuthUser | null>;
@@ -62,6 +70,20 @@ const initialState = {
   userName: '',
 };
 
+/** Apply a JWT session (from login or activate) into the store. */
+function sessionState(data: AuthData) {
+  return {
+    user: data.user,
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    isAuthenticated: true,
+    role: data.user.role,
+    userName: data.user.fullName,
+    isLoading: false,
+    error: null,
+  };
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, _get) => ({
@@ -75,22 +97,12 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const res = await loginApi(payload);
-          if (!res.success) {
+          if (!res.success || !res.data) {
             set({ isLoading: false, error: res.message });
             throw new Error(res.message);
           }
-          const { user, accessToken, refreshToken } = res.data;
-          set({
-            user,
-            accessToken,
-            refreshToken,
-            isAuthenticated: true,
-            role: user.role,
-            userName: user.fullName,
-            isLoading: false,
-            error: null,
-          });
-          return user;
+          set(sessionState(res.data));
+          return res.data.user;
         } catch (err) {
           const message =
             err instanceof Error ? err.message : 'Đăng nhập thất bại. Vui lòng thử lại.';
@@ -107,21 +119,28 @@ export const useAuthStore = create<AuthState>()(
             set({ isLoading: false, error: res.message });
             throw new Error(res.message);
           }
-          const { user, accessToken, refreshToken } = res.data;
-          set({
-            user,
-            accessToken,
-            refreshToken,
-            isAuthenticated: true,
-            role: user.role,
-            userName: user.fullName,
-            isLoading: false,
-            error: null,
-          });
-          return user;
+          set({ isLoading: false, error: null });
         } catch (err) {
           const message =
             err instanceof Error ? err.message : 'Đăng ký thất bại. Vui lòng thử lại.';
+          set({ isLoading: false, error: message });
+          throw err;
+        }
+      },
+
+      activate: async (token, password) => {
+        set({ isLoading: true, error: null });
+        try {
+          const res = await activateApi(token, password);
+          if (!res.success || !res.data) {
+            set({ isLoading: false, error: res.message });
+            throw new Error(res.message);
+          }
+          set(sessionState(res.data));
+          return res.data.user;
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Kích hoạt tài khoản thất bại. Vui lòng thử lại.';
           set({ isLoading: false, error: message });
           throw err;
         }

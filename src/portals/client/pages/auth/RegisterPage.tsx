@@ -1,8 +1,9 @@
 ﻿/**
- * RegisterPage — Trang đăng ký học viên
+ * RegisterPage — Trang đăng ký tài khoản (luồng email)
  * -----------------------------------------------------------
  * Bao bọc RegisterForm trong layout responsive.
- * Đăng ký thành công → Student role → chuyển đến /my-learning.
+ * Đăng ký thành công → hệ thống gửi email chứa link đặt mật khẩu
+ * (trang /set-password) → tài khoản mới được kích hoạt.
  */
 
 import React, { useEffect } from 'react';
@@ -46,7 +47,7 @@ const RegisterPage: React.FC = () => {
       {/* Form area */}
       <main className="flex-1 px-4 sm:px-6 py-6 sm:py-10 flex items-start sm:items-center justify-center">
         <div className="w-full">
-          <RegisterForm onSuccessRedirect={() => '/my-learning'} />
+          <RegisterForm />
         </div>
       </main>
 

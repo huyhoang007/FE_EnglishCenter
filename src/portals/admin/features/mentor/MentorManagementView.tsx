@@ -978,13 +978,13 @@ export const MentorManagementView: React.FC = () => {
                 Tạo tài khoản Mentor thành công!
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Tài khoản <strong className="text-slate-800">{tempPasswordResult.fullName}</strong> ({tempPasswordResult.email}) đã được kích hoạt vai trò <span className="font-bold text-[#0052CC]">MENTOR</span>.
+                Tài khoản <strong className="text-slate-800">{tempPasswordResult.fullName}</strong> ({tempPasswordResult.email}) đã được tạo với vai trò <span className="font-bold text-[#0052CC]">MENTOR</span>. Mật khẩu tạm đã được <strong>gửi tới email của mentor</strong>.
               </p>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left space-y-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
-                Mật khẩu tạm thời (Temporary Password)
+                Mật khẩu tạm thời (bản sao lưu — dùng khi email gửi lỗi)
               </span>
               <div className="flex items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-xl border border-slate-200 shadow-inner">
                 <span className="font-mono font-bold text-base text-slate-800 tracking-wider select-all">
@@ -1013,7 +1013,7 @@ export const MentorManagementView: React.FC = () => {
             <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-left text-xs text-amber-800 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <span>
-                Mật khẩu này chỉ hiển thị một lần duy nhất. Hãy sao chép và gửi trực tiếp cho Mentor. Mentor có thể đổi mật khẩu sau lần đăng nhập đầu tiên.
+                Hệ thống đã tự động gửi mật khẩu này tới email của mentor. Nếu mentor không nhận được (kiểm tra spam/SMTP), sao chép mật khẩu bên trên và gửi thủ công. Mentor bắt buộc đổi mật khẩu ở lần đăng nhập đầu tiên.
               </span>
             </div>
 

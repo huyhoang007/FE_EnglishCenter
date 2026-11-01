@@ -13,6 +13,8 @@ export const ROUTE_ROOT = {
     login: '/login',
     register: '/register',
     forgot: '/forgot-password',
+    /** Trang đặt mật khẩu qua link kích hoạt email */
+    setPassword: '/set-password',
   },
 } as const;
 
