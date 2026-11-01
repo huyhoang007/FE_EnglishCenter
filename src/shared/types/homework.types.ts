@@ -26,7 +26,9 @@ export type UploadPurpose =
   | 'attachment'
   | 'submission'
   | 'submission_audio'
-  | 'multiple_choice';
+  | 'multiple_choice'
+  /** File nghe của đề thi / đề luyện tập (chỉ admin, public) */
+  | 'exam_audio';
 
 /** Chữ ký upload Cloudinary (API secret KHÔNG có trong response này). */
 export interface UploadSignature {

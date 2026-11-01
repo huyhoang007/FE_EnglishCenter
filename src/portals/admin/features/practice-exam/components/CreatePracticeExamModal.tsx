@@ -2,7 +2,8 @@
  * CreatePracticeExamModal — tạo 1 đề luyện tập AI gồm nhiều phần thi (Listening / Reading / Writing / Speaking)
  * -----------------------------------------------------------
  * 1. Thông tin đề: tiêu đề, chứng chỉ (không bắt buộc), thời gian làm bài
- * 2. "+ Thêm phần thi": mỗi phần chọn kỹ năng + file đề (PDF / Word / .txt) hoặc dán nội dung
+ * 2. "+ Thêm phần thi": mỗi phần chọn kỹ năng + file đề (PDF / Word / .txt) hoặc dán nội dung;
+ *    Listening: dán link file nghe hoặc bấm "Tải mp3 lên" (upload thẳng lên Cloudinary, tự điền link)
  * 3. "Đọc đề": file theo mẫu đọc thẳng, còn lại Claude đọc → xem trước câu hỏi + đáp án
  * 4. "Tạo đề": tạo đề (exam_scope = practice) → section → câu hỏi → xuất bản cho học viên
  * Reading / Listening chấm tự động theo đáp án; Writing / Speaking do AI chấm khi học viên nộp bài.
@@ -29,6 +30,7 @@ import {
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { useToast } from '@/shared/components/Toast';
+import { uploadToCloudinary } from '@/shared/hooks/useCloudinaryUpload';
 import { getErrorMessage, unwrapOrThrow } from '@/shared/api/axiosClient';
 import { fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
@@ -60,7 +62,7 @@ const SKILL_ICON: Record<PracticeSkill, React.ElementType> = {
 };
 
 const SKILL_HINT: Record<PracticeSkill, string> = {
-  LISTENING: 'Câu hỏi + đáp án, tự chấm. Thêm link file nghe nếu file đề không có.',
+  LISTENING: 'Câu hỏi + đáp án, tự chấm. File đề không có file nghe thì dán link hoặc bấm "Tải mp3 lên".',
   READING: 'Đoạn đọc + câu hỏi + đáp án, tự chấm.',
   WRITING: 'Đề bài viết (Task 1 / Task 2…), AI chấm khi học viên nộp.',
   SPEAKING: 'Câu hỏi nói, học viên ghi âm → phiên âm, AI chấm.',
@@ -111,6 +113,25 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
   const updateRow = (id: number, patch: Partial<SectionRow>) =>
     // Đổi nguồn đề / kỹ năng thì phải đọc lại
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'idle', result: undefined, error: undefined, ...patch } : r)));
+
+  /** Đổi link file nghe không cần đọc lại đề: thay cho các section đang dùng link cũ / chưa có file nghe */
+  const updateAudio = (id: number, url: string) =>
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const oldUrl = r.audioUrl.trim() || undefined;
+        const newUrl = url.trim() || undefined;
+        const result = r.result && {
+          ...r.result,
+          sections: r.result.sections.map((s) =>
+            !s.request.audioUrl || s.request.audioUrl === oldUrl
+              ? { ...s, request: { ...s.request, audioUrl: newUrl } }
+              : s,
+          ),
+        };
+        return { ...r, audioUrl: url, result };
+      }),
+    );
 
   const addRow = () => {
     const used = new Set(rows.map((r) => r.skill));
@@ -331,6 +352,7 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
               disabled={isBusy}
               canRemove={rows.length > 1}
               onChange={(patch) => updateRow(row.id, patch)}
+              onAudioChange={(url) => updateAudio(row.id, url)}
               onRemove={() => removeRow(row.id)}
             />
           ))}
@@ -407,11 +429,41 @@ const SectionRowCard: React.FC<{
   disabled: boolean;
   canRemove: boolean;
   onChange: (patch: Partial<SectionRow>) => void;
+  onAudioChange: (url: string) => void;
   onRemove: () => void;
-}> = ({ index, row, disabled, canRemove, onChange, onRemove }) => {
+}> = ({ index, row, disabled, canRemove, onChange, onAudioChange, onRemove }) => {
+  const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setDragging] = useState(false);
+  /** null = không upload; 0 - 100 = % đang upload file nghe */
+  const [audioProgress, setAudioProgress] = useState<number | null>(null);
   const result = row.result;
+
+  /** Upload file nghe lên Cloudinary (chữ ký do BE cấp) rồi điền link vào ô */
+  const uploadAudio = async (file: File) => {
+    setAudioProgress(0);
+    try {
+      await uploadToCloudinary(
+        {
+          file,
+          purpose: 'exam_audio',
+          notifyError: toast.error,
+          onUploaded: (uploaded) => {
+            if (uploaded.secure_url) {
+              onAudioChange(uploaded.secure_url);
+              toast.success('Đã tải file nghe lên');
+            }
+          },
+        },
+        setAudioProgress,
+      );
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setAudioProgress(null);
+    }
+  };
 
   return (
     <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
@@ -517,14 +569,40 @@ const SectionRowCard: React.FC<{
       </div>
 
       {row.skill === 'LISTENING' && (
-        <input
-          type="url"
-          value={row.audioUrl}
-          onChange={(e) => onChange({ audioUrl: e.target.value })}
-          disabled={disabled}
-          placeholder="Link file nghe (https://…/audio.mp3) — dùng khi file đề không có"
-          className={cn(inputCls(false), 'text-xs')}
-        />
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={row.audioUrl}
+              onChange={(e) => onAudioChange(e.target.value)}
+              disabled={disabled || audioProgress !== null}
+              placeholder="Link file nghe (https://…/audio.mp3) — dùng khi file đề không có"
+              className={cn(inputCls(false), 'text-xs flex-1 min-w-0')}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={Headphones}
+              disabled={disabled}
+              isLoading={audioProgress !== null}
+              onClick={() => audioInputRef.current?.click()}
+              className="h-10 shrink-0"
+            >
+              {audioProgress !== null ? `${audioProgress}%` : 'Tải mp3 lên'}
+            </Button>
+            <input
+              ref={audioInputRef}
+              type="file"
+              accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) void uploadAudio(e.target.files[0]);
+                e.target.value = '';
+              }}
+            />
+          </div>
+          {row.audioUrl.trim() && <audio controls src={row.audioUrl.trim()} className="w-full h-9" />}
+        </div>
       )}
 
       {row.error && <p className="text-xs text-status-danger font-semibold">{row.error}</p>}
