@@ -67,6 +67,7 @@ const RE_QUESTION = /^(?:Câu\s*)?(\d+)\s*[.):]\s*(?:\[(TF|FILL|MATCH|ESSAY|MC)\
 /** Thẻ đứng trước số câu hoặc không có số (AI hay viết): "[ESSAY] 13. Task…", "[ESSAY] Task…" */
 const RE_TAG_FIRST = /^\[(TF|FILL|MATCH|ESSAY|MC)\]\s*(?:(?:Câu\s*)?\d+\s*[.):]\s*)?(.+)$/i;
 const RE_OPTION = /^(\*)?\s*([A-H])\s*[.)]\s*(.+)$/;
+const RE_NOT_GIVEN = /^not\s*given$/i;
 const RE_POINTS = /\{\s*(\d+(?:[.,]\d+)?)\s*\}\s*$/;
 
 interface DraftQuestion {
@@ -274,6 +275,8 @@ export function parseExamText(text: string, parts: PartScale[] = []): ImportResu
     s.request.passageText = s.request.passageText?.trim() || undefined;
     s.request.instructions = s.request.instructions?.trim() || undefined;
   });
+  sections.forEach((s) => alignNotGivenGroups(s.questions));
+  alignNotGivenGroups(looseQuestions);
   const questionCount = sections.reduce((n, s) => n + s.questions.length, 0) + looseQuestions.length;
   if (!sections.length && !looseQuestions.length && !errors.length) {
     errors.push({ line: 0, message: 'Không tìm thấy section hay câu hỏi nào. Kiểm tra lại file theo hướng dẫn.' });
@@ -283,6 +286,38 @@ export function parseExamText(text: string, parts: PartScale[] = []): ImportResu
     .map((e) => ({ ...e, text: e.line > 0 ? lines[e.line - 1]?.trim() : undefined }))
     .sort((a, b) => a.line - b.line);
   return { sections, looseQuestions, errors: withText, questionCount };
+}
+
+const hasNotGiven = (q: ImportQuestion) => (q.request.options ?? []).some((o) => RE_NOT_GIVEN.test(o.optionText.trim()));
+
+/**
+ * Trong một nhóm True / False / Not Given liền nhau, mọi câu phải có đủ 3 lựa chọn;
+ * nếu không, học viên nhìn số lựa chọn là đoán được câu nào có đáp án Not Given.
+ */
+function alignNotGivenGroups(questions: ImportQuestion[]) {
+  const inGroup = (q: ImportQuestion) => q.request.questionType === 'true_false' || hasNotGiven(q);
+  let i = 0;
+  while (i < questions.length) {
+    if (!inGroup(questions[i])) {
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (end < questions.length && inGroup(questions[end])) end += 1;
+    const group = questions.slice(i, end);
+    if (group.some(hasNotGiven)) {
+      group
+        .filter((q) => q.request.questionType === 'true_false')
+        .forEach((q) => {
+          q.request = {
+            ...q.request,
+            questionType: 'multiple_choice',
+            options: [...(q.request.options ?? []), { optionText: 'Not Given', isCorrect: false }],
+          };
+        });
+    }
+    i = end;
+  }
 }
 
 /** Kiểm tra và đổi câu nháp thành request backend; trả về chuỗi lỗi nếu thiếu. */
@@ -304,6 +339,18 @@ function buildQuestion(q: DraftQuestion): Omit<CreateQuestionRequest, 'sectionId
       const ans = (q.answers[0] ?? q.options.find((o) => o.correct)?.text ?? '').toLowerCase();
       const isTrue = ['true', 'đúng', 't', 'yes'].includes(ans);
       const isFalse = ['false', 'sai', 'f', 'no'].includes(ans);
+      // AI hay viết True / False / Not Given thành [TF] + "= Not Given": đây là trắc nghiệm 3 lựa chọn
+      if (RE_NOT_GIVEN.test(ans)) {
+        return {
+          ...base,
+          questionType: 'multiple_choice',
+          options: [
+            { optionText: 'True', isCorrect: false },
+            { optionText: 'False', isCorrect: false },
+            { optionText: 'Not Given', isCorrect: true },
+          ],
+        };
+      }
       if (!isTrue && !isFalse) return `Câu đúng/sai "${base.questionText.slice(0, 40)}" cần dòng "= True" hoặc "= False"`;
       options = [
         { optionText: 'True', isCorrect: isTrue },
