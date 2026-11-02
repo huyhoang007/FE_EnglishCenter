@@ -126,6 +126,10 @@ export function parseExamText(text: string, parts: PartScale[] = []): ImportResu
 
   const finishQuestion = () => {
     if (!question) return;
+    // Không có lựa chọn nhưng có "= đáp án" (VD AI quên thẻ [FILL]) → câu điền từ
+    if (question.type === 'multiple_choice' && question.options.length === 0 && question.answers.length > 0) {
+      question.type = 'fill_blank';
+    }
     const built = buildQuestion(question);
     if (typeof built === 'string') errors.push({ line: question.line, message: built });
     else (section ? section.questions : looseQuestions).push({ line: question.line, request: built });
