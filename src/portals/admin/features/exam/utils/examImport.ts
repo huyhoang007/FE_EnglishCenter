@@ -64,6 +64,8 @@ const TYPE_TAGS: Record<string, QuestionType> = {
 
 const RE_TAG = /^\[(SECTION|INSTRUCTIONS|PASSAGE|AUDIO|EXPLAIN)\]\s*(.*)$/i;
 const RE_QUESTION = /^(?:Câu\s*)?(\d+)\s*[.):]\s*(?:\[(TF|FILL|MATCH|ESSAY|MC)\]\s*)?(.+)$/i;
+/** Thẻ đứng trước số câu hoặc không có số (AI hay viết): "[ESSAY] 13. Task…", "[ESSAY] Task…" */
+const RE_TAG_FIRST = /^\[(TF|FILL|MATCH|ESSAY|MC)\]\s*(?:(?:Câu\s*)?\d+\s*[.):]\s*)?(.+)$/i;
 const RE_OPTION = /^(\*)?\s*([A-H])\s*[.)]\s*(.+)$/;
 const RE_POINTS = /\{\s*(\d+(?:[.,]\d+)?)\s*\}\s*$/;
 
@@ -195,7 +197,7 @@ export function parseExamText(text: string, parts: PartScale[] = []): ImportResu
       return;
     }
 
-    const q = RE_QUESTION.exec(line);
+    const q = RE_QUESTION.exec(line.replace(RE_TAG_FIRST, '0. [$1] $2'));
     // Chỉ coi là câu mới khi không đang ở đáp án dạng "A." (câu hỏi luôn bắt đầu bằng số)
     if (q) {
       finishQuestion();
