@@ -14,6 +14,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  Copy,
   EyeOff,
   FileUp,
   Info,
@@ -29,11 +30,12 @@ import { useToast } from '@/shared/components/Toast';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
 import { formatPass } from '@/shared/constants/examScales';
 import { useCertificateScale } from '@/portals/client/features/exams/hooks/useCertificateScale';
-import { EXAM_TYPE_LABEL } from '@/shared/types';
+import { EXAM_TYPE_LABEL, type ExamQuestion, type ExamSection } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { useAdminExam, useExamActions } from './hooks/useAdminExams';
 import { AddQuestionModal } from './components/AddQuestionModal';
 import { AddSectionForm } from './components/AddSectionForm';
+import { EditContentModal } from './components/EditContentModal';
 import { ExamStatusPill } from './components/ExamStatusPill';
 import { ImportExamModal } from './components/ImportExamModal';
 import { QuestionRow } from './components/QuestionRow';
@@ -55,6 +57,10 @@ export const ExamEditorView: React.FC = () => {
   /** File Word kéo thả vào ô "Đề chưa có phần thi nào" — nhập luôn, không cần mở "Nhập từ Word" trước */
   const [droppedFile, setDroppedFile] = useState<File | undefined>();
   const [isDropping, setDropping] = useState(false);
+  /** Đang sửa nội dung hiển thị của một phần thi / câu hỏi */
+  const [editing, setEditing] = useState<
+    { kind: 'section'; section: ExamSection } | { kind: 'question'; question: ExamQuestion } | null
+  >(null);
 
   // Đề luyện tập AI được quản lý ở trang AI Practice
   const isPractice = data?.exam.examScope === 'practice';
@@ -106,6 +112,28 @@ export const ExamEditorView: React.FC = () => {
   const handleArchive = () => {
     if (!window.confirm(`Lưu trữ đề "${exam.examTitle}"? Học viên sẽ không thấy đề này nữa, lịch sử thi vẫn được giữ.`)) return;
     actions.archive.mutate(undefined, { onSuccess: () => toast.success('Đã lưu trữ đề'), onError });
+  };
+  /** Nhân bản thành đề nháp mới — cách sửa đáp án / cấu trúc khi đề cũ đã có lượt thi */
+  const handleClone = () => {
+    if (!window.confirm(`Nhân bản đề "${exam.examTitle}" thành một đề nháp mới?`)) return;
+    actions.clone.mutate(undefined, {
+      onSuccess: (copy) => {
+        toast.success('Đã nhân bản đề, bạn đang ở bản sao');
+        navigate(`${ADMIN_ROUTES.exams}/${copy.exam.examId}`);
+      },
+      onError,
+    });
+  };
+  // Đề lưu trữ thì chỉ xem; còn lại sửa được nội dung hiển thị kể cả khi đã có lượt thi
+  const canEditContent = !isArchived;
+  const saveEditing = (values: Record<string, string>) => {
+    if (!editing) return;
+    const done = { onSuccess: () => { toast.success('Đã lưu'); setEditing(null); }, onError };
+    if (editing.kind === 'section') {
+      actions.updateSection.mutate({ sectionId: editing.section.sectionId, payload: values }, done);
+    } else {
+      actions.updateQuestion.mutate({ questionId: editing.question.questionId, payload: values }, done);
+    }
   };
 
   const primaryAction = isDraft ? (
@@ -166,6 +194,7 @@ export const ExamEditorView: React.FC = () => {
           {primaryAction}
           <MoreActions
             items={[
+              { label: 'Nhân bản', icon: Copy, onSelect: handleClone },
               ...(!isArchived
                 ? [{ label: 'Lưu trữ', icon: Archive, onSelect: handleArchive }]
                 : []),
@@ -275,6 +304,8 @@ export const ExamEditorView: React.FC = () => {
                 actions.removeSection.mutate(section.sectionId, { onError })
               }
               onRemoveQuestion={(questionId) => actions.removeQuestion.mutate(questionId, { onError })}
+              onEdit={canEditContent ? () => setEditing({ kind: 'section', section }) : undefined}
+              onEditQuestion={canEditContent ? (question) => setEditing({ kind: 'question', question }) : undefined}
             />
           ))}
 
@@ -287,6 +318,7 @@ export const ExamEditorView: React.FC = () => {
                   question={q}
                   isEditable={isDraft}
                   onRemove={() => actions.removeQuestion.mutate(q.questionId, { onError })}
+                  onEdit={canEditContent ? () => setEditing({ kind: 'question', question: q }) : undefined}
                 />
               ))}
             </section>
@@ -346,6 +378,30 @@ export const ExamEditorView: React.FC = () => {
             setImportOpen(false);
             setDroppedFile(undefined);
           }}
+        />
+      )}
+
+      {editing && (
+        <EditContentModal
+          title={editing.kind === 'section' ? 'Sửa nội dung phần thi' : `Sửa nội dung câu ${editing.question.displayNumber}`}
+          fields={
+            editing.kind === 'section'
+              ? [
+                  { key: 'title', label: 'Tên phần thi', value: editing.section.title, required: true },
+                  { key: 'instructions', label: 'Hướng dẫn', value: editing.section.instructions, multiline: true },
+                  { key: 'passageText', label: 'Đoạn đọc', value: editing.section.passageText, multiline: true },
+                  { key: 'audioUrl', label: 'Link file nghe', value: editing.section.audioUrl },
+                ]
+              : [
+                  { key: 'questionText', label: 'Nội dung câu hỏi', value: editing.question.questionText, multiline: true, required: true },
+                  { key: 'explanation', label: 'Giải thích đáp án', value: editing.question.explanation, multiline: true },
+                  { key: 'audioUrl', label: 'Link audio', value: editing.question.audioUrl },
+                  { key: 'imageUrl', label: 'Link ảnh', value: editing.question.imageUrl },
+                ]
+          }
+          isSaving={actions.updateSection.isPending || actions.updateQuestion.isPending}
+          onSave={saveEditing}
+          onClose={() => setEditing(null)}
         />
       )}
 

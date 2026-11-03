@@ -10,6 +10,7 @@ import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import {
   addQuestionApi,
   archiveExamApi,
+  cloneExamApi,
   createExamApi,
   createSectionApi,
   deleteExamApi,
@@ -20,10 +21,14 @@ import {
   removeQuestionApi,
   restoreExamApi,
   unpublishExamApi,
+  updateQuestionApi,
+  updateSectionApi,
   type AdminExamFilter,
   type CreateExamRequest,
   type CreateQuestionRequest,
   type CreateSectionRequest,
+  type UpdateQuestionContentRequest,
+  type UpdateSectionContentRequest,
 } from '../services/adminExamService';
 
 export function useAdminExams(filter: AdminExamFilter) {
@@ -119,6 +124,20 @@ export function useExamActions(examId: string) {
     }),
     removeQuestion: useMutation({
       mutationFn: async (questionId: string) => unwrapOrThrow(await removeQuestionApi(examId, questionId)),
+      onSuccess,
+    }),
+    updateSection: useMutation({
+      mutationFn: async (vars: { sectionId: string; payload: UpdateSectionContentRequest }) =>
+        unwrapOrThrow(await updateSectionApi(examId, vars.sectionId, vars.payload)),
+      onSuccess,
+    }),
+    updateQuestion: useMutation({
+      mutationFn: async (vars: { questionId: string; payload: UpdateQuestionContentRequest }) =>
+        unwrapOrThrow(await updateQuestionApi(examId, vars.questionId, vars.payload)),
+      onSuccess,
+    }),
+    clone: useMutation({
+      mutationFn: async () => unwrapOrThrow(await cloneExamApi(examId)),
       onSuccess,
     }),
   };

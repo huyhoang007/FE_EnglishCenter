@@ -160,6 +160,38 @@ export const deleteSectionApi = (examId: string, sectionId: string): Promise<Api
 export const addQuestionApi = (examId: string, payload: CreateQuestionRequest): Promise<ApiResponse<ExamQuestion>> =>
   apiPost<ExamQuestion>(`${BASE}/${examId}/questions`, payload);
 
+/** Sửa nội dung hiển thị — được cả khi đề đã có lượt thi (BE chặn đổi loại, thứ tự, phần thi của chứng chỉ) */
+export interface UpdateSectionContentRequest {
+  title?: string;
+  instructions?: string;
+  passageText?: string;
+  audioUrl?: string;
+}
+
+export const updateSectionApi = (
+  examId: string,
+  sectionId: string,
+  payload: UpdateSectionContentRequest,
+): Promise<ApiResponse<ExamSection>> => apiPut<ExamSection>(`${BASE}/${examId}/sections/${sectionId}`, payload);
+
+/** Sửa nội dung hiển thị của câu — được cả khi đã có học viên trả lời (BE chặn đổi đáp án, điểm, dạng câu) */
+export interface UpdateQuestionContentRequest {
+  questionText?: string;
+  explanation?: string;
+  audioUrl?: string;
+  imageUrl?: string;
+}
+
+export const updateQuestionApi = (
+  examId: string,
+  questionId: string,
+  payload: UpdateQuestionContentRequest,
+): Promise<ApiResponse<ExamQuestion>> => apiPut<ExamQuestion>(`${BASE}/${examId}/questions/${questionId}`, payload);
+
+/** Nhân bản đề (phần thi, câu hỏi, đáp án) thành một đề nháp mới */
+export const cloneExamApi = (examId: string): Promise<ApiResponse<ExamDetail>> =>
+  apiPost<ExamDetail>(`${BASE}/${examId}/clone`);
+
 export const removeQuestionApi = (examId: string, questionId: string): Promise<ApiResponse<void>> =>
   apiDelete<void>(`${BASE}/${examId}/questions/${questionId}`);
 

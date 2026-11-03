@@ -7,10 +7,10 @@
  */
 
 import React, { useState } from 'react';
-import { Headphones, Plus, Trash2 } from 'lucide-react';
+import { Headphones, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
-import type { ExamSection } from '@/shared/types';
+import type { ExamQuestion, ExamSection } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { QuestionRow } from './QuestionRow';
 
@@ -23,6 +23,9 @@ interface SectionCardProps {
   onAddQuestion: () => void;
   onRemove: () => void;
   onRemoveQuestion: (questionId: string) => void;
+  /** Sửa nội dung hiển thị (có cả khi đề đã có lượt thi); không truyền = ẩn nút */
+  onEdit?: () => void;
+  onEditQuestion?: (question: ExamQuestion) => void;
 }
 
 export const SectionCard: React.FC<SectionCardProps> = ({
@@ -32,6 +35,8 @@ export const SectionCard: React.FC<SectionCardProps> = ({
   onAddQuestion,
   onRemove,
   onRemoveQuestion,
+  onEdit,
+  onEditQuestion,
 }) => {
   const [isPassageOpen, setPassageOpen] = useState(false);
   const passage = section.passageText ?? '';
@@ -55,12 +60,26 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             {section.questionCount} câu hỏi · {section.maxScore ?? 0} điểm
           </p>
         </div>
-        {isEditable && (
+        {(isEditable || onEdit) && (
           // Màn hình nhỏ: nút xuống dòng riêng để tên phần thi không bị ép
           <div className="flex items-center justify-end gap-1 w-full sm:w-auto">
-            <Button size="sm" variant="secondary" leftIcon={Plus} onClick={onAddQuestion}>
-              Thêm câu hỏi
-            </Button>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                title="Sửa nội dung phần thi"
+                aria-label={`Sửa nội dung phần thi ${section.title}`}
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC]/40"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+            {isEditable && (
+              <Button size="sm" variant="secondary" leftIcon={Plus} onClick={onAddQuestion}>
+                Thêm câu hỏi
+              </Button>
+            )}
+            {isEditable && (
             <button
               type="button"
               onClick={onRemove}
@@ -70,6 +89,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
             >
               <Trash2 className="w-4 h-4" />
             </button>
+            )}
           </div>
         )}
       </header>
@@ -112,6 +132,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
                 question={q}
                 isEditable={isEditable}
                 onRemove={() => onRemoveQuestion(q.questionId)}
+                onEdit={onEditQuestion ? () => onEditQuestion(q) : undefined}
               />
             ))}
           </div>

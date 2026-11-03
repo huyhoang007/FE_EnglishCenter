@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { CheckCircle2, Trash2 } from 'lucide-react';
+import { CheckCircle2, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { QUESTION_TYPE_LABEL, type ExamQuestion } from '@/shared/types';
@@ -13,9 +13,11 @@ interface QuestionRowProps {
   question: ExamQuestion;
   isEditable: boolean;
   onRemove: () => void;
+  /** Sửa nội dung hiển thị — có cả khi đề đã có lượt thi */
+  onEdit?: () => void;
 }
 
-export const QuestionRow: React.FC<QuestionRowProps> = ({ question, isEditable, onRemove }) => (
+export const QuestionRow: React.FC<QuestionRowProps> = ({ question, isEditable, onRemove, onEdit }) => (
   <div className="rounded-xl border border-slate-200 p-3 flex gap-3">
     <span className="w-7 h-7 rounded-full text-xs font-extrabold flex items-center justify-center shrink-0 bg-slate-900 text-white">
       {question.displayNumber}
@@ -45,6 +47,11 @@ export const QuestionRow: React.FC<QuestionRowProps> = ({ question, isEditable, 
         </ul>
       )}
     </div>
+    {onEdit && (
+      <Button size="icon" variant="ghost" aria-label="Sửa nội dung câu hỏi" title="Sửa nội dung" onClick={onEdit}>
+        <Pencil className="w-4 h-4" />
+      </Button>
+    )}
     {isEditable && (
       <Button
         size="icon"
