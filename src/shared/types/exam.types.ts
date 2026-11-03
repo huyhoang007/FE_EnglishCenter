@@ -151,6 +151,9 @@ export interface AttemptSummary {
   studentId?: string;
   studentName?: string;
   studentEmail?: string;
+  /** Mentor đã nhận chấm bài (lần chấm đầu tiên) — chỉ có ở màn chấm */
+  gradingById?: string;
+  gradingByName?: string;
 }
 
 export interface SectionScore {

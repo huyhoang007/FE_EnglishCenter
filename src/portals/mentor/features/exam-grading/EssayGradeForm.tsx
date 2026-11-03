@@ -28,11 +28,13 @@ interface EssayGradeFormProps {
   scale: ScaleInfo;
   /** Thang của phần thi chứa câu này */
   part: PartScale;
+  /** Bài đang được mentor khác chấm: chỉ xem */
+  readOnly?: boolean;
 }
 
 const AUDIO_URL = /^https?:\/\/\S+\.(mp3|wav|m4a|ogg|webm)$/i;
 
-export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answer, scale, part }) => {
+export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answer, scale, part, readOnly = false }) => {
   const grade = useGradeAnswer();
   const toast = useToast();
   const isRaw = scale.kind === 'raw';
@@ -123,6 +125,7 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
             ? `Điểm (tối đa ${answer.points})`
             : `${scale.label} ${part.name} (${range.min} – ${range.max})`}
           <input
+            disabled={readOnly}
             type="number"
             step={range.step}
             min={range.min}
@@ -135,6 +138,7 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
         <label className="text-xs font-bold text-slate-600 space-y-1">
           Nhận xét cho học viên
           <textarea
+            disabled={readOnly}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             rows={3}
@@ -144,7 +148,7 @@ export const EssayGradeForm: React.FC<EssayGradeFormProps> = ({ attemptId, answe
       </div>
       {fieldError && <p className="text-sm text-status-danger font-semibold">{fieldError}</p>}
       <div className="flex justify-end">
-        <Button type="submit" leftIcon={Save} isLoading={grade.isPending}>
+        <Button type="submit" leftIcon={Save} isLoading={grade.isPending} disabled={readOnly}>
           Lưu điểm
         </Button>
       </div>
