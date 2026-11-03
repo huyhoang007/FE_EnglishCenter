@@ -14,6 +14,7 @@ import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { useCertificateScale } from '../hooks/useCertificateScale';
 import type { ExamQuestion, ExamSection } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
@@ -29,6 +30,7 @@ export interface ExamRoomViewProps {
 
 export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
   const navigate = useNavigate();
+  const isLearner = useAuthStore((s) => s.role) === 'USER';
   const room = useExamRoom(attemptId);
   const [isConfirmOpen, setConfirmOpen] = useState(false);
   const [activeQuestionId, setActiveQuestionId] = useState('');
@@ -46,8 +48,13 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
   if (room.attemptQuery.isError || !room.attempt?.exam) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" leftIcon={ArrowLeft} onClick={() => navigate(CLIENT_ROUTES.exams)}>
-          Ngân hàng đề
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={ArrowLeft}
+          onClick={() => navigate(isLearner ? CLIENT_ROUTES.examPlacement : CLIENT_ROUTES.exams)}
+        >
+          {isLearner ? 'Kiểm tra năng lực' : 'Ngân hàng đề'}
         </Button>
         <ErrorState
           message={room.attemptQuery.error?.message ?? 'Lượt thi đã kết thúc.'}

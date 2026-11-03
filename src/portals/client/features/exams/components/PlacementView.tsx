@@ -29,6 +29,8 @@ import { formatDateTime } from '../utils/examRoom';
 export const PlacementView: React.FC = () => {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const role = useAuthStore((s) => s.role);
+  const isLearner = isAuthenticated && role === 'USER';
   const certificates = useCertificates();
   const proficiency = useMyProficiency(isAuthenticated);
   const [certificateId, setCertificateId] = useState('');
@@ -44,12 +46,15 @@ export const PlacementView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Link
-        to={CLIENT_ROUTES.exams}
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900"
-      >
-        <ArrowLeft className="w-4 h-4" /> Ngân hàng đề
-      </Link>
+      {/* Learner (USER) chưa có Ngân hàng đề (route /exams chuyển USER sang /practice) */}
+      {!isLearner && (
+        <Link
+          to={CLIENT_ROUTES.exams}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="w-4 h-4" /> Ngân hàng đề
+        </Link>
+      )}
 
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">Kiểm tra năng lực</h1>

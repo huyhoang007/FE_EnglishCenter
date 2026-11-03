@@ -10,6 +10,7 @@ import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
 import { EmptyState, ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { ATTEMPT_STATUS_LABEL, type AttemptSummary } from '@/shared/types';
 import { useMyAttempts } from '../hooks/useExams';
 import { formatDateTime } from '../utils/examRoom';
@@ -18,6 +19,8 @@ const STATUS_VARIANT = { in_progress: 'primary', submitted: 'ai', graded: 'succe
 
 export const AttemptHistoryView: React.FC = () => {
   const navigate = useNavigate();
+  // Learner (USER) chỉ làm bài kiểm tra đầu vào → dẫn về /exams/placement thay vì Ngân hàng đề
+  const isLearner = useAuthStore((s) => s.role) === 'USER';
   const [page, setPage] = useState(0);
   const { data, isLoading, isError, error, refetch } = useMyAttempts(page);
 
@@ -36,7 +39,7 @@ export const AttemptHistoryView: React.FC = () => {
           title="Bạn chưa làm đề nào"
           description="Vào ngân hàng đề để chọn một đề và bắt đầu làm bài."
           actionLabel="Chọn đề để làm"
-          onAction={() => navigate(CLIENT_ROUTES.exams)}
+          onAction={() => navigate(isLearner ? CLIENT_ROUTES.examPlacement : CLIENT_ROUTES.exams)}
         />
       ) : (
         <>

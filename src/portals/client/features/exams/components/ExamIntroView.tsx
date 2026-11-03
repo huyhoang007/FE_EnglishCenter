@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Clock, FileQuestion, Play, RotateCcw, Target, Trophy } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
@@ -27,13 +27,22 @@ interface ExamIntroViewProps {
 export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const role = useAuthStore((s) => s.role);
+  const isLearner = isAuthenticated && role === 'USER';
   const { data, isLoading, isError, error, refetch } = useExamDetail(examId);
   const start = useStartAttempt();
   const scale = useCertificateScale(data?.exam.certificateId, data?.exam.certificateName);
 
+  // Learner (USER) không có Ngân hàng đề → quay về trang Kiểm tra năng lực; đề placement cũng quay về đó
+  const backToPlacement = isLearner || data?.exam.examType === 'placement_test';
   const backButton = (
-    <Button variant="ghost" size="sm" leftIcon={ArrowLeft} onClick={() => navigate(CLIENT_ROUTES.exams)}>
-      Ngân hàng đề
+    <Button
+      variant="ghost"
+      size="sm"
+      leftIcon={ArrowLeft}
+      onClick={() => navigate(backToPlacement ? CLIENT_ROUTES.examPlacement : CLIENT_ROUTES.exams)}
+    >
+      {backToPlacement ? 'Kiểm tra năng lực' : 'Ngân hàng đề'}
     </Button>
   );
 
@@ -55,6 +64,12 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
   }
 
   const { exam } = data;
+
+  // Learner (USER) chỉ được làm bài kiểm tra đầu vào; đề khác → về trang Kiểm tra năng lực
+  if (isLearner && exam.examType !== 'placement_test') {
+    return <Navigate to={CLIENT_ROUTES.examPlacement} replace />;
+  }
+
   const canStart = isAuthenticated && data.accessible !== false;
 
   return (

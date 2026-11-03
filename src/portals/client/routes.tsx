@@ -221,9 +221,11 @@ const ClientRoutesComponent: React.FC = () => {
             path={CLIENT_ROUTES.examPlacement}
             element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><ExamPlacementPage /></RoleRedirect>}
           />
+          {/* USER vào được /exams/:id để làm bài kiểm tra đầu vào; đề không phải placement_test thì
+              ExamIntroView tự đưa USER về /exams/placement (RoleRedirect theo route không biết loại đề) */}
           <Route
             path={CLIENT_ROUTES.exam()}
-            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><RoleRedirect deniedRoles={['USER']} to={CLIENT_ROUTES.practice}><ExamDetailPage /></RoleRedirect></RoleRedirect>}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><ExamDetailPage /></RoleRedirect>}
           />
           <Route
             path={CLIENT_ROUTES.examHistory}
