@@ -3,7 +3,7 @@
  * Converted to match the reference UI (11.webp)
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/shared/components/Card';
 import { Button } from '@/shared/components/Button';
@@ -32,13 +32,35 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import {
-  getMentors,
+  getAdminMentors,
+  getAdminMentorStats,
   createMentor,
   updateMentor,
   revokeMentor,
 } from '@/shared/api/domainApi';
 import type { CreateMentorDto, MentorDto, UpdateMentorDto } from '@/shared/api/apiTypes';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
+/** Ngày tham gia: mentorRegisteredAt, dữ liệu cũ chưa có thì lấy ngày tạo hồ sơ */
+const formatJoinedDate = (m: MentorDto) => {
+  const value = m.mentorRegisteredAt ?? m.createdAt;
+  return value ? new Date(value).toLocaleDateString('vi-VN') : '—';
+};
+
+/** Các nút trang (0-based): trang đầu, trang cuối, ±1 quanh trang hiện tại; 'gap' = dấu … */
+const pageItems = (current: number, total: number): (number | 'gap')[] => {
+  const pages = [...new Set([0, total - 1, current - 1, current, current + 1])]
+    .filter((p) => p >= 0 && p < total)
+    .sort((a, b) => a - b);
+  const items: (number | 'gap')[] = [];
+  pages.forEach((p, i) => {
+    if (i > 0 && p - pages[i - 1] > 1) items.push('gap');
+    items.push(p);
+  });
+  return items;
+};
 
 export const MentorManagementView: React.FC = () => {
   const queryClient = useQueryClient();
@@ -49,6 +71,26 @@ export const MentorManagementView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [specialization, setSpecialization] = useState('');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  // Ô gõ chữ: chờ ngừng gõ 400ms mới gọi API
+  const [debouncedKeyword, setDebouncedKeyword] = useState('');
+  const [debouncedSpecialization, setDebouncedSpecialization] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(keyword.trim());
+      setPage(0);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [keyword]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSpecialization(specialization.trim());
+      setPage(0);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [specialization]);
 
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -86,45 +128,42 @@ export const MentorManagementView: React.FC = () => {
     hourlyRate: 500000,
   });
 
-  // Query mentors
+  // Danh sách mentor: lọc + phân trang ở server (GET /api/v1/admin/mentors)
   const { data: mentorsData, isLoading, isError } = useQuery({
-    queryKey: [...QUERY_KEYS.admin.mentors, specialization, page],
+    queryKey: [
+      ...QUERY_KEYS.admin.mentors,
+      'list',
+      { keyword: debouncedKeyword, department, statusFilter, specialization: debouncedSpecialization, page, pageSize },
+    ],
     queryFn: () =>
-      getMentors({
-        specialization: specialization || undefined,
+      getAdminMentors({
+        keyword: debouncedKeyword || undefined,
+        department: department || undefined,
+        specialization: debouncedSpecialization || undefined,
+        isActive: statusFilter === '' ? undefined : statusFilter === 'Active',
         page,
-        size: 15,
+        size: pageSize,
       }),
   });
 
-  const rawMentors: MentorDto[] = mentorsData?.data ?? [];
-
-  // Filter client-side by keyword, department, status
-  const mentors = rawMentors.filter((m) => {
-    const matchKeyword =
-      !keyword ||
-      m.fullName.toLowerCase().includes(keyword.toLowerCase()) ||
-      m.email.toLowerCase().includes(keyword.toLowerCase()) ||
-      (m.phone && m.phone.includes(keyword));
-
-    const matchDept = !department || m.department === department;
-    const matchStatus =
-      !statusFilter ||
-      (statusFilter === 'Active' ? m.isActive !== false : m.isActive === false);
-
-    return matchKeyword && matchDept && matchStatus;
+  // Thống kê trên toàn bộ mentor (không phụ thuộc trang / bộ lọc)
+  const { data: stats } = useQuery({
+    queryKey: [...QUERY_KEYS.admin.mentors, 'stats'],
+    queryFn: getAdminMentorStats,
   });
 
-  // Real statistics calculated dynamically from backend data
-  const totalMentorsCount = mentorsData?.totalElements ?? rawMentors.length;
-  const activeMentorsCount = rawMentors.filter((m) => m.isActive !== false).length;
-  const inactiveMentorsCount = rawMentors.filter((m) => m.isActive === false).length;
-  const departmentsCount = new Set(rawMentors.map((m) => m.department).filter(Boolean)).size;
-  const newMentorsCount = rawMentors.filter((m) => {
-    if (!m.mentorRegisteredAt) return true;
-    const diffDays = (Date.now() - new Date(m.mentorRegisteredAt).getTime()) / (1000 * 3600 * 24);
-    return diffDays <= 30;
-  }).length;
+  const mentors: MentorDto[] = mentorsData?.data ?? [];
+  const totalElements = mentorsData?.totalElements ?? 0;
+  const totalPages = Math.max(1, mentorsData?.totalPages ?? 1);
+  const rangeFrom = totalElements === 0 ? 0 : page * pageSize + 1;
+  const rangeTo = page * pageSize + mentors.length;
+
+  const totalMentorsCount = stats?.total ?? 0;
+  const activeMentorsCount = stats?.active ?? 0;
+  const inactiveMentorsCount = stats?.inactive ?? 0;
+  const newMentorsCount = stats?.newLast30Days ?? 0;
+  const departmentOptions = stats?.departments ?? [];
+  const departmentsCount = departmentOptions.length;
 
   // Create Mentor Mutation
   const createMutation = useMutation({
@@ -231,7 +270,7 @@ export const MentorManagementView: React.FC = () => {
         <StatCard
           title="New Mentors"
           value={newMentorsCount}
-          subtext="Mới gia nhập"
+          subtext="Mới gia nhập (30 ngày)"
           icon={Award}
           colorScheme="purple"
         />
@@ -294,20 +333,27 @@ export const MentorManagementView: React.FC = () => {
           {/* Department Filter */}
           <select
             value={department}
-            onChange={(e) => setDepartment(e.target.value)}
+            onChange={(e) => {
+              setDepartment(e.target.value);
+              setPage(0);
+            }}
             className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
           >
             <option value="">All Departments</option>
-            <option value="IELTS Intensive">IELTS Intensive</option>
-            <option value="TOEIC Master">TOEIC Master</option>
-            <option value="VSTEP Academic">VSTEP Academic</option>
-            <option value="Speaking & Writing">Speaking & Writing</option>
+            {departmentOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
           </select>
 
           {/* Status Filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(0);
+            }}
             className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
           >
             <option value="">All Status</option>
@@ -315,21 +361,14 @@ export const MentorManagementView: React.FC = () => {
             <option value="Inactive">Inactive</option>
           </select>
 
-          {/* Specialization Filter */}
-          <select
+          {/* Specialization Filter — tìm gần đúng ở server */}
+          <input
+            type="text"
             value={specialization}
-            onChange={(e) => {
-              setSpecialization(e.target.value);
-              setPage(0);
-            }}
-            className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
-          >
-            <option value="">All Specializations</option>
-            <option value="IELTS 8.0+">IELTS 8.0+</option>
-            <option value="TESOL">TESOL Certified</option>
-            <option value="TOEIC 900+">TOEIC 900+</option>
-            <option value="VSTEP C1">VSTEP C1</option>
-          </select>
+            onChange={(e) => setSpecialization(e.target.value)}
+            placeholder="Specialization (VD: Writing, 8.0)"
+            className="h-10 px-3 w-56 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-[#0052CC]"
+          />
 
           {/* More Filters & Reset */}
           <button
@@ -342,6 +381,13 @@ export const MentorManagementView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Gợi ý department đang dùng cho ô nhập ở form tạo / sửa mentor (vẫn gõ giá trị mới được) */}
+      <datalist id="mentor-department-options">
+        {departmentOptions.map((d) => (
+          <option key={d} value={d} />
+        ))}
+      </datalist>
 
       {/* ================= 4. TABLE SECTION (Matching 11.webp) ================= */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
@@ -370,7 +416,7 @@ export const MentorManagementView: React.FC = () => {
                   </th>
                   <th className="py-3.5 px-2 w-12 font-bold">#</th>
                   <th className="py-3.5 px-3 font-bold">Mentor</th>
-                  <th className="py-3.5 px-3 font-bold">Employee ID</th>
+                  <th className="py-3.5 px-3 font-bold">Mentor ID</th>
                   <th className="py-3.5 px-3 font-bold">Department</th>
                   <th className="py-3.5 px-3 font-bold">Specialization</th>
                   <th className="py-3.5 px-3 font-bold">Email</th>
@@ -389,7 +435,7 @@ export const MentorManagementView: React.FC = () => {
                     <td className="py-3 pl-4 pr-2">
                       <input type="checkbox" className="rounded border-slate-300 text-[#0052CC]" />
                     </td>
-                    <td className="py-3 px-2 text-slate-400 font-medium">{idx + 1}</td>
+                    <td className="py-3 px-2 text-slate-400 font-medium">{page * pageSize + idx + 1}</td>
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full bg-blue-50 text-[#0052CC] font-bold text-xs flex items-center justify-center shrink-0 border border-blue-100">
@@ -400,11 +446,11 @@ export const MentorManagementView: React.FC = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-slate-500 font-mono text-[11px]">
-                      MNT-00{idx + 1}
+                    <td className="py-3 px-3 text-slate-500 font-mono text-[11px]" title={m.userId}>
+                      {m.userId.slice(0, 8).toUpperCase()}
                     </td>
                     <td className="py-3 px-3 text-slate-700 font-medium">
-                      {m.department || 'English Dept'}
+                      {m.department || '—'}
                     </td>
                     <td className="py-3 px-3">
                       <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-[#0052CC] font-bold text-[10px] border border-blue-100 truncate max-w-[140px]">
@@ -427,9 +473,7 @@ export const MentorManagementView: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-3 text-slate-400 text-[11px]">
-                      {m.mentorRegisteredAt
-                        ? new Date(m.mentorRegisteredAt).toLocaleDateString('vi-VN')
-                        : 'May 10, 2024'}
+                      {formatJoinedDate(m)}
                     </td>
                     <td className="py-3 pr-4 text-right">
                       <div className="inline-flex items-center gap-1">
@@ -466,11 +510,20 @@ export const MentorManagementView: React.FC = () => {
           </div>
         )}
 
-        {/* ================= 5. PAGINATION (Matching 11.webp) ================= */}
+        {/* ================= 5. PAGINATION (theo totalElements / totalPages của server) ================= */}
         <div className="px-5 py-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
           <div>
-            Showing <span className="font-bold text-slate-700">{mentors.length}</span> of{' '}
-            <span className="font-bold text-slate-700">85</span> mentors
+            {totalElements === 0 ? (
+              'Không có mentor'
+            ) : (
+              <>
+                Showing{' '}
+                <span className="font-bold text-slate-700">
+                  {rangeFrom}–{rangeTo}
+                </span>{' '}
+                of <span className="font-bold text-slate-700">{totalElements}</span> mentors
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -480,47 +533,54 @@ export const MentorManagementView: React.FC = () => {
                 disabled={page === 0}
                 onClick={() => setPage(page - 1)}
                 className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 disabled:opacity-40"
+                aria-label="Trang trước"
               >
                 ‹
               </button>
+              {pageItems(page, totalPages).map((item, i) =>
+                item === 'gap' ? (
+                  <span key={`gap-${i}`} className="px-1 text-slate-400">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setPage(item)}
+                    className={
+                      item === page
+                        ? 'w-7 h-7 rounded-lg bg-[#0052CC] text-white font-bold flex items-center justify-center shadow-xs'
+                        : 'w-7 h-7 rounded-lg border border-slate-200 text-slate-600 font-semibold flex items-center justify-center hover:bg-slate-50'
+                    }
+                  >
+                    {item + 1}
+                  </button>
+                ),
+              )}
               <button
                 type="button"
-                className="w-7 h-7 rounded-lg bg-[#0052CC] text-white font-bold flex items-center justify-center shadow-xs"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 font-semibold flex items-center justify-center hover:bg-slate-50"
-              >
-                2
-              </button>
-              <button
-                type="button"
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 font-semibold flex items-center justify-center hover:bg-slate-50"
-              >
-                3
-              </button>
-              <span className="px-1 text-slate-400">…</span>
-              <button
-                type="button"
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 font-semibold flex items-center justify-center hover:bg-slate-50"
-              >
-                9
-              </button>
-              <button
-                type="button"
+                disabled={page >= totalPages - 1}
                 onClick={() => setPage(page + 1)}
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50"
+                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 disabled:opacity-40"
+                aria-label="Trang sau"
               >
                 ›
               </button>
             </div>
 
-            <select className="h-7 px-2 border border-slate-200 rounded-lg text-slate-600 text-xs bg-white focus:outline-none">
-              <option>10 per page</option>
-              <option>20 per page</option>
-              <option>50 per page</option>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(0);
+              }}
+              className="h-7 px-2 border border-slate-200 rounded-lg text-slate-600 text-xs bg-white focus:outline-none"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size} per page
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -625,7 +685,7 @@ export const MentorManagementView: React.FC = () => {
                     onChange={(e) =>
                       setCreateForm({ ...createForm, specialization: e.target.value })
                     }
-                    placeholder="VD: IELTS 8.5, TESOL"
+                    placeholder="VD: Writing & Speaking · 8.0"
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
                   />
                 </div>
@@ -641,7 +701,8 @@ export const MentorManagementView: React.FC = () => {
                     onChange={(e) =>
                       setCreateForm({ ...createForm, department: e.target.value })
                     }
-                    placeholder="VD: IELTS Intensive"
+                    placeholder="VD: IELTS"
+                    list="mentor-department-options"
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
                   />
                 </div>
@@ -785,6 +846,7 @@ export const MentorManagementView: React.FC = () => {
                     onChange={(e) =>
                       setEditForm({ ...editForm, specialization: e.target.value })
                     }
+                    placeholder="VD: Writing & Speaking · 8.0"
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
                   />
                 </div>
@@ -798,6 +860,8 @@ export const MentorManagementView: React.FC = () => {
                     required
                     value={editForm.department}
                     onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                    placeholder="VD: IELTS"
+                    list="mentor-department-options"
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
                   />
                 </div>

@@ -34,6 +34,34 @@ export const en = {
   'common.required': 'Required',
 
   // =========================================================
+  // Admin layout (sidebar, header, menu tài khoản)
+  // =========================================================
+  'admin.nav.dashboard': 'Dashboard',
+  'admin.nav.payments': 'Payments',
+  'admin.nav.bookings': 'Bookings',
+  'admin.nav.students': 'Students',
+  'admin.nav.mentors': 'Mentors',
+  'admin.nav.courses': 'Courses',
+  'admin.nav.vocabulary': 'Vocabulary',
+  'admin.nav.certificates': 'Certificates',
+  'admin.nav.learningPaths': 'Learning Paths',
+  'admin.nav.aiPractice': 'AI Practice',
+  'admin.nav.exams': 'Exams',
+  'admin.nav.accounts': 'Users & Roles',
+  'admin.nav.settings': 'Settings',
+  'admin.nav.groupManagement': 'MANAGEMENT',
+  'admin.nav.groupOther': 'OTHER',
+  'admin.layout.dashboardTitle': 'Admin Dashboard',
+  'admin.layout.portal': 'Admin Portal',
+  'admin.layout.searchPlaceholder': 'Search anything across courses, students, mentors...',
+  'admin.layout.superAdmin': 'Super Admin',
+  'admin.layout.adminUser': 'Admin User',
+  'admin.layout.accountMenu': 'Account menu',
+  'admin.layout.changePassword': 'Change password',
+  'admin.layout.logout': 'Logout',
+  'admin.layout.copyright': '© 2025 PrepMaster. All rights reserved.',
+
+  // =========================================================
   // Language switcher
   // =========================================================
   'lang.label': 'Language',

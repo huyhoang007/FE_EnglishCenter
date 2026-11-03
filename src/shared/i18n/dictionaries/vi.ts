@@ -31,6 +31,34 @@ export const vi: Record<TranslationKey, string> = {
   'common.required': 'Bắt buộc',
 
   // =========================================================
+  // Admin layout (sidebar, header, menu tài khoản)
+  // =========================================================
+  'admin.nav.dashboard': 'Tổng quan',
+  'admin.nav.payments': 'Thanh toán',
+  'admin.nav.bookings': 'Lịch đặt',
+  'admin.nav.students': 'Học viên',
+  'admin.nav.mentors': 'Mentor',
+  'admin.nav.courses': 'Khóa học',
+  'admin.nav.vocabulary': 'Từ vựng',
+  'admin.nav.certificates': 'Chứng chỉ',
+  'admin.nav.learningPaths': 'Lộ trình học',
+  'admin.nav.aiPractice': 'Luyện tập AI',
+  'admin.nav.exams': 'Đề thi',
+  'admin.nav.accounts': 'Người dùng & Phân quyền',
+  'admin.nav.settings': 'Cài đặt',
+  'admin.nav.groupManagement': 'QUẢN LÝ',
+  'admin.nav.groupOther': 'KHÁC',
+  'admin.layout.dashboardTitle': 'Bảng điều khiển',
+  'admin.layout.portal': 'Trang quản trị',
+  'admin.layout.searchPlaceholder': 'Tìm khóa học, học viên, mentor...',
+  'admin.layout.superAdmin': 'Quản trị viên',
+  'admin.layout.adminUser': 'Quản trị viên',
+  'admin.layout.accountMenu': 'Menu tài khoản',
+  'admin.layout.changePassword': 'Đổi mật khẩu',
+  'admin.layout.logout': 'Đăng xuất',
+  'admin.layout.copyright': '© 2025 PrepMaster. Bảo lưu mọi quyền.',
+
+  // =========================================================
   // Language switcher
   // =========================================================
   'lang.label': 'Ngôn ngữ',

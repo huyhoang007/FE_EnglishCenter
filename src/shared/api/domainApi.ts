@@ -1,6 +1,6 @@
 import axiosClient, { type BeResponse } from './axiosClient';
 import type { ApiResponse } from '@/shared/types';
-import type { AuthDto, ChangePasswordDto, CreateMentorDto, CreateMentorResponseDto, MentorDto, PageResponse, ProfileUpdateDto, RoleDto, UpdateMentorDto, UserDto } from './apiTypes';
+import type { AuthDto, ChangePasswordDto, CreateMentorDto, CreateMentorResponseDto, MentorDto, MentorStatsDto, PageResponse, ProfileUpdateDto, RoleDto, UpdateMentorDto, UserDto } from './apiTypes';
 import { toUser } from './apiTypes';
 
 function ok<T>(data: T, message = 'Success'): ApiResponse<T> { return { success: true, message, data }; }
@@ -77,6 +77,21 @@ export const getRoles = async () => (await axiosClient.get<BeResponse<RoleDto[]>
 export const createMentor = async (payload: CreateMentorDto) => (await axiosClient.post<BeResponse<CreateMentorResponseDto>>('/api/v1/admin/mentors', payload)).data.result;
 export const updateMentor = async (id: string, payload: UpdateMentorDto) => (await axiosClient.put<BeResponse<MentorDto>>(`/api/v1/admin/mentors/${id}`, payload)).data.result;
 export const revokeMentor = (id: string) => axiosClient.delete(`/api/v1/admin/mentors/${id}`);
+
+/** Admin: danh sách mentor (cả active / inactive), lọc + phân trang ở server */
+export async function getAdminMentors(params: {
+  keyword?: string;
+  department?: string;
+  specialization?: string;
+  isActive?: boolean;
+  page?: number;
+  size?: number;
+}) {
+  const { data } = await axiosClient.get<PageResponse<MentorDto>>('/api/v1/admin/mentors', { params });
+  return data;
+}
+export const getAdminMentorStats = async () =>
+  (await axiosClient.get<BeResponse<MentorStatsDto>>('/api/v1/admin/mentors/stats')).data.result;
 
 export async function getMentors(params: { specialization?: string; minRate?: number; maxRate?: number; page?: number; size?: number }) {
   const { data } = await axiosClient.get<PageResponse<MentorDto>>('/api/v1/mentors', { params });

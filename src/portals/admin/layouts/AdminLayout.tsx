@@ -3,7 +3,7 @@
  * Designed to replicate the reference SaaS School/Center management UI
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -19,8 +19,10 @@ import {
   Route,
   Sparkles,
   FileCheck2,
-  Mail,
   Search,
+  ChevronDown,
+  KeyRound,
+  Languages,
   LogOut,
   ChevronRight,
   Menu,
@@ -29,31 +31,33 @@ import {
 import { cn } from '@/shared/utils/cn';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { NotificationBell } from '@/shared/components/NotificationBell';
-import { LanguageToggle } from '@/shared/i18n/LanguageToggle';
+import { ChangePasswordForm } from '@/shared/components/ChangePasswordForm';
+import { useTranslation } from '@/shared/i18n/I18nProvider';
+import { LOCALES, LOCALE_LABEL, type TranslationKey } from '@/shared/i18n/config';
 
 interface NavItem {
   to: string;
-  label: string;
+  labelKey: TranslationKey;
   icon: React.ComponentType<{ className?: string }>;
   end?: boolean;
 }
 
 const MANAGEMENT_NAV: NavItem[] = [
-  { to: '/admin/payments', label: 'Payments', icon: Receipt },
-  { to: '/admin/bookings', label: 'Bookings', icon: CalendarDays },
-  { to: '/admin/students', label: 'Students', icon: Users },
-  { to: '/admin/mentors', label: 'Mentors', icon: GraduationCap },
-  { to: '/admin/courses', label: 'Courses', icon: BookOpen },
-  { to: '/admin/vocabularies', label: 'Vocabulary', icon: BookA },
-  { to: '/admin/certificates', label: 'Certificates', icon: Award },
-  { to: '/admin/learning-paths', label: 'Learning Paths', icon: Route },
-  { to: '/admin/practice-exams', label: 'AI Practice', icon: Sparkles },
-  { to: '/admin/exams', label: 'Exams', icon: FileCheck2 },
+  { to: '/admin/payments', labelKey: 'admin.nav.payments', icon: Receipt },
+  { to: '/admin/bookings', labelKey: 'admin.nav.bookings', icon: CalendarDays },
+  { to: '/admin/students', labelKey: 'admin.nav.students', icon: Users },
+  { to: '/admin/mentors', labelKey: 'admin.nav.mentors', icon: GraduationCap },
+  { to: '/admin/courses', labelKey: 'admin.nav.courses', icon: BookOpen },
+  { to: '/admin/vocabularies', labelKey: 'admin.nav.vocabulary', icon: BookA },
+  { to: '/admin/certificates', labelKey: 'admin.nav.certificates', icon: Award },
+  { to: '/admin/learning-paths', labelKey: 'admin.nav.learningPaths', icon: Route },
+  { to: '/admin/practice-exams', labelKey: 'admin.nav.aiPractice', icon: Sparkles },
+  { to: '/admin/exams', labelKey: 'admin.nav.exams', icon: FileCheck2 },
 ];
 
 const OTHER_NAV: NavItem[] = [
-  { to: '/admin/accounts', label: 'Users & Roles', icon: ShieldCheck },
-  { to: '/admin/settings', label: 'Settings', icon: Settings },
+  { to: '/admin/accounts', labelKey: 'admin.nav.accounts', icon: ShieldCheck },
+  { to: '/admin/settings', labelKey: 'admin.nav.settings', icon: Settings },
 ];
 
 export const AdminLayout: React.FC = () => {
@@ -61,6 +65,22 @@ export const AdminLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { locale, setLocale, t } = useTranslation();
+  // Menu avatar: đổi mật khẩu, ngôn ngữ, đăng xuất
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [profileMenuOpen]);
 
   const handleLogout = async () => {
     await logout();
@@ -68,12 +88,15 @@ export const AdminLayout: React.FC = () => {
   };
 
   // Determine current active page title for breadcrumb
-  const currentNav =
-    location.pathname === '/admin'
-      ? { label: 'Admin Dashboard' }
-      : [...MANAGEMENT_NAV, ...OTHER_NAV].find((n) => location.pathname.startsWith(n.to)) || {
-          label: 'Admin Portal',
-        };
+  const matchedNav = [...MANAGEMENT_NAV, ...OTHER_NAV].find((n) => location.pathname.startsWith(n.to));
+  const currentNav = {
+    label:
+      location.pathname === '/admin'
+        ? t('admin.layout.dashboardTitle')
+        : matchedNav
+          ? t(matchedNav.labelKey)
+          : t('admin.layout.portal'),
+  };
 
   return (
     <div
@@ -138,17 +161,17 @@ export const AdminLayout: React.FC = () => {
               }
             >
               <LayoutDashboard className="w-4 h-4" />
-              <span>Dashboard</span>
+              <span>{t('admin.nav.dashboard')}</span>
             </NavLink>
           </div>
 
           {/* Group: MANAGEMENT */}
           <div>
             <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
-              MANAGEMENT
+              {t('admin.nav.groupManagement')}
             </p>
             <nav className="space-y-1">
-              {MANAGEMENT_NAV.map(({ to, label, icon: Icon }) => (
+              {MANAGEMENT_NAV.map(({ to, labelKey, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -163,7 +186,7 @@ export const AdminLayout: React.FC = () => {
                   }
                 >
                   <Icon className="w-4 h-4" />
-                  <span>{label}</span>
+                  <span>{t(labelKey)}</span>
                 </NavLink>
               ))}
             </nav>
@@ -172,10 +195,10 @@ export const AdminLayout: React.FC = () => {
           {/* Group: OTHER */}
           <div>
             <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
-              OTHER
+              {t('admin.nav.groupOther')}
             </p>
             <nav className="space-y-1">
-              {OTHER_NAV.map(({ to, label, icon: Icon }) => (
+              {OTHER_NAV.map(({ to, labelKey, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -190,7 +213,7 @@ export const AdminLayout: React.FC = () => {
                   }
                 >
                   <Icon className="w-4 h-4" />
-                  <span>{label}</span>
+                  <span>{t(labelKey)}</span>
                 </NavLink>
               ))}
             </nav>
@@ -208,10 +231,10 @@ export const AdminLayout: React.FC = () => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold text-slate-900 truncate">
-                {userName || 'Admin User'}
+                {userName || t('admin.layout.adminUser')}
               </p>
               <p className="text-[10px] text-slate-400 font-semibold truncate uppercase">
-                {role === 'ADMIN' ? 'Super Admin' : role}
+                {role === 'ADMIN' ? t('admin.layout.superAdmin') : role}
               </p>
             </div>
           </div>
@@ -222,11 +245,11 @@ export const AdminLayout: React.FC = () => {
             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span>Logout</span>
+            <span>{t('admin.layout.logout')}</span>
           </button>
 
           <p className="text-[10px] text-slate-400 text-center pt-1 font-medium">
-            © 2025 PrepMaster. All rights reserved.
+            {t('admin.layout.copyright')}
           </p>
         </div>
       </aside>
@@ -248,7 +271,7 @@ export const AdminLayout: React.FC = () => {
             <div>
               <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
                 <Link to="/admin" className="hover:text-slate-600">
-                  Dashboard
+                  {t('admin.nav.dashboard')}
                 </Link>
                 {location.pathname !== '/admin' && (
                   <>
@@ -270,45 +293,121 @@ export const AdminLayout: React.FC = () => {
             <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="Search anything across courses, students, mentors..."
+              placeholder={t('admin.layout.searchPlaceholder')}
               className="bg-transparent outline-none w-full placeholder:text-slate-400 text-slate-700 text-xs"
             />
           </div>
 
-          {/* Right: Notification, Mail, Admin Chip */}
+          {/* Right: Notification, Admin menu (đổi mật khẩu, ngôn ngữ, đăng xuất) */}
           <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Language switcher EN / VI */}
-            <LanguageToggle />
-
             {/* Notifications (Dev 5 — API thật) */}
             <NotificationBell />
 
-            {/* Messages */}
-            <button
-              type="button"
-              className="relative w-9 h-9 rounded-full hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors"
-              title="Messages"
-            >
-              <Mail className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
-            </button>
+            {/* Profile Avatar + menu */}
+            <div className="relative pl-2 border-l border-slate-200" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((o) => !o)}
+                className="flex items-center gap-2 rounded-xl px-1.5 py-1 hover:bg-slate-100 transition-colors"
+                aria-label={t('admin.layout.accountMenu')}
+                aria-haspopup="menu"
+                aria-expanded={profileMenuOpen}
+              >
+                <div className="w-8 h-8 rounded-full bg-[#0052CC] text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                  {userName?.charAt(0)?.toUpperCase() || 'A'}
+                </div>
+                <div className="hidden sm:block text-left leading-tight">
+                  <p className="text-xs font-bold text-slate-900 truncate max-w-[120px]">
+                    {userName || t('admin.layout.adminUser')}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-semibold">
+                    {role === 'ADMIN' ? t('admin.layout.superAdmin') : role}
+                  </p>
+                </div>
+                <ChevronDown
+                  className={cn('hidden sm:block w-4 h-4 text-slate-400 transition-transform', profileMenuOpen && 'rotate-180')}
+                />
+              </button>
 
-            {/* Profile Avatar */}
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-[#0052CC] text-white font-bold text-xs flex items-center justify-center shadow-xs">
-                {userName?.charAt(0)?.toUpperCase() || 'A'}
-              </div>
-              <div className="hidden sm:block text-left leading-tight">
-                <p className="text-xs font-bold text-slate-900 truncate max-w-[120px]">
-                  {userName || 'Admin User'}
-                </p>
-                <p className="text-[10px] text-slate-400 font-semibold">
-                  {role === 'ADMIN' ? 'Super Admin' : role}
-                </p>
-              </div>
+              {profileMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-12 w-60 z-40 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden"
+                >
+                  <ul className="py-1">
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileMenuOpen(false);
+                          setChangePasswordOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <KeyRound className="w-4 h-4 text-slate-400" />
+                        {t('admin.layout.changePassword')}
+                      </button>
+                    </li>
+                    <li className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700">
+                      <Languages className="w-4 h-4 text-slate-400" />
+                      <span className="flex-1">{t('lang.label')}</span>
+                      <div className="inline-flex rounded-lg border border-slate-200 p-0.5">
+                        {LOCALES.map((l) => (
+                          <button
+                            key={l}
+                            type="button"
+                            onClick={() => setLocale(l)}
+                            className={cn(
+                              'h-6 px-2 rounded-md text-[10px] font-extrabold uppercase tracking-wider transition-colors',
+                              locale === l ? 'bg-[#0052CC] text-white' : 'text-slate-500 hover:bg-slate-100',
+                            )}
+                          >
+                            {LOCALE_LABEL[l]}
+                          </button>
+                        ))}
+                      </div>
+                    </li>
+                  </ul>
+                  <div className="border-t border-slate-100 py-1">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      {t('admin.layout.logout')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
+
+        {/* Modal đổi mật khẩu (mở từ menu avatar) */}
+        {changePasswordOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl">
+                    <KeyRound className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900">{t('admin.layout.changePassword')}</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setChangePasswordOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                  aria-label={t('common.close')}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <ChangePasswordForm onCancel={() => setChangePasswordOpen(false)} />
+            </div>
+          </div>
+        )}
 
         {/* Content Body */}
         <main className="flex-1 p-4 sm:p-6 lg:p-7 max-w-[1600px] w-full mx-auto">

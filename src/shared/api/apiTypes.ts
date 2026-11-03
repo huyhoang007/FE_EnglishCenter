@@ -26,6 +26,15 @@ export interface AuthDto {
   user: UserDto;
 }
 
+/** GET /api/v1/admin/mentors/stats — đếm trên toàn bộ mentor */
+export interface MentorStatsDto {
+  total: number;
+  active: number;
+  inactive: number;
+  newLast30Days: number;
+  /** Các department đang dùng — option cho bộ lọc */
+  departments: string[];
+}
 export interface CreateMentorResponseDto { mentor: MentorDto; tempPassword: string; note?: string; }
 
 export interface MentorDto extends UserDto {
