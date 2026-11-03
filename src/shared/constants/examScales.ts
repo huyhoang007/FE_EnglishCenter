@@ -352,6 +352,33 @@ export interface SectionLike {
   percentage: number;
   pendingManualGrading: boolean;
   certificatePartId?: string | null;
+  /** Điểm tối đa của section — dùng làm trọng số khi gộp nhiều section cùng một phần thi */
+  maxScore?: number;
+}
+
+/**
+ * Gộp các section cùng một phần thi của chứng chỉ (VD Writing Task 1 + Task 2, Reading Passage 1–3)
+ * thành một kỹ năng; % của phần = trung bình có trọng số theo điểm tối đa từng section.
+ */
+function groupByPart(scale: ScaleInfo, sections: SectionLike[]) {
+  const groups = new Map<string, { part: PartScale; titles: string[]; weighted: number; weight: number; pending: boolean }>();
+  for (const s of sections) {
+    const part = sectionPart(scale, s);
+    const key = part.partId ?? `${part.skill}:${part.name}`;
+    const weight = s.maxScore && s.maxScore > 0 ? s.maxScore : 1;
+    const g = groups.get(key) ?? { part, titles: [], weighted: 0, weight: 0, pending: false };
+    g.titles.push(s.title);
+    g.weighted += s.percentage * weight;
+    g.weight += weight;
+    g.pending = g.pending || s.pendingManualGrading;
+    groups.set(key, g);
+  }
+  return [...groups.values()].map((g) => ({
+    part: g.part,
+    title: g.titles.join(' · '),
+    percentage: g.weight > 0 ? Math.round((g.weighted / g.weight) * 100) / 100 : 0,
+    pending: g.pending,
+  }));
 }
 
 /** CEFR của một kỹ năng: APTIS theo cut-score riêng từng kỹ năng (Dev 2), chứng chỉ khác theo benchmarks */
@@ -365,17 +392,16 @@ function skillCefr(scale: ScaleInfo, part: PartScale, score: number): string | u
 }
 
 export function scaleResult(scale: ScaleInfo, sections: SectionLike[]): ScaledResult {
-  const skills: SkillScore[] = sections.map((s) => {
-    const part = sectionPart(scale, s);
-    const score = s.pendingManualGrading ? null : percentToScore(part, s.percentage);
+  const skills: SkillScore[] = groupByPart(scale, sections).map((g) => {
+    const score = g.pending ? null : percentToScore(g.part, g.percentage);
     return {
-      skill: part.skill,
-      title: s.title,
-      part,
+      skill: g.part.skill,
+      title: g.title,
+      part: g.part,
       score,
-      percentage: s.percentage,
-      pending: s.pendingManualGrading,
-      cefr: score !== null ? skillCefr(scale, part, score) : undefined,
+      percentage: g.percentage,
+      pending: g.pending,
+      cefr: score !== null ? skillCefr(scale, g.part, score) : undefined,
     };
   });
   const ready = skills.length > 0 && skills.every((s) => s.score !== null);
