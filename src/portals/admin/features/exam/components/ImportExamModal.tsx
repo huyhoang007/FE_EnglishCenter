@@ -19,7 +19,7 @@ import { useToast } from '@/shared/components/Toast';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { QUESTION_TYPE_LABEL } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
-import { addQuestionApi, aiImportApi, createSectionApi } from '../services/adminExamService';
+import { aiImportApi, importExamContentApi } from '../services/adminExamService';
 import type { ScaleInfo } from '@/shared/constants/examScales';
 import {
   MAX_PDF_BYTES,
@@ -137,33 +137,25 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFile]);
 
-  /** Tạo lần lượt từng section rồi các câu của section đó; dừng ở lỗi đầu tiên. */
+  /** Lưu cả bộ đề một lần (một giao dịch ở backend): lỗi ở câu nào thì không lưu gì. */
   const handleCreate = async (source: ImportResult | null = result) => {
     if (!source) return;
     const result = source;
     const total = result.sections.length + result.questionCount;
-    let done = 0;
     setCreateError(null);
-    setProgress({ done, total });
+    setProgress({ done: 0, total });
     try {
-      for (const q of result.looseQuestions) {
-        unwrapOrThrow(await addQuestionApi(examId, q.request));
-        setProgress({ done: ++done, total });
-      }
-      for (const s of result.sections) {
-        const section = unwrapOrThrow(await createSectionApi(examId, s.request));
-        setProgress({ done: ++done, total });
-        for (const q of s.questions) {
-          unwrapOrThrow(await addQuestionApi(examId, { ...q.request, sectionId: section.sectionId }));
-          setProgress({ done: ++done, total });
-        }
-      }
+      unwrapOrThrow(
+        await importExamContentApi(examId, {
+          sections: result.sections.map((s) => ({ section: s.request, questions: s.questions.map((q) => q.request) })),
+          questions: result.looseQuestions.map((q) => q.request),
+        }),
+      );
+      setProgress({ done: total, total });
       toast.success(`Đã tạo ${result.sections.length} section, ${result.questionCount} câu hỏi`);
       onClose();
     } catch (err) {
-      setCreateError(
-        `${err instanceof Error ? err.message : 'Tạo thất bại'} — đã tạo được ${done}/${total} mục, kiểm tra đề rồi xóa phần thừa nếu cần.`,
-      );
+      setCreateError(`${err instanceof Error ? err.message : 'Tạo thất bại'} — chưa lưu gì, sửa lỗi rồi thử lại.`);
     } finally {
       queryClient.invalidateQueries({ queryKey: ['exam'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.examOptions });
@@ -280,7 +272,7 @@ export const ImportExamModal: React.FC<ImportExamModalProps> = ({
         <div className="flex items-center justify-end gap-2">
           {progress && !createError && (
             <span className="text-xs text-slate-500 mr-auto">
-              Đang tạo {progress.done}/{progress.total}…
+              Đang tạo {progress.total} mục…
             </span>
           )}
           <Button variant="outline" onClick={onClose} disabled={isCreating}>

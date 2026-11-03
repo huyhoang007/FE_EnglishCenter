@@ -188,6 +188,18 @@ export const updateQuestionApi = (
   payload: UpdateQuestionContentRequest,
 ): Promise<ApiResponse<ExamQuestion>> => apiPut<ExamQuestion>(`${BASE}/${examId}/questions/${questionId}`, payload);
 
+/** Lưu cả bộ đề trong một giao dịch: câu nào lỗi thì không lưu gì */
+export interface ImportExamContentRequest {
+  sections: { section: CreateSectionRequest; questions: Omit<CreateQuestionRequest, 'sectionId'>[] }[];
+  questions: Omit<CreateQuestionRequest, 'sectionId'>[];
+}
+
+export const importExamContentApi = (
+  examId: string,
+  payload: ImportExamContentRequest,
+): Promise<ApiResponse<{ sectionCount: number; questionCount: number }>> =>
+  apiPost<{ sectionCount: number; questionCount: number }>(`${BASE}/${examId}/content`, payload, { timeout: 60_000 });
+
 /** Nhân bản đề (phần thi, câu hỏi, đáp án) thành một đề nháp mới */
 export const cloneExamApi = (examId: string): Promise<ApiResponse<ExamDetail>> =>
   apiPost<ExamDetail>(`${BASE}/${examId}/clone`);
