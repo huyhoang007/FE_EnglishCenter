@@ -115,3 +115,42 @@ export async function readSectionSource(
     fromAi,
   };
 }
+
+/* ---------- Thời gian làm bài từng phần thi ---------- */
+
+export const MIN_SECTION_MINUTES = 1;
+export const MAX_SECTION_MINUTES = 240;
+export const MAX_EXAM_MINUTES = 600;
+
+/** Thời gian mặc định (phút) của từng kỹ năng theo preset chứng chỉ (Dev 2) — admin sửa được trên form */
+const PRESET_DURATIONS: Record<string, Partial<Record<PracticeSkill, number>>> = {
+  IELTS: { LISTENING: 30, READING: 60, WRITING: 60, SPEAKING: 14 },
+  TOEIC_LR: { LISTENING: 45, READING: 75 },
+  TOEIC_SW: { WRITING: 60, SPEAKING: 20 },
+  VSTEP: { LISTENING: 40, READING: 60, WRITING: 60, SPEAKING: 12 },
+  TOEFL_NEW: { LISTENING: 29, READING: 30, WRITING: 23, SPEAKING: 8 },
+  APTIS: { LISTENING: 40, READING: 35, WRITING: 50, SPEAKING: 12 },
+};
+
+/** Đề không gắn chứng chỉ / preset chưa khai báo / kỹ năng không có trong chứng chỉ */
+const FALLBACK_DURATIONS: Record<PracticeSkill, number> = {
+  LISTENING: 30,
+  READING: 30,
+  WRITING: 30,
+  SPEAKING: 15,
+};
+
+export function defaultDuration(preset: string | undefined, skill: PracticeSkill): number {
+  return (preset ? PRESET_DURATIONS[preset]?.[skill] : undefined) ?? FALLBACK_DURATIONS[skill];
+}
+
+/**
+ * Chia thời gian của 1 phần thi cho các section con đọc ra từ file đề (VD Reading 60 phút, 3 passage → 20/20/20).
+ * Chia đều, phần dư cộng vào section đầu; mỗi section tối thiểu 1 phút (BE yêu cầu).
+ */
+export function splitMinutes(total: number, count: number): number[] {
+  if (count <= 0) return [];
+  const base = Math.floor(total / count);
+  const rest = total - base * count;
+  return Array.from({ length: count }, (_, i) => Math.max(MIN_SECTION_MINUTES, base + (i === 0 ? rest : 0)));
+}

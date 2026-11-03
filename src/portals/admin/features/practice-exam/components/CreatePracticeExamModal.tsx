@@ -1,8 +1,9 @@
 /**
  * CreatePracticeExamModal — tạo 1 đề luyện tập AI gồm nhiều phần thi (Listening / Reading / Writing / Speaking)
  * -----------------------------------------------------------
- * 1. Thông tin đề: tiêu đề, chứng chỉ (không bắt buộc), thời gian làm bài
- * 2. "+ Thêm phần thi": mỗi phần chọn kỹ năng + file đề (PDF / Word / .txt) hoặc dán nội dung;
+ * 1. Thông tin đề: tiêu đề, chứng chỉ (không bắt buộc); thời gian cả đề = tổng thời gian các phần thi
+ * 2. "+ Thêm phần thi": mỗi phần chọn kỹ năng + thời gian (gợi ý theo chứng chỉ, sửa được)
+ *    + file đề (PDF / Word / .txt) hoặc dán nội dung;
  *    Listening: dán link file nghe hoặc bấm "Tải mp3 lên" (upload thẳng lên Cloudinary, tự điền link)
  * 3. "Đọc đề": file theo mẫu đọc thẳng, còn lại Claude đọc → xem trước câu hỏi + đáp án
  * 4. "Tạo đề": tạo đề (exam_scope = practice) → section → câu hỏi → xuất bản cho học viên
@@ -16,6 +17,7 @@ import {
   AlertTriangle,
   BookOpen,
   CheckCircle2,
+  Clock,
   FileText,
   Headphones,
   Loader2,
@@ -46,8 +48,13 @@ import {
 } from '@/portals/admin/features/exam/services/adminExamService';
 import type { ImportQuestion } from '@/portals/admin/features/exam/utils/examImport';
 import {
+  MAX_EXAM_MINUTES,
+  MAX_SECTION_MINUTES,
+  MIN_SECTION_MINUTES,
   PRACTICE_SKILLS,
+  defaultDuration,
   readSectionSource,
+  splitMinutes,
   type PracticeSkill,
   type SectionReadResult,
   type SectionSource,
@@ -70,10 +77,22 @@ const SKILL_HINT: Record<PracticeSkill, string> = {
 
 interface SectionRow extends SectionSource {
   id: number;
+  /** Thời gian làm phần thi (phút) — chuỗi để admin xoá / gõ lại trong ô nhập */
+  duration: string;
+  /** true = admin đã tự sửa thời gian → đổi kỹ năng / chứng chỉ không ghi đè */
+  durationEdited: boolean;
   status: 'idle' | 'reading' | 'done' | 'error';
   result?: SectionReadResult;
   error?: string;
 }
+
+const SECTION_DURATION_ERROR = `Từ ${MIN_SECTION_MINUTES} đến ${MAX_SECTION_MINUTES} phút`;
+
+/** Thời gian 1 phần thi hợp lệ: số nguyên trong khoảng cho phép */
+const isValidMinutes = (value: string) => {
+  const n = Number(value);
+  return value.trim() !== '' && Number.isInteger(n) && n >= MIN_SECTION_MINUTES && n <= MAX_SECTION_MINUTES;
+};
 
 const answerText = (q: ImportQuestion) =>
   (q.request.options ?? [])
@@ -89,10 +108,18 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [certificateId, setCertificateId] = useState('');
-  const [duration, setDuration] = useState('60');
   const [publishNow, setPublishNow] = useState(true);
   const [rows, setRows] = useState<SectionRow[]>([
-    { id: 1, skill: 'READING', file: null, text: '', audioUrl: '', status: 'idle' },
+    {
+      id: 1,
+      skill: 'READING',
+      file: null,
+      text: '',
+      audioUrl: '',
+      duration: String(defaultDuration(undefined, 'READING')),
+      durationEdited: false,
+      status: 'idle',
+    },
   ]);
   const [touched, setTouched] = useState(false);
   const [isReading, setReading] = useState(false);
@@ -111,8 +138,19 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
 
   /* ---------- Sửa danh sách phần thi ---------- */
   const updateRow = (id: number, patch: Partial<SectionRow>) =>
-    // Đổi nguồn đề / kỹ năng thì phải đọc lại
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'idle', result: undefined, error: undefined, ...patch } : r)));
+    // Đổi nguồn đề / kỹ năng thì phải đọc lại; đổi kỹ năng thì gợi ý lại thời gian nếu admin chưa tự sửa
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const next: SectionRow = { ...r, status: 'idle', result: undefined, error: undefined, ...patch };
+        if (patch.skill && !r.durationEdited) next.duration = String(defaultDuration(scale.preset, patch.skill));
+        return next;
+      }),
+    );
+
+  /** Đổi thời gian không cần đọc lại đề */
+  const updateDuration = (id: number, value: string) =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, duration: value, durationEdited: true } : r)));
 
   /** Đổi link file nghe không cần đọc lại đề: thay cho các section đang dùng link cũ / chưa có file nghe */
   const updateAudio = (id: number, url: string) =>
@@ -136,16 +174,32 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
   const addRow = () => {
     const used = new Set(rows.map((r) => r.skill));
     const skill = PRACTICE_SKILLS.find((s) => !used.has(s)) ?? 'READING';
-    setRows((prev) => [...prev, { id: nextId.current++, skill, file: null, text: '', audioUrl: '', status: 'idle' }]);
+    setRows((prev) => [
+      ...prev,
+      {
+        id: nextId.current++,
+        skill,
+        file: null,
+        text: '',
+        audioUrl: '',
+        duration: String(defaultDuration(scale.preset, skill)),
+        durationEdited: false,
+        status: 'idle',
+      },
+    ]);
   };
 
   const removeRow = (id: number) => setRows((prev) => prev.filter((r) => r.id !== id));
 
   /* ---------- Kiểm tra form ---------- */
-  const durationValue = Number(duration);
   const titleError = !title.trim() ? 'Tiêu đề là bắt buộc' : title.trim().length > 255 ? 'Tối đa 255 ký tự' : '';
-  const durationError =
-    !Number.isInteger(durationValue) || durationValue < 1 || durationValue > 600 ? 'Từ 1 đến 600 phút' : '';
+  // Thời gian cả đề = tổng thời gian các phần thi
+  const totalMinutes = rows.reduce((n, r) => n + (isValidMinutes(r.duration) ? Number(r.duration) : 0), 0);
+  const durationError = rows.some((r) => !isValidMinutes(r.duration))
+    ? 'Kiểm tra lại thời gian từng phần thi'
+    : totalMinutes > MAX_EXAM_MINUTES
+      ? `Tổng thời gian tối đa ${MAX_EXAM_MINUTES} phút`
+      : '';
   const rowsError = rows.length === 0
     ? 'Thêm ít nhất 1 phần thi'
     : rows.some((r) => !r.file && !r.text.trim())
@@ -205,7 +259,7 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
           certificateId: certificateId || undefined,
           examTitle: title.trim(),
           description: description.trim() || undefined,
-          durationMinutes: durationValue,
+          durationMinutes: totalMinutes,
           // Luyện tập: không giới hạn lượt, miễn phí, cho xem điểm và đáp án
           maxAttempts: 0,
           isFree: true,
@@ -216,8 +270,14 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
       examId = exam.exam.examId;
       setProgress({ done: ++done, total });
       for (const row of rows) {
-        for (const s of row.result?.sections ?? []) {
-          const section = unwrapOrThrow(await createSectionApi(examId, s.request));
+        const sections = row.result?.sections ?? [];
+        // Thời gian của phần thi chia cho các section con đọc ra từ file đề
+        const minutes = splitMinutes(Number(row.duration), sections.length);
+        for (let i = 0; i < sections.length; i++) {
+          const s = sections[i];
+          const section = unwrapOrThrow(
+            await createSectionApi(examId, { ...s.request, durationMinutes: minutes[i] }),
+          );
           setProgress({ done: ++done, total });
           for (const q of s.questions) {
             unwrapOrThrow(await addQuestionApi(examId, { ...q.request, sectionId: section.sectionId }));
@@ -293,9 +353,19 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
             <select
               value={certificateId}
               onChange={(e) => {
+                const nextCert = certificates.find((c) => c.certificateId === e.target.value) ?? null;
+                const nextPreset = scaleFromCertificate(nextCert).preset;
                 setCertificateId(e.target.value);
-                // Đổi chứng chỉ thì phần thi gắn theo chứng chỉ khác → đọc lại
-                setRows((prev) => prev.map((r) => ({ ...r, status: 'idle', result: undefined, error: undefined })));
+                // Đổi chứng chỉ thì phần thi gắn theo chứng chỉ khác → đọc lại; gợi ý lại thời gian các phần chưa tự sửa
+                setRows((prev) =>
+                  prev.map((r) => ({
+                    ...r,
+                    status: 'idle',
+                    result: undefined,
+                    error: undefined,
+                    duration: r.durationEdited ? r.duration : String(defaultDuration(nextPreset, r.skill)),
+                  })),
+                );
               }}
               className={inputCls(false)}
               disabled={isBusy}
@@ -308,16 +378,17 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
               ))}
             </select>
           </Field>
-          <Field label="Thời gian làm bài (phút)" required error={touched ? durationError : ''}>
-            <input
-              type="number"
-              min={1}
-              max={600}
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className={inputCls(Boolean(touched && durationError))}
-              disabled={isBusy}
-            />
+          <Field label="Thời gian làm bài (phút)" error={touched ? durationError : ''}>
+            <div
+              className={cn(
+                inputCls(Boolean(touched && durationError)),
+                'flex items-center gap-2 bg-slate-50 text-slate-700',
+              )}
+            >
+              <Clock className="w-4 h-4 text-slate-400" />
+              <span className="font-bold">{totalMinutes}</span>
+              <span className="text-xs text-slate-400">phút · tự cộng từ các phần thi</span>
+            </div>
           </Field>
         </div>
 
@@ -351,7 +422,9 @@ export const CreatePracticeExamModal: React.FC<{ onClose: () => void }> = ({ onC
               row={row}
               disabled={isBusy}
               canRemove={rows.length > 1}
+              durationError={touched && !isValidMinutes(row.duration) ? SECTION_DURATION_ERROR : ''}
               onChange={(patch) => updateRow(row.id, patch)}
+              onDurationChange={(value) => updateDuration(row.id, value)}
               onAudioChange={(url) => updateAudio(row.id, url)}
               onRemove={() => removeRow(row.id)}
             />
@@ -428,10 +501,12 @@ const SectionRowCard: React.FC<{
   row: SectionRow;
   disabled: boolean;
   canRemove: boolean;
+  durationError: string;
   onChange: (patch: Partial<SectionRow>) => void;
+  onDurationChange: (value: string) => void;
   onAudioChange: (url: string) => void;
   onRemove: () => void;
-}> = ({ index, row, disabled, canRemove, onChange, onAudioChange, onRemove }) => {
+}> = ({ index, row, disabled, canRemove, durationError, onChange, onDurationChange, onAudioChange, onRemove }) => {
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
@@ -439,6 +514,9 @@ const SectionRowCard: React.FC<{
   /** null = không upload; 0 - 100 = % đang upload file nghe */
   const [audioProgress, setAudioProgress] = useState<number | null>(null);
   const result = row.result;
+  // Phần thi đọc ra nhiều section (VD 3 passage) → hiện thời gian chia cho từng section
+  const sectionMinutes = splitMinutes(Number(row.duration), result?.sections.length ?? 0);
+  const showSplit = isValidMinutes(row.duration) && sectionMinutes.length > 1;
 
   /** Upload file nghe lên Cloudinary (chữ ký do BE cấp) rồi điền link vào ô */
   const uploadAudio = async (file: File) => {
@@ -505,7 +583,25 @@ const SectionRowCard: React.FC<{
           </button>
         )}
       </div>
-      <p className="text-[11px] text-slate-500">{SKILL_HINT[row.skill]}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-[11px] text-slate-500 flex-1 min-w-[200px]">{SKILL_HINT[row.skill]}</p>
+        <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+          <Clock className="w-3.5 h-3.5 text-slate-400" />
+          Thời gian
+          <input
+            type="number"
+            min={MIN_SECTION_MINUTES}
+            max={MAX_SECTION_MINUTES}
+            value={row.duration}
+            onChange={(e) => onDurationChange(e.target.value)}
+            disabled={disabled}
+            aria-label="Thời gian phần thi (phút)"
+            className={cn(inputCls(Boolean(durationError)), 'w-20 h-8 px-2 text-center')}
+          />
+          phút
+        </label>
+      </div>
+      {durationError && <p className="text-[11px] text-rose-500 text-right">{durationError}</p>}
 
       <div className="grid sm:grid-cols-2 gap-3">
         <div
@@ -628,7 +724,10 @@ const SectionRowCard: React.FC<{
                     {s.request.sectionType}
                   </Badge>
                   <span className="font-bold text-xs text-slate-800 flex-1">{s.request.title}</span>
-                  <span className="text-[11px] text-slate-500">{s.questions.length} câu</span>
+                  <span className="text-[11px] text-slate-500">
+                    {showSplit && `${sectionMinutes[i]} phút · `}
+                    {s.questions.length} câu
+                  </span>
                 </div>
                 {s.request.audioUrl && <p className="text-[11px] text-slate-500 truncate">🎧 {s.request.audioUrl}</p>}
                 {s.request.passageText && (

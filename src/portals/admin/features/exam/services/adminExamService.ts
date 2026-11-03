@@ -68,6 +68,8 @@ export interface CreateSectionRequest {
   instructions?: string;
   passageText?: string;
   audioUrl?: string;
+  /** Thời lượng riêng của section (phút) — BE: CreateExamSectionRequest.durationMinutes, tối thiểu 1 */
+  durationMinutes?: number;
 }
 
 export interface QuestionOptionInput {
