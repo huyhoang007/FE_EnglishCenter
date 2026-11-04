@@ -4,17 +4,19 @@
  *   GET    /api/v1/admin/exams?keyword=&status=&page=&size=     → PageResponse<ExamSummary>
  *   GET    /api/v1/admin/exams/{examId}                         → ExamDetail (kèm đáp án đúng)
  *   POST   /api/v1/admin/exams                                  → ExamDetail (luôn ở trạng thái nháp)
+ *   PUT    /api/v1/admin/exams/{examId}                         → ExamDetail (trường không gửi = giữ nguyên)
  *   DELETE /api/v1/admin/exams/{examId}
  *   POST   /api/v1/admin/exams/{examId}/publish | /unpublish    → ExamDetail
  *   POST   /api/v1/admin/exams/{examId}/archive | /restore      → ExamDetail (lưu trữ / khôi phục về nháp, 5024)
  *   POST   /api/v1/admin/exams/{examId}/sections                → ExamSection
+ *   PUT    /api/v1/admin/exams/{examId}/sections/{sectionId}    → ExamSection
  *   DELETE /api/v1/admin/exams/{examId}/sections/{sectionId}
  *   POST   /api/v1/admin/exams/{examId}/questions               → ExamQuestion
  *   DELETE /api/v1/admin/exams/{examId}/questions/{questionId}
  * Sửa cấu trúc chỉ được khi đề là nháp và chưa có lượt thi (backend chặn với 5005 / 5006).
  */
 
-import { apiDelete, apiGet, apiPost } from '@/shared/api/axiosClient';
+import { apiDelete, apiGet, apiPost, apiPut } from '@/shared/api/axiosClient';
 import type {
   ApiResponse,
   DifficultyLevel,
@@ -58,6 +60,25 @@ export interface CreateExamRequest {
   price?: number;
   difficultyLevel?: DifficultyLevel;
   recommendedLevel?: string;
+}
+
+/**
+ * Sửa thông tin đề — BE: UpdateExamRequest, trường không gửi = giữ nguyên.
+ * Đổi chứng chỉ chỉ được khi đề là nháp và chưa có lượt thi (5005 / 5006).
+ */
+export interface UpdateExamRequest {
+  certificateId?: string;
+  /** true = bỏ gắn chứng chỉ (vì certificateId không gửi nghĩa là giữ nguyên) */
+  clearCertificate?: boolean;
+  examTitle?: string;
+  description?: string;
+  durationMinutes?: number;
+}
+
+export interface UpdateSectionRequest {
+  title?: string;
+  sectionOrder?: number;
+  durationMinutes?: number;
 }
 
 export interface CreateSectionRequest {
@@ -107,6 +128,9 @@ export const getAdminExamApi = (examId: string): Promise<ApiResponse<ExamDetail>
 export const createExamApi = (payload: CreateExamRequest): Promise<ApiResponse<ExamDetail>> =>
   apiPost<ExamDetail>(BASE, payload);
 
+export const updateExamApi = (examId: string, payload: UpdateExamRequest): Promise<ApiResponse<ExamDetail>> =>
+  apiPut<ExamDetail>(`${BASE}/${examId}`, payload);
+
 export const deleteExamApi = (examId: string): Promise<ApiResponse<void>> => apiDelete<void>(`${BASE}/${examId}`);
 
 export const publishExamApi = (examId: string): Promise<ApiResponse<ExamDetail>> =>
@@ -123,6 +147,12 @@ export const restoreExamApi = (examId: string): Promise<ApiResponse<ExamDetail>>
 
 export const createSectionApi = (examId: string, payload: CreateSectionRequest): Promise<ApiResponse<ExamSection>> =>
   apiPost<ExamSection>(`${BASE}/${examId}/sections`, payload);
+
+export const updateSectionApi = (
+  examId: string,
+  sectionId: string,
+  payload: UpdateSectionRequest,
+): Promise<ApiResponse<ExamSection>> => apiPut<ExamSection>(`${BASE}/${examId}/sections/${sectionId}`, payload);
 
 export const deleteSectionApi = (examId: string, sectionId: string): Promise<ApiResponse<void>> =>
   apiDelete<void>(`${BASE}/${examId}/sections/${sectionId}`);

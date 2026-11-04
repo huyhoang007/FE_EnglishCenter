@@ -4,7 +4,8 @@
  * Đề luyện tập dùng chung module Exam (exam_scope = practice): một đề gồm nhiều phần thi
  * Listening / Reading (tự chấm theo đáp án) và Writing / Speaking (AI - Claude chấm khi học viên nộp).
  *   - "Tạo đề luyện tập": thêm từng phần thi + file đề của kỹ năng đó → AI đọc → tạo 1 lần
- *   - Sửa câu hỏi / đáp án, xuất bản, lưu trữ: trang soạn đề của module Exam
+ *   - "Sửa đề" (bút chì): mở lại form tạo đề để sửa tiêu đề, chứng chỉ, mô tả, thời gian, phần thi
+ *   - Sửa từng câu hỏi / đáp án, lưu trữ: trang soạn đề của module Exam (nút danh sách)
  * API: GET /api/v1/admin/exams?examScope=practice, xem thêm exam/services/adminExamService.ts
  *
  * Layout giữ nguyên AdminLayout: StatCard → title bar → filter bar → bảng → modal,
@@ -14,7 +15,21 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Award, CheckCircle2, Eye, EyeOff, FileText, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react';
+import {
+  Award,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  FileText,
+  ListChecks,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { StatCard } from '@/portals/admin/components/StatCard';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
@@ -53,6 +68,8 @@ export const PracticeExamManagementView: React.FC = () => {
   const [page, setPage] = useState(0);
 
   const [isCreateOpen, setCreateOpen] = useState(false);
+  /** examId của đề đang mở form sửa */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ExamSummary | null>(null);
 
   const { data: certificates = [] } = useQuery({
@@ -312,12 +329,21 @@ export const PracticeExamManagementView: React.FC = () => {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          onClick={() => navigate(ADMIN_ROUTES.examEditor(exam.examId))}
+                          onClick={() => setEditingId(exam.examId)}
                           className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                          title="Soạn đề: sửa câu hỏi, đáp án, phần thi"
-                          aria-label="Soạn đề"
+                          title="Sửa đề: tiêu đề, chứng chỉ, mô tả, thời gian, phần thi"
+                          aria-label="Sửa đề"
                         >
                           <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(ADMIN_ROUTES.examEditor(exam.examId))}
+                          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+                          title="Soạn đề: sửa từng câu hỏi, đáp án"
+                          aria-label="Soạn đề"
+                        >
+                          <ListChecks className="w-3.5 h-3.5" />
                         </button>
                         {exam.status !== 'archived' && (
                           <button
@@ -355,6 +381,7 @@ export const PracticeExamManagementView: React.FC = () => {
 
       {/* ============ MODALS ============ */}
       {isCreateOpen && <CreatePracticeExamModal onClose={() => setCreateOpen(false)} />}
+      {editingId && <CreatePracticeExamModal key={editingId} examId={editingId} onClose={() => setEditingId(null)} />}
 
       {deleting && (
         <ModalShell onClose={() => setDeleting(null)}>
