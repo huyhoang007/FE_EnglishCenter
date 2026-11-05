@@ -81,6 +81,14 @@ export interface UpdateSectionRequest {
   durationMinutes?: number;
 }
 
+/** Sửa nội dung hiển thị — được cả khi đề đã có lượt thi (BE chặn đổi loại, thứ tự, phần thi của chứng chỉ) */
+export interface UpdateSectionContentRequest {
+  title?: string;
+  instructions?: string;
+  passageText?: string;
+  audioUrl?: string;
+}
+
 export interface CreateSectionRequest {
   title: string;
   sectionType?: string;
@@ -151,7 +159,7 @@ export const createSectionApi = (examId: string, payload: CreateSectionRequest):
 export const updateSectionApi = (
   examId: string,
   sectionId: string,
-  payload: UpdateSectionRequest,
+  payload: UpdateSectionRequest | UpdateSectionContentRequest,
 ): Promise<ApiResponse<ExamSection>> => apiPut<ExamSection>(`${BASE}/${examId}/sections/${sectionId}`, payload);
 
 export const deleteSectionApi = (examId: string, sectionId: string): Promise<ApiResponse<void>> =>
@@ -159,20 +167,6 @@ export const deleteSectionApi = (examId: string, sectionId: string): Promise<Api
 
 export const addQuestionApi = (examId: string, payload: CreateQuestionRequest): Promise<ApiResponse<ExamQuestion>> =>
   apiPost<ExamQuestion>(`${BASE}/${examId}/questions`, payload);
-
-/** Sửa nội dung hiển thị — được cả khi đề đã có lượt thi (BE chặn đổi loại, thứ tự, phần thi của chứng chỉ) */
-export interface UpdateSectionContentRequest {
-  title?: string;
-  instructions?: string;
-  passageText?: string;
-  audioUrl?: string;
-}
-
-export const updateSectionApi = (
-  examId: string,
-  sectionId: string,
-  payload: UpdateSectionContentRequest,
-): Promise<ApiResponse<ExamSection>> => apiPut<ExamSection>(`${BASE}/${examId}/sections/${sectionId}`, payload);
 
 /** Sửa nội dung hiển thị của câu — được cả khi đã có học viên trả lời (BE chặn đổi đáp án, điểm, dạng câu) */
 export interface UpdateQuestionContentRequest {
