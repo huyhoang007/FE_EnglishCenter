@@ -34,6 +34,7 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  SpellCheck,
   Trash2,
   Upload,
   X,
@@ -46,7 +47,7 @@ import { getErrorMessage, unwrapOrThrow } from '@/shared/api/axiosClient';
 import { fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
-import { SKILL_LABEL, scaleFromCertificate, toSkill } from '@/shared/constants/examScales';
+import { scaleFromCertificate, toSkill, type ScaleInfo } from '@/shared/constants/examScales';
 import { QUESTION_TYPE_LABEL } from '@/shared/types';
 import type { ExamDetail, ExamSection, ExamStatus } from '@/shared/types';
 import { cn } from '@/shared/utils';
@@ -66,8 +67,10 @@ import {
   MAX_EXAM_MINUTES,
   MAX_SECTION_MINUTES,
   MIN_SECTION_MINUTES,
-  PRACTICE_SKILLS,
+  corePartOf,
   defaultDuration,
+  practiceSkillLabel,
+  practiceSkillsFor,
   readSectionSource,
   splitMinutes,
   type PracticeSkill,
@@ -81,6 +84,7 @@ const SKILL_ICON: Record<PracticeSkill, React.ElementType> = {
   READING: BookOpen,
   WRITING: PenLine,
   SPEAKING: Mic,
+  OTHER: SpellCheck,
 };
 
 const SKILL_HINT: Record<PracticeSkill, string> = {
@@ -88,6 +92,7 @@ const SKILL_HINT: Record<PracticeSkill, string> = {
   READING: 'Đoạn đọc + câu hỏi + đáp án, tự chấm.',
   WRITING: 'Đề bài viết (Task 1 / Task 2…), AI chấm khi học viên nộp.',
   SPEAKING: 'Câu hỏi nói, học viên ghi âm → phiên âm, AI chấm.',
+  OTHER: 'Ngữ pháp + từ vựng (Core): câu hỏi + đáp án, tự chấm. Có điểm riêng, không cộng vào điểm tổng.',
 };
 
 /** Phần thi đã có trong đề (chế độ sửa): các section liền nhau cùng kỹ năng */
@@ -131,10 +136,8 @@ const answerText = (q: ImportQuestion) =>
     .map((o) => o.optionText.replace('::', ' → '))
     .join(' · ');
 
-const toPracticeSkill = (sectionType?: string | null): PracticeSkill => {
-  const skill = toSkill(sectionType);
-  return skill === 'OTHER' ? 'READING' : skill;
-};
+/** Section GENERAL = phần Core (VD Aptis Grammar & Vocabulary) */
+const toPracticeSkill = (sectionType?: string | null): PracticeSkill => toSkill(sectionType);
 
 /** Đề đã có → các dòng phần thi: section liền nhau cùng kỹ năng gộp thành 1 phần (VD Reading 3 passage) */
 function rowsFromExam(detail: ExamDetail, firstId: number): SectionRow[] {
@@ -265,7 +268,7 @@ export const CreatePracticeExamModal: React.FC<{
 
   const addRow = () => {
     const used = new Set(rows.map((r) => r.skill));
-    const skill = PRACTICE_SKILLS.find((s) => !used.has(s)) ?? 'READING';
+    const skill = practiceSkillsFor(scale).find((s) => !used.has(s)) ?? 'READING';
     setRows((prev) => [...prev, newRow(nextId.current++, skill, scale.preset)]);
   };
 
@@ -636,7 +639,10 @@ export const CreatePracticeExamModal: React.FC<{
               value={certificateId}
               onChange={(e) => {
                 const nextCert = certificates.find((c) => c.certificateId === e.target.value) ?? null;
-                const nextPreset = scaleFromCertificate(nextCert).preset;
+                const nextScale = scaleFromCertificate(nextCert);
+                const nextPreset = nextScale.preset;
+                // Chứng chỉ mới không có phần Core (chỉ Aptis có) → phần Core chưa lưu chuyển về Reading
+                const keepCore = Boolean(corePartOf(nextScale));
                 setCertificateId(e.target.value);
                 // Đổi chứng chỉ thì phần thi mới phải đọc lại theo chứng chỉ mới; gợi ý lại thời gian các phần chưa tự sửa.
                 // Phần đã có trong đề giữ nguyên — BE tự gắn lại phần thi theo kỹ năng khi lưu.
@@ -644,13 +650,17 @@ export const CreatePracticeExamModal: React.FC<{
                   prev.map((r) =>
                     isKept(r)
                       ? r
-                      : {
-                          ...r,
-                          status: 'idle',
-                          result: undefined,
-                          error: undefined,
-                          duration: r.durationEdited ? r.duration : String(defaultDuration(nextPreset, r.skill)),
-                        },
+                      : (() => {
+                          const skill: PracticeSkill = r.skill === 'OTHER' && !keepCore ? 'READING' : r.skill;
+                          return {
+                            ...r,
+                            skill,
+                            status: 'idle' as const,
+                            result: undefined,
+                            error: undefined,
+                            duration: r.durationEdited ? r.duration : String(defaultDuration(nextPreset, skill)),
+                          };
+                        })(),
                   ),
                 );
               }}
@@ -713,6 +723,7 @@ export const CreatePracticeExamModal: React.FC<{
               key={row.id}
               index={index}
               row={row}
+              scale={scale}
               disabled={isBusy}
               locked={isStructureLocked}
               canRemove={rows.length > 1 && !isStructureLocked}
@@ -804,6 +815,8 @@ export const CreatePracticeExamModal: React.FC<{
 const SectionRowCard: React.FC<{
   index: number;
   row: SectionRow;
+  /** Thang chứng chỉ: quyết định có tab Core (VD Aptis) hay không */
+  scale: ScaleInfo;
   disabled: boolean;
   /** Đề đã có lượt làm: không đổi thời gian / nội dung */
   locked: boolean;
@@ -818,6 +831,7 @@ const SectionRowCard: React.FC<{
 }> = ({
   index,
   row,
+  scale,
   disabled,
   locked,
   canRemove,
@@ -836,6 +850,9 @@ const SectionRowCard: React.FC<{
   /** null = không upload; 0 - 100 = % đang upload file nghe */
   const [audioProgress, setAudioProgress] = useState<number | null>(null);
   const kept = isKept(row);
+  // Tab kỹ năng: 4 kỹ năng (+ Core nếu chứng chỉ có, VD Aptis); phần đã lưu kiểu khác vẫn hiện tab của nó
+  const allowed = practiceSkillsFor(scale);
+  const skillTabs = allowed.includes(row.skill) ? allowed : [...allowed, row.skill];
   const result = row.result;
   // Phần thi đọc ra nhiều section (VD 3 passage) → hiện thời gian chia cho từng section
   const sectionCount = kept ? row.existing!.sections.length : (result?.sections.length ?? 0);
@@ -872,7 +889,7 @@ const SectionRowCard: React.FC<{
       <div className="flex items-center gap-2">
         <span className="text-xs font-extrabold text-slate-400">#{index + 1}</span>
         <div className="flex flex-wrap gap-1.5 flex-1">
-          {PRACTICE_SKILLS.map((skill) => {
+          {skillTabs.map((skill) => {
             const Icon = SKILL_ICON[skill];
             return (
               <button
@@ -890,7 +907,7 @@ const SectionRowCard: React.FC<{
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />
-                {SKILL_LABEL[skill]}
+                {practiceSkillLabel(skill, scale)}
               </button>
             );
           })}

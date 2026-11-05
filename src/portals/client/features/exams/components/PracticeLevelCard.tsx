@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { BookOpen, Headphones, Layers, Mic, PenLine } from 'lucide-react';
+import { BookOpen, Headphones, Mic, PenLine, SpellCheck } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import type { PracticeLevel } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
@@ -35,7 +35,7 @@ const SKILL_VIEW: Record<PracticeLevel['skills'][number]['skill'], { label: stri
   READING: { label: 'Reading', icon: BookOpen },
   WRITING: { label: 'Writing', icon: PenLine },
   SPEAKING: { label: 'Speaking', icon: Mic },
-  OTHER: { label: 'Khác', icon: Layers },
+  OTHER: { label: 'Core', icon: SpellCheck },
 };
 
 /** Thang ≤ 10 (IELTS, VSTEP…) hiện 1 chữ số thập phân; thang lớn (TOEIC) hiện số nguyên */
@@ -76,7 +76,7 @@ export const PracticeLevelCard: React.FC<{ level: PracticeLevel }> = ({ level })
             <div key={s.skill} className="rounded-2xl border border-slate-200 p-4 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                  <Icon className="w-4 h-4" /> {view.label}
+                  <Icon className="w-4 h-4" /> {s.name ?? view.label}
                 </span>
                 <span className="text-xl font-extrabold text-slate-900 tabular-nums">
                   {fmt(s.score, s.maxScore)}
@@ -88,6 +88,9 @@ export const PracticeLevelCard: React.FC<{ level: PracticeLevel }> = ({ level })
                   Trình độ <b className="text-slate-800">{s.cefrLevel}</b>
                   {CEFR_LABEL[s.cefrLevel] ? ` · ${CEFR_LABEL[s.cefrLevel]}` : ''}
                 </p>
+              )}
+              {s.excludeFromTotal && (
+                <p className="text-[11px] text-slate-400">Điểm riêng, không tính vào điểm tổng</p>
               )}
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, s.percentage)}%` }} />

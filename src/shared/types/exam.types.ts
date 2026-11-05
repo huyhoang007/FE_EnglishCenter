@@ -232,6 +232,10 @@ export interface PracticeLevel {
     maxScore: number;
     cefrLevel?: string;
     percentage: number;
+    /** Tên phần thi của chứng chỉ (VD "Grammar & Vocabulary" — Core của Aptis) */
+    name?: string;
+    /** true = điểm riêng, không tính vào điểm tổng (VD Aptis Core) */
+    excludeFromTotal?: boolean;
   }[];
 }
 

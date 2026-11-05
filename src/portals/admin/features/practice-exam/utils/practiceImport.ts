@@ -9,7 +9,7 @@
  */
 
 import { unwrapOrThrow } from '@/shared/api/axiosClient';
-import { SKILL_LABEL, type ScaleInfo } from '@/shared/constants/examScales';
+import { SKILL_LABEL, skillToSectionType, type ScaleInfo } from '@/shared/constants/examScales';
 import { aiImportApi } from '@/portals/admin/features/exam/services/adminExamService';
 import {
   MAX_PDF_BYTES,
@@ -22,9 +22,22 @@ import {
   type ImportSection,
 } from '@/portals/admin/features/exam/utils/examImport';
 
-export type PracticeSkill = 'LISTENING' | 'READING' | 'WRITING' | 'SPEAKING';
+/** OTHER = phần "Core" ngoài 4 kỹ năng (VD Aptis Grammar & Vocabulary), section lưu loại GENERAL */
+export type PracticeSkill = 'LISTENING' | 'READING' | 'WRITING' | 'SPEAKING' | 'OTHER';
 
+/** 4 kỹ năng luôn có trên form */
 export const PRACTICE_SKILLS: PracticeSkill[] = ['LISTENING', 'READING', 'WRITING', 'SPEAKING'];
+
+/** Phần thi "Core" của chứng chỉ: phần không thuộc 4 kỹ năng (VD Aptis "Grammar & Vocabulary") */
+export const corePartOf = (scale: ScaleInfo) => scale.parts.find((p) => p.skill === 'OTHER');
+
+/** Kỹ năng chọn được trên form: 4 kỹ năng, thêm Core chỉ khi chứng chỉ có phần đó (VD Aptis) */
+export const practiceSkillsFor = (scale: ScaleInfo): PracticeSkill[] =>
+  corePartOf(scale) ? [...PRACTICE_SKILLS, 'OTHER'] : PRACTICE_SKILLS;
+
+/** Nhãn kỹ năng trên form: Core lấy đúng tên phần thi của chứng chỉ */
+export const practiceSkillLabel = (skill: PracticeSkill, scale: ScaleInfo): string =>
+  skill === 'OTHER' ? (corePartOf(scale)?.name ?? 'Core') : SKILL_LABEL[skill];
 
 /** Một phần thi admin đang soạn: kỹ năng + nguồn đề (file hoặc nội dung dán vào) */
 export interface SectionSource {
@@ -51,7 +64,7 @@ export async function readSectionSource(
 ): Promise<SectionReadResult> {
   // Phần thi của chứng chỉ ứng với kỹ năng này (để chấm theo thang của phần), không có thì dùng tên kỹ năng
   const parts = scale.parts.filter((p) => p.partId && p.skill === source.skill);
-  const tokens = parts.length ? parts.map((p) => p.name) : [source.skill];
+  const tokens = parts.length ? parts.map((p) => p.name) : [skillToSectionType(source.skill)];
   let fromAi = false;
 
   const askAi = async (fileBase64?: string, text?: string) => {
@@ -86,7 +99,7 @@ export async function readSectionSource(
 
   // Không có [SECTION] nào → mở sẵn một section của kỹ năng này để câu hỏi không bị lạc
   if (!/^\s*\[SECTION\]/im.test(text)) {
-    text = `[SECTION] ${tokens[0]} | ${SKILL_LABEL[source.skill]}\n${text}`;
+    text = `[SECTION] ${tokens[0]} | ${practiceSkillLabel(source.skill, scale)}\n${text}`;
   }
   const parsed = parseExamText(text, parts);
 
@@ -100,7 +113,7 @@ export async function readSectionSource(
       request: {
         ...s.request,
         // Ép đúng kỹ năng của phần thi: AI chấm Writing / Speaking dựa vào loại section
-        sectionType: source.skill,
+        sectionType: skillToSectionType(source.skill),
         audioUrl: source.skill === 'LISTENING' ? audioUrl : undefined,
       },
     };
@@ -129,7 +142,7 @@ const PRESET_DURATIONS: Record<string, Partial<Record<PracticeSkill, number>>> =
   TOEIC_SW: { WRITING: 60, SPEAKING: 20 },
   VSTEP: { LISTENING: 40, READING: 60, WRITING: 60, SPEAKING: 12 },
   TOEFL_NEW: { LISTENING: 29, READING: 30, WRITING: 23, SPEAKING: 8 },
-  APTIS: { LISTENING: 40, READING: 35, WRITING: 50, SPEAKING: 12 },
+  APTIS: { LISTENING: 40, READING: 35, WRITING: 50, SPEAKING: 12, OTHER: 25 },
 };
 
 /** Đề không gắn chứng chỉ / preset chưa khai báo / kỹ năng không có trong chứng chỉ */
@@ -138,6 +151,7 @@ const FALLBACK_DURATIONS: Record<PracticeSkill, number> = {
   READING: 30,
   WRITING: 30,
   SPEAKING: 15,
+  OTHER: 25,
 };
 
 export function defaultDuration(preset: string | undefined, skill: PracticeSkill): number {
