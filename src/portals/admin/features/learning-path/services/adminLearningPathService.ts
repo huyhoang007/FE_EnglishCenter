@@ -9,7 +9,8 @@
  * Dữ liệu cho dropdown khi thêm chặng:
  *   GET /api/v1/courses          (Dev 2, fetchCourses trong shared/api) — chặng COURSE
  *   GET /api/v1/admin/exams      (Dev 3)  — chặng EXAM
- *   GET /api/v1/practice-exams   (Dev 5)  — chặng PRACTICE_EXAM
+ *   GET /api/v1/admin/exams?examScope=practice&status=published — chặng PRACTICE_EXAM
+ *       (đề luyện tập AI tạo ở trang AI Practice nằm trong module Exam, không còn ở /practice-exams)
  */
 
 import { apiDelete, apiGet, apiPost, apiPut } from '@/shared/api/axiosClient';
@@ -19,7 +20,6 @@ import type {
   LearningPath,
   LearningPathPayload,
   PageResponse,
-  PracticeExam,
 } from '@/shared/types';
 
 const ADMIN_BASE = '/api/v1/admin/learning-paths';
@@ -59,5 +59,8 @@ export const deleteLearningPathApi = (learningPathId: string): Promise<ApiRespon
 export const getExamOptionsApi = (): Promise<ApiResponse<PageResponse<ExamOption>>> =>
   apiGet<PageResponse<ExamOption>>('/api/v1/admin/exams', { params: { page: 0, size: OPTION_SIZE } });
 
-export const getPracticeOptionsApi = (): Promise<ApiResponse<PageResponse<PracticeExam>>> =>
-  apiGet<PageResponse<PracticeExam>>('/api/v1/practice-exams', { params: { page: 0, size: OPTION_SIZE } });
+/** Đề luyện tập AI đã xuất bản (cùng nguồn với trang AI Practice) */
+export const getPracticeOptionsApi = (): Promise<ApiResponse<PageResponse<ExamOption>>> =>
+  apiGet<PageResponse<ExamOption>>('/api/v1/admin/exams', {
+    params: { examScope: 'practice', status: 'published', page: 0, size: OPTION_SIZE },
+  });

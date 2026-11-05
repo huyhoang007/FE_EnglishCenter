@@ -500,7 +500,10 @@ const LearningPathFormModal: React.FC<{
         label: `${e.examTitle}${e.examCode ? ` · ${e.examCode}` : ''}${e.status !== 'published' ? ` (${e.status})` : ''}`,
       }));
     }
-    return options.practices.map((p) => ({ id: p.practiceExamId, label: `${p.title} · ${p.examType}` }));
+    return options.practices.map((p) => ({
+      id: p.examId,
+      label: `${p.examTitle}${p.certificateName ? ` · ${p.certificateName}` : ''}`,
+    }));
   };
 
   /* ---------- Validate (khớp BE LearningPathRequest) ---------- */
