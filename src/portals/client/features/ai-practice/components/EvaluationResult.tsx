@@ -1,10 +1,10 @@
 /**
- * EvaluationResult — hiển thị kết quả AI chấm (band tổng + 4 tiêu chí + nhận xét + gợi ý)
+ * EvaluationResult — hiển thị kết quả AI chấm (band tổng + 4 tiêu chí + nhận xét + điểm yếu + lỗi phát âm + gợi ý)
  * Dữ liệu: PracticeEvaluation từ BE (Dev 5).
  */
 
 import React from 'react';
-import { Lightbulb, MessageSquareText, Sparkles } from 'lucide-react';
+import { AlertTriangle, Lightbulb, MessageSquareText, Mic, Sparkles } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import type { CriterionScore, PracticeEvaluation } from '@/shared/types';
@@ -22,6 +22,8 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
     { label: 'Grammatical Range & Accuracy', score: evaluation.grammaticalAccuracy },
   ];
   const isMock = evaluation.model === 'mock';
+  // Bài trống / không viết bằng tiếng Anh: BE cho 0 điểm theo quy tắc, không gọi AI
+  const isRuleBased = evaluation.model === 'rule-based';
   // Thang theo chứng chỉ mục tiêu; bài chấm cũ không có thang → IELTS 0 – 9
   const scale: ScoreScale = {
     name: evaluation.certificateName || 'IELTS',
@@ -51,8 +53,8 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
                 Level {evaluation.cefrLevel}
               </Badge>
             )}
-            <Badge variant={isMock ? 'warning' : 'neutral'} size="sm">
-              {isMock ? 'Chấm giả lập (mock)' : evaluation.model}
+            <Badge variant={isMock || isRuleBased ? 'warning' : 'neutral'} size="sm">
+              {isMock ? 'Chấm giả lập (mock)' : isRuleBased ? 'Không chấm được (0 điểm)' : evaluation.model}
             </Badge>
           </div>
         </div>
@@ -89,6 +91,57 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
             Nhận xét chung
           </p>
           <p className="mt-1.5 text-sm text-slate-700 leading-relaxed">{evaluation.feedback}</p>
+        </div>
+      )}
+
+      {/* Điểm yếu cụ thể */}
+      {(evaluation.weaknesses?.length ?? 0) > 0 && (
+        <div className="px-5 pb-4">
+          <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-500" />
+            Điểm yếu cần sửa
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {evaluation.weaknesses?.map((w, i) => (
+              <li key={i} className="flex gap-2 text-sm text-slate-700">
+                <span className="text-rose-500 font-bold">•</span>
+                <span>{w}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Speaking: từ nghi phát âm sai */}
+      {evaluation.examType === 'SPEAKING' && (evaluation.pronunciationIssues?.length ?? 0) > 0 && (
+        <div className="px-5 pb-4">
+          <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Mic className="w-4 h-4 text-violet-500" />
+            Phát âm cần chú ý
+          </p>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-slate-500 border-b border-slate-100">
+                  <th className="py-1.5 pr-3 font-bold">Từ cần nói</th>
+                  <th className="py-1.5 pr-3 font-bold">Máy nghe thành</th>
+                  <th className="py-1.5 font-bold">Cách sửa</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {evaluation.pronunciationIssues?.map((p, i) => (
+                  <tr key={i}>
+                    <td className="py-1.5 pr-3 font-bold text-slate-900">{p.word}</td>
+                    <td className="py-1.5 pr-3 text-rose-600">{p.heardAs || '—'}</td>
+                    <td className="py-1.5 text-slate-700">{p.tip}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-400">
+            Suy ra từ bản ghi giọng nói: từ bị máy nhận dạng sai thường là từ phát âm chưa chuẩn.
+          </p>
         </div>
       )}
 

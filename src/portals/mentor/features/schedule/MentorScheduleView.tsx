@@ -1,260 +1,194 @@
 /**
- * MentorScheduleView — Lịch dạy 1-1 của Mentor (Dev 5 — TASK D5-02, D5-03, D5-04, D5-11, D5-13)
+ * MentorScheduleView — Lịch dạy 1-1 của Mentor (Dev 5)
  * -----------------------------------------------------------
- * - Mở khung giờ rảnh (slot) theo ngày và giờ.
- * - Quản lý slot chưa kết thúc: sửa, đóng / mở lại, xóa (chỉ khi chưa có học viên đặt).
+ * Không còn "mở slot công khai, ai vào thì vào". Lịch dạy gắn với lộ trình của từng học viên:
+ * - Gói kèm 1-1: mentor tạo sau khi tư vấn chốt lộ trình (VD 12 buổi, các khung giờ cụ thể),
+ *   học viên thanh toán 1 lần cả gói thì các buổi mới được xác nhận. Gói chưa thanh toán thì hủy được.
  * - Lịch dạy sắp tới / đã qua: hủy buổi, ghi nhận "Đã dạy" / "Vắng mặt" sau giờ bắt đầu.
- * Thời gian nhập theo giờ máy, gửi BE dạng UTC.
+ * Thời gian nhập theo giờ máy, gửi BE dạng UTC; chỉ xếp trong 90 ngày tới, mỗi buổi 30 – 180 phút.
  */
 
 import React, { useState } from 'react';
-import { CalendarPlus, Clock, Edit2, Lock, Trash2, Unlock, Video, X, XCircle } from 'lucide-react';
+import { CalendarPlus, ChevronDown, ChevronUp, Route, Users, Video, X, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { Pagination } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { getErrorMessage } from '@/shared/api/axiosClient';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
 import { cn } from '@/shared/utils/cn';
 import { formatVND } from '@/shared/utils';
 import {
   BOOKING_STATUS_LABEL,
   BOOKING_STATUS_VARIANT,
-  SLOT_STATUS_LABEL,
-  SLOT_STATUS_VARIANT,
+  PLAN_STATUS_LABEL,
+  PLAN_STATUS_VARIANT,
   formatDayLabel,
   formatTime,
   isActiveBooking,
-  toDateInput,
-  toTimeInput,
-  toUtcIso,
   useCancelBooking,
-  useCreateSlot,
-  useDeleteSlot,
+  useCancelMentoringPlan,
+  useMentorPlans,
   useMentorSchedule,
-  useMySlots,
   useUpdateBookingStatus,
-  useUpdateSlot,
 } from '@/shared/schedule';
-import type { Booking, MentorScheduleSlot, ScheduleListType } from '@/shared/types';
+import type { Booking, MentoringPlan, ScheduleListType } from '@/shared/types';
+import { CreatePlanModal } from './CreatePlanModal';
 
-const INPUT_CLASS =
-  'w-full h-10 px-3 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[#0052CC]';
 const LABEL_CLASS = 'text-xs text-slate-500 font-semibold uppercase tracking-wider';
 
 const MentorScheduleView: React.FC = () => {
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">
-          Mentor workspace
-        </p>
-        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
-          Lịch dạy 1-1
-        </h1>
+      <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Mentor workspace</p>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">Lịch dạy 1-1</h1>
+          <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+            Lịch dạy được xếp theo lộ trình của từng học viên sau khi tư vấn. Vào{' '}
+            <Link to={CLIENT_ROUTES.mentorStudents} className="font-bold text-[#0052CC] hover:underline">
+              Học viên & tư vấn
+            </Link>{' '}
+            để xem điểm test level và nhận yêu cầu tư vấn.
+          </p>
+        </div>
       </header>
 
-      <CreateSlotCard />
-      <MySlotsCard />
+      <MentoringPlansCard />
       <TeachingScheduleCard />
     </div>
   );
 };
 
 /* ============================================================
- *  Mở khung giờ mới
+ *  Gói kèm 1-1 mentor đã tạo
  * ============================================================ */
-const CreateSlotCard: React.FC = () => {
-  const toast = useToast();
-  const createMutation = useCreateSlot();
-  const [form, setForm] = useState({
-    date: toDateInput(new Date().toISOString()),
-    startTime: '19:00',
-    endTime: '20:00',
-    meetingUrl: '',
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createMutation.mutate(
-      {
-        startTime: toUtcIso(form.date, form.startTime),
-        endTime: toUtcIso(form.date, form.endTime),
-        meetingUrl: form.meetingUrl.trim() || undefined,
-      },
-      {
-        onSuccess: () => toast.success('Đã mở khung giờ mới'),
-        onError: (err) => toast.error(getErrorMessage(err)),
-      },
-    );
-  };
-
-  return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-bold text-slate-900">Mở khung giờ mới</h2>
-        <span className="text-xs text-slate-400 font-medium">Học phí tính theo hourly rate của bạn</span>
-      </div>
-      <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[160px_120px_120px_1fr_auto] gap-3 items-end">
-        <label className="space-y-1">
-          <span className={LABEL_CLASS}>Ngày</span>
-          <input
-            type="date"
-            required
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            className={INPUT_CLASS}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className={LABEL_CLASS}>Bắt đầu</span>
-          <input
-            type="time"
-            required
-            value={form.startTime}
-            onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-            className={INPUT_CLASS}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className={LABEL_CLASS}>Kết thúc</span>
-          <input
-            type="time"
-            required
-            value={form.endTime}
-            onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-            className={INPUT_CLASS}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className={LABEL_CLASS}>Link phòng học</span>
-          <input
-            type="url"
-            maxLength={500}
-            placeholder="https://meet.google.com/..."
-            value={form.meetingUrl}
-            onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })}
-            className={INPUT_CLASS}
-          />
-        </label>
-        <Button type="submit" variant="primary" size="md" leftIcon={CalendarPlus} isLoading={createMutation.isPending}>
-          Mở slot
-        </Button>
-      </form>
-    </Card>
-  );
-};
-
-/* ============================================================
- *  Khung giờ của tôi (chưa kết thúc)
- * ============================================================ */
-const MySlotsCard: React.FC = () => {
+const MentoringPlansCard: React.FC = () => {
   const toast = useToast();
   const [page, setPage] = useState(0);
-  const [editing, setEditing] = useState<MentorScheduleSlot | null>(null);
-  const [deleting, setDeleting] = useState<MentorScheduleSlot | null>(null);
-  const slotsQuery = useMySlots(page);
-  const updateMutation = useUpdateSlot();
-  const deleteMutation = useDeleteSlot();
-  const slots = slotsQuery.data?.data ?? [];
+  const [creating, setCreating] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<MentoringPlan | null>(null);
+  const plansQuery = useMentorPlans(page);
+  const cancelMutation = useCancelMentoringPlan();
+  const plans = plansQuery.data?.data ?? [];
 
-  // Đóng slot đang mở / mở lại slot đã đóng, giữ nguyên giờ và link
-  const handleToggle = (slot: MentorScheduleSlot) => {
-    updateMutation.mutate(
+  const handleCancel = (reason: string) => {
+    if (!cancelling) return;
+    cancelMutation.mutate(
+      { planId: cancelling.planId, reason },
       {
-        scheduleId: slot.scheduleId,
-        payload: {
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          meetingUrl: slot.meetingUrl ?? undefined,
-          status: slot.status === 'available' ? 'cancelled' : 'available',
+        onSuccess: () => {
+          toast.success('Đã hủy gói kèm 1-1');
+          setCancelling(null);
         },
-      },
-      {
-        onSuccess: () => toast.success(slot.status === 'available' ? 'Đã đóng khung giờ' : 'Đã mở lại khung giờ'),
-        onError: (err) => toast.error(getErrorMessage(err)),
       },
     );
   };
 
-  const handleDelete = () => {
-    if (!deleting) return;
-    deleteMutation.mutate(deleting.scheduleId, {
-      onSuccess: () => {
-        toast.success('Đã xóa khung giờ');
-        setDeleting(null);
-      },
-    });
-  };
-
   return (
     <Card>
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-bold text-slate-900">Khung giờ của tôi</h2>
-        <span className="text-xs text-slate-400 font-medium">Chỉ sửa / xóa được khung giờ chưa có học viên đặt</span>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Gói kèm 1-1 theo lộ trình</h2>
+          <p className="text-xs text-slate-400 font-medium mt-0.5">
+            Học phí tính theo hourly rate của bạn · học viên trả 1 lần cả gói
+          </p>
+        </div>
+        <Button variant="primary" size="md" leftIcon={CalendarPlus} onClick={() => setCreating(true)}>
+          Tạo gói kèm 1-1
+        </Button>
       </div>
 
-      {slotsQuery.isLoading ? (
-        <p className="py-10 text-center text-slate-400 text-xs">Đang tải khung giờ…</p>
-      ) : slotsQuery.isError ? (
-        <p className="py-10 text-center text-rose-600 text-xs">{getErrorMessage(slotsQuery.error)}</p>
-      ) : slots.length === 0 ? (
-        <p className="py-10 text-center text-slate-400 text-xs">Bạn chưa mở khung giờ nào.</p>
+      {plansQuery.isLoading ? (
+        <p className="py-10 text-center text-slate-400 text-xs">Đang tải gói kèm…</p>
+      ) : plansQuery.isError ? (
+        <p className="py-10 text-center text-rose-600 text-xs">{getErrorMessage(plansQuery.error)}</p>
+      ) : plans.length === 0 ? (
+        <p className="py-10 text-center text-slate-400 text-xs">
+          Chưa có gói nào. Tư vấn học viên xong thì tạo gói gồm các buổi đã chốt.
+        </p>
       ) : (
         <ul className="mt-4 divide-y divide-slate-100">
-          {slots.map((slot) => {
-            const editable = slot.status === 'available' || slot.status === 'cancelled';
+          {plans.map((plan) => {
+            const open = expanded === plan.planId;
             return (
-              <li key={slot.scheduleId} className="py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-bold text-slate-900 tabular-nums">
-                      {formatDayLabel(slot.startTime)} · {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
+              <li key={plan.planId} className="py-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-bold text-slate-900">{plan.title}</p>
+                      <Badge variant={PLAN_STATUS_VARIANT[plan.status]} size="sm">
+                        {PLAN_STATUS_LABEL[plan.status]}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <Users className="w-3 h-3" /> {plan.studentName}
+                      {plan.learningPathName && (
+                        <>
+                          <Route className="w-3 h-3 ml-1" /> {plan.learningPathName}
+                        </>
+                      )}
+                      <span>
+                        · {plan.completedSessions}/{plan.totalSessions} buổi · {formatVND(plan.totalPrice)}
+                      </span>
                     </p>
-                    <Badge variant={SLOT_STATUS_VARIANT[slot.status]} size="sm">
-                      {SLOT_STATUS_LABEL[slot.status]}
-                    </Badge>
+                    {plan.cancelReason && <p className="text-[11px] text-slate-500 mt-0.5">Lý do hủy: {plan.cancelReason}</p>}
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5 truncate">
-                    {formatVND(slot.price)} · {slot.meetingUrl || 'Chưa có link phòng học'}
-                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={open ? ChevronUp : ChevronDown}
+                      onClick={() => setExpanded(open ? null : plan.planId)}
+                    >
+                      Các buổi
+                    </Button>
+                    {plan.status === 'pending_payment' && (
+                      <Button variant="ghost" size="sm" leftIcon={XCircle} onClick={() => setCancelling(plan)}>
+                        Hủy gói
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="inline-flex items-center gap-1 shrink-0">
-                  <IconButton title="Sửa" disabled={!editable} onClick={() => setEditing(slot)} className="text-blue-600 hover:bg-blue-50">
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </IconButton>
-                  <IconButton
-                    title={slot.status === 'available' ? 'Đóng khung giờ' : 'Mở lại khung giờ'}
-                    disabled={!editable || updateMutation.isPending}
-                    onClick={() => handleToggle(slot)}
-                    className="text-slate-500 hover:text-[#0052CC] hover:bg-slate-100"
-                  >
-                    {slot.status === 'available' ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-                  </IconButton>
-                  <IconButton title="Xóa" disabled={!editable} onClick={() => setDeleting(slot)} className="text-rose-500 hover:bg-rose-50">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </IconButton>
-                </div>
+                {open && (
+                  <ul className="mt-2 ml-1 space-y-1">
+                    {plan.sessions.map((s, i) => (
+                      <li key={s.bookingId} className="text-xs text-slate-600 flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-400 w-7">#{i + 1}</span>
+                        <span className="tabular-nums font-semibold text-slate-800">
+                          {formatDayLabel(s.startTime)} · {formatTime(s.startTime)} – {formatTime(s.endTime)}
+                        </span>
+                        <Badge variant={BOOKING_STATUS_VARIANT[s.status]} size="sm">
+                          {BOOKING_STATUS_LABEL[s.status]}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             );
           })}
         </ul>
       )}
 
-      <Pagination className="mt-4" currentPage={page} totalPages={slotsQuery.data?.totalPages ?? 0} onChange={setPage} />
+      <Pagination className="mt-4" currentPage={page} totalPages={plansQuery.data?.totalPages ?? 0} onChange={setPage} />
 
-      {editing && <EditSlotModal slot={editing} onClose={() => setEditing(null)} />}
-      {deleting && (
+      {creating && <CreatePlanModal onClose={() => setCreating(false)} />}
+      {cancelling && (
         <ConfirmModal
-          title="Xóa khung giờ"
-          message={`Xóa khung giờ ${formatDayLabel(deleting.startTime)} · ${formatTime(deleting.startTime)} – ${formatTime(deleting.endTime)}?`}
-          confirmLabel="Xóa"
-          isLoading={deleteMutation.isPending}
-          errorMessage={deleteMutation.isError ? getErrorMessage(deleteMutation.error) : null}
-          onConfirm={handleDelete}
+          title="Hủy gói kèm 1-1"
+          message={`Hủy gói "${cancelling.title}" của ${cancelling.studentName}? Mọi buổi trong gói sẽ bị hủy.`}
+          confirmLabel="Xác nhận hủy"
+          withReason
+          isLoading={cancelMutation.isPending}
+          errorMessage={cancelMutation.isError ? getErrorMessage(cancelMutation.error) : null}
+          onConfirm={handleCancel}
           onClose={() => {
-            setDeleting(null);
-            deleteMutation.reset();
+            setCancelling(null);
+            cancelMutation.reset();
           }}
         />
       )}
@@ -331,7 +265,7 @@ const TeachingScheduleCard: React.FC = () => {
         <p className="py-10 text-center text-rose-600 text-xs">{getErrorMessage(scheduleQuery.error)}</p>
       ) : bookings.length === 0 ? (
         <p className="py-10 text-center text-slate-400 text-xs">
-          {listType === 'upcoming' ? 'Chưa có học viên nào đặt lịch sắp tới.' : 'Chưa có buổi dạy nào.'}
+          {listType === 'upcoming' ? 'Chưa có buổi dạy nào sắp tới (gói chưa thanh toán sẽ hiện ở trạng thái Chờ thanh toán).' : 'Chưa có buổi dạy nào.'}
         </p>
       ) : (
         <ul className="mt-4 divide-y divide-slate-100">
@@ -372,9 +306,12 @@ const TeachingScheduleCard: React.FC = () => {
                         </Button>
                       </>
                     ) : (
-                      <Button variant="ghost" size="sm" leftIcon={XCircle} onClick={() => setCancelling(b)}>
-                        Hủy
-                      </Button>
+                      // Buổi của gói chưa thanh toán: hủy cả gói ở mục Gói kèm 1-1
+                      b.status === 'confirmed' && (
+                        <Button variant="ghost" size="sm" leftIcon={XCircle} onClick={() => setCancelling(b)}>
+                          Hủy
+                        </Button>
+                      )
                     )}
                   </div>
                 )}
@@ -408,85 +345,6 @@ const TeachingScheduleCard: React.FC = () => {
 /* ============================================================
  *  Sub components
  * ============================================================ */
-const IconButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ className, children, ...props }) => (
-  <button
-    type="button"
-    className={cn('p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:pointer-events-none', className)}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-/** Sửa giờ / link của slot chưa có người đặt */
-const EditSlotModal: React.FC<{ slot: MentorScheduleSlot; onClose: () => void }> = ({ slot, onClose }) => {
-  const toast = useToast();
-  const updateMutation = useUpdateSlot();
-  const [form, setForm] = useState({
-    date: toDateInput(slot.startTime),
-    startTime: toTimeInput(slot.startTime),
-    endTime: toTimeInput(slot.endTime),
-    meetingUrl: slot.meetingUrl ?? '',
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateMutation.mutate(
-      {
-        scheduleId: slot.scheduleId,
-        payload: {
-          startTime: toUtcIso(form.date, form.startTime),
-          endTime: toUtcIso(form.date, form.endTime),
-          meetingUrl: form.meetingUrl.trim() || undefined,
-          status: slot.status === 'cancelled' ? 'cancelled' : 'available',
-        },
-      },
-      {
-        onSuccess: () => {
-          toast.success('Đã cập nhật khung giờ');
-          onClose();
-        },
-      },
-    );
-  };
-
-  return (
-    <ModalShell title="Sửa khung giờ" onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <label className="block space-y-1">
-          <span className={LABEL_CLASS}>Ngày</span>
-          <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={INPUT_CLASS} />
-        </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block space-y-1">
-            <span className={LABEL_CLASS}>Bắt đầu</span>
-            <input type="time" required value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className={INPUT_CLASS} />
-          </label>
-          <label className="block space-y-1">
-            <span className={LABEL_CLASS}>Kết thúc</span>
-            <input type="time" required value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} className={INPUT_CLASS} />
-          </label>
-        </div>
-        <label className="block space-y-1">
-          <span className={LABEL_CLASS}>Link phòng học</span>
-          <input type="url" maxLength={500} value={form.meetingUrl} onChange={(e) => setForm({ ...form, meetingUrl: e.target.value })} className={INPUT_CLASS} />
-        </label>
-        {updateMutation.isError && (
-          <p className="text-xs text-rose-600 font-semibold">{getErrorMessage(updateMutation.error)}</p>
-        )}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="ghost" size="md" onClick={onClose}>
-            Đóng
-          </Button>
-          <Button type="submit" variant="primary" size="md" leftIcon={Clock} isLoading={updateMutation.isPending}>
-            Lưu thay đổi
-          </Button>
-        </div>
-      </form>
-    </ModalShell>
-  );
-};
-
 /** Hộp thoại xác nhận, có thể kèm ô nhập lý do */
 const ConfirmModal: React.FC<{
   title: string;

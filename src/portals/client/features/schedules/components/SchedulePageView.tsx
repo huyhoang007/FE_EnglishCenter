@@ -1,24 +1,23 @@
-﻿/**
- * SchedulePageView — Lịch học & Đặt hẹn Giảng viên 1-1 (Dev 5 — TASK D5-20)
+/**
+ * SchedulePageView — Mentor 1-1 của học viên (Dev 5)
  * -----------------------------------------------------------
- * Phần 1: Buổi học sắp diễn ra (booking gần nhất của học viên + nút tham gia phòng học)
- * Phần 2: Đặt lịch kèm riêng 1-1 (chọn ngày trong 7 ngày tới, chọn khung giờ của mentor,
- *          tóm tắt → đặt lịch (booking "pending", BE giữ slot + tạo đơn SePay) → hộp thoại QR thanh toán thật,
- *          tự kiểm tra trạng thái đơn tới khi PAID). Khi đổi lịch thì dùng lại khu vực này.
- * Phần 3: Lịch của tôi (sắp tới / đã qua) — hủy và đổi lịch.
- * Mentor lấy từ ?mentorId= trên URL, không có thì lấy mentor đầu tiên trong danh sách.
- * Dải "Chọn giảng viên" cho học viên chuyển mentor (cập nhật ?mentorId=); khi đổi lịch thì khóa mentor cũ.
+ * Không còn tự chọn slot công khai của mentor. Luồng mới:
+ *   test level → để lại SĐT nhờ mentor tư vấn → mentor gọi / email tư vấn, chốt lộ trình
+ *   → mentor tạo gói kèm 1-1 (VD 12 buổi, các khung giờ cụ thể) → học viên thanh toán 1 lần cả gói (SePay)
+ *   → các buổi được xác nhận, hiện ở "Lịch của tôi".
+ * Phần 1: Buổi học sắp diễn ra (booking gần nhất + nút vào phòng học)
+ * Phần 2: Gói kèm 1-1 của tôi (thanh toán / từ chối gói chờ thanh toán, tiến độ gói đang học)
+ * Phần 3: Tư vấn lộ trình (để lại SĐT)
+ * Phần 4: Lịch của tôi (sắp tới / đã qua) — hủy buổi đã thanh toán trước hạn
+ * Learner (USER) cũng vào được trang này để thanh toán gói mentor tạo cho mình (sau khi trả tiền thành STUDENT).
  * Thời gian BE trả dạng UTC, hiển thị theo giờ máy người dùng.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import {
   Calendar,
   Clock,
   Video,
-  Sparkles,
-  Star,
   CheckCircle2,
   X,
   ShieldCheck,
@@ -26,11 +25,11 @@ import {
   Check,
   Banknote,
   ArrowRight,
-  User,
   RefreshCw,
   XCircle,
   AlertTriangle,
   CreditCard,
+  Route,
 } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Button } from '@/shared/components/Button';
@@ -40,7 +39,7 @@ import { useToast } from '@/shared/components/Toast';
 import { cn } from '@/shared/utils';
 import { formatVND } from '@/shared/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMentor, getMentors } from '@/shared/api/domainApi';
+import { getMentor } from '@/shared/api/domainApi';
 import { getErrorMessage } from '@/shared/api/axiosClient';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
@@ -48,150 +47,44 @@ import { useCanCallNotificationApi } from '@/shared/notifications/useNotificatio
 import {
   BOOKING_STATUS_LABEL,
   BOOKING_STATUS_VARIANT,
-  addDays,
+  PLAN_STATUS_LABEL,
+  PLAN_STATUS_VARIANT,
   durationMinutes,
-  formatDate,
   formatDayLabel,
   formatTime,
   isActiveBooking,
-  isSameDay,
-  startOfDay,
-  useBookSlot,
   useCancelBooking,
   useCancelSessionPayment,
-  useMentorAvailability,
+  useCheckoutPlan,
+  useMyPlans,
   useMySchedule,
-  useRescheduleBooking,
+  useRejectPlan,
   useSessionPayment,
-  weekdayFull,
-  weekdayShort,
 } from '@/shared/schedule';
-import type { Booking, MentorScheduleSlot, ScheduleListType, SessionPaymentStatus } from '@/shared/types';
+import type { Booking, MentoringPlan, ScheduleListType, SessionPaymentStatus } from '@/shared/types';
 import type { MentorDto } from '@/shared/api/apiTypes';
-
-/** Số ngày hiển thị trên dải chọn ngày (tính từ hôm nay) */
-const DAYS_TO_SHOW = 7;
-/** Số mentor tải cho dải chọn giảng viên */
-const MENTORS_TO_SHOW = 20;
+import { ConsultationRequestCard } from './ConsultationRequestCard';
 
 /* ============================================================
  *  Component chính
  * ============================================================ */
 export const SchedulePageView: React.FC = () => {
-  const toast = useToast();
-  const [searchParams, setSearchParams] = useSearchParams();
   const role = useAuthStore((s) => s.role);
   const canCallApi = useCanCallNotificationApi();
   const isStudent = canCallApi && role === 'STUDENT';
+  const isLearner = canCallApi && (role === 'STUDENT' || role === 'USER');
 
-  const [selectedDay, setSelectedDay] = useState<number>(0);
-  const [selectedSlot, setSelectedSlot] = useState<MentorScheduleSlot | null>(null);
   /** Mã đơn SePay đang mở hộp thoại thanh toán (null = đóng) */
   const [paymentOrderCode, setPaymentOrderCode] = useState<string | null>(null);
-  /** Booking đang được đổi lịch (null = đặt lịch mới) */
-  const [rescheduling, setRescheduling] = useState<Booking | null>(null);
-  const bookingSectionRef = useRef<HTMLElement>(null);
-
-  // 7 ngày tới tính theo giờ máy người dùng, khoảng thời gian gửi BE dạng UTC
-  const { days, rangeFrom, rangeTo } = useMemo(() => {
-    const today = startOfDay(new Date());
-    return {
-      days: Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(today, i)),
-      rangeFrom: today.toISOString(),
-      rangeTo: addDays(today, DAYS_TO_SHOW).toISOString(),
-    };
-  }, []);
-
-  // Mentor: đang đổi lịch thì cố định mentor cũ, sau đó tới ?mentorId=, cuối cùng là mentor đầu tiên
-  const { data: mentorsData } = useQuery({
-    queryKey: QUERY_KEYS.mentor.directory({ page: 0 }),
-    queryFn: () => getMentors({ page: 0, size: MENTORS_TO_SHOW }),
-  });
-  const mentorList = mentorsData?.data ?? [];
-  const mentorId =
-    rescheduling?.mentorId ?? searchParams.get('mentorId') ?? mentorsData?.data?.[0]?.userId;
-
-  const { data: realMentor } = useQuery({
-    queryKey: QUERY_KEYS.mentor.detail(mentorId ?? ''),
-    queryFn: () => getMentor(mentorId as string),
-    enabled: !!mentorId,
-  });
-
-  const mentorForBooking = useMemo(() => (realMentor ? toMentorCard(realMentor) : null), [realMentor]);
-
-  // Lịch trống + đã đặt của mentor trong 7 ngày tới
-  const availabilityQuery = useMentorAvailability(mentorId, rangeFrom, rangeTo);
-  const slotsByDay = useMemo(() => {
-    const all = availabilityQuery.data ?? [];
-    return days.map((d) => all.filter((s) => isSameDay(new Date(s.startTime), d)));
-  }, [availabilityQuery.data, days]);
-  const slots = slotsByDay[selectedDay] ?? [];
 
   // Buổi học sắp diễn ra = booking gần nhất của học viên
   const upcomingQuery = useMySchedule('upcoming', 0, isStudent);
-  const upcoming = upcomingQuery.data?.data?.[0];
+  const upcoming = upcomingQuery.data?.data?.find((b) => b.status === 'confirmed');
   const { data: upcomingMentor } = useQuery({
     queryKey: QUERY_KEYS.mentor.detail(upcoming?.mentorId ?? ''),
     queryFn: () => getMentor(upcoming?.mentorId as string),
     enabled: !!upcoming,
   });
-
-  const bookMutation = useBookSlot();
-  const rescheduleMutation = useRescheduleBooking();
-
-  /** Chuyển sang mentor khác: lưu vào URL để tải lại lịch trống của mentor đó */
-  const handleSelectMentor = (id: string) => {
-    if (rescheduling || id === mentorId) return;
-    const next = new URLSearchParams(searchParams);
-    next.set('mentorId', id);
-    setSearchParams(next, { replace: true });
-    setSelectedDay(0);
-    setSelectedSlot(null);
-  };
-
-  const handleSelectSlot = (slot: MentorScheduleSlot) => {
-    if (slot.status !== 'available') return;
-    setSelectedSlot(slot);
-  };
-
-  const handleStartReschedule = (booking: Booking) => {
-    setRescheduling(booking);
-    setSelectedDay(0);
-    setSelectedSlot(null);
-    bookingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const handleCancelReschedule = () => {
-    setRescheduling(null);
-    setSelectedSlot(null);
-  };
-
-  const handleConfirmReschedule = () => {
-    if (!rescheduling || !selectedSlot) return;
-    rescheduleMutation.mutate(
-      { bookingId: rescheduling.bookingId, newScheduleId: selectedSlot.scheduleId },
-      {
-        onSuccess: () => {
-          toast.success('Đổi lịch thành công');
-          setRescheduling(null);
-          setSelectedSlot(null);
-        },
-        onError: (err) => toast.error(getErrorMessage(err)),
-      },
-    );
-  };
-
-  // Đặt lịch: BE tạo booking "pending", giữ slot và tạo đơn SePay → mở hộp thoại QR của đơn đó
-  const handleBookAndPay = () => {
-    if (!selectedSlot) return;
-    bookMutation.mutate(selectedSlot.scheduleId, {
-      onSuccess: (booking) => {
-        setSelectedSlot(null);
-        if (booking.paymentOrderCode) setPaymentOrderCode(booking.paymentOrderCode);
-      },
-      onError: (err) => toast.error(getErrorMessage(err)),
-    });
-  };
 
   return (
     <div className="space-y-6">
@@ -199,419 +92,264 @@ export const SchedulePageView: React.FC = () => {
       <header>
         <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
           <Calendar className="w-3.5 h-3.5" />
-          Lịch học & Đặt hẹn
+          Mentor 1-1
         </div>
         <h1 className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          Lịch học và đặt hẹn Giảng viên 1-1
+          Lộ trình kèm 1-1 với mentor
         </h1>
         <p className="mt-1.5 text-sm text-slate-600 max-w-2xl">
-          Theo dõi buổi học sắp tới và đặt lịch kèm riêng với giảng viên
-          chuyên môn cao theo khung giờ phù hợp với bạn.
+          Mentor xem kết quả test level, tư vấn lộ trình cho bạn qua điện thoại / email, rồi xếp lịch các buổi theo lộ
+          trình đã chốt. Bạn thanh toán 1 lần cả gói để giữ lịch.
         </p>
       </header>
 
       {/* ============== SECTION 1: BUỔI HỌC SẮP DIỄN RA ============== */}
-      <section aria-label="Buổi học sắp diễn ra">
-        <SectionHeader
-          title="Buổi học sắp diễn ra"
-          subtitle="Buổi hẹn gần nhất với giảng viên của bạn"
-        />
-        {!upcoming ? (
-          <Card>
-            <p className="text-sm text-slate-500 text-center py-6">
-              {!isStudent
-                ? 'Đăng nhập bằng tài khoản học viên để xem lịch học của bạn.'
-                : upcomingQuery.isLoading
+      {isStudent && (
+        <section aria-label="Buổi học sắp diễn ra">
+          <SectionHeader title="Buổi học sắp diễn ra" subtitle="Buổi kèm gần nhất với mentor của bạn" />
+          {!upcoming ? (
+            <Card>
+              <p className="text-sm text-slate-500 text-center py-6">
+                {upcomingQuery.isLoading
                   ? 'Đang tải lịch học…'
                   : upcomingQuery.isError
                     ? getErrorMessage(upcomingQuery.error)
                     : 'Bạn chưa có buổi học nào sắp diễn ra.'}
-            </p>
-          </Card>
-        ) : (
-          <Card hoverable className="relative overflow-hidden p-0">
-            <div className="absolute -top-20 -right-16 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-20 -left-10 w-64 h-64 bg-ai/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="relative p-5 sm:p-6 flex flex-col md:flex-row md:items-center gap-5">
-              {/* Time block */}
-              <div className="flex md:flex-col items-center md:items-start gap-4 md:gap-1 md:w-48 shrink-0">
-                <Badge variant="primary" size="md" icon={Clock}>
-                  {formatDayLabel(upcoming.startTime)}
-                </Badge>
-                <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 tabular-nums">
-                  {formatTime(upcoming.startTime)}
-                  <span className="text-slate-400 font-bold text-base mx-1">
-                    –
-                  </span>
-                  {formatTime(upcoming.endTime)}
-                </p>
-                <p className="text-xs text-slate-500 font-medium">
-                  {durationMinutes(upcoming.startTime, upcoming.endTime)} phút · Phòng học trực tuyến
-                </p>
-              </div>
-
-              {/* Divider */}
-              <div className="hidden md:block w-px self-stretch bg-slate-200" />
-
-              {/* Mentor + topic */}
-              <div className="flex-1 min-w-0 space-y-3">
-                <div className="flex items-center gap-3">
+              </p>
+            </Card>
+          ) : (
+            <Card hoverable className="relative overflow-hidden p-0">
+              <div className="relative p-5 sm:p-6 flex flex-col md:flex-row md:items-center gap-5">
+                <div className="flex md:flex-col items-center md:items-start gap-4 md:gap-1 md:w-48 shrink-0">
+                  <Badge variant="primary" size="md" icon={Clock}>
+                    {formatDayLabel(upcoming.startTime)}
+                  </Badge>
+                  <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 tabular-nums">
+                    {formatTime(upcoming.startTime)}
+                    <span className="text-slate-400 font-bold text-base mx-1">–</span>
+                    {formatTime(upcoming.endTime)}
+                  </p>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {durationMinutes(upcoming.startTime, upcoming.endTime)} phút · Phòng học trực tuyến
+                  </p>
+                </div>
+                <div className="hidden md:block w-px self-stretch bg-slate-200" />
+                <div className="flex-1 min-w-0 flex items-center gap-3">
                   <img
                     src={upcomingMentor ? toMentorCard(upcomingMentor).avatarUrl : avatarOf(upcoming.mentorName)}
                     alt={upcoming.mentorName}
                     className="w-12 h-12 rounded-full bg-slate-100 border-2 border-white shadow-md"
                   />
                   <div className="min-w-0">
-                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-                      Giảng viên hướng dẫn
-                    </p>
-                    <p className="font-extrabold text-slate-900 truncate">
-                      Thầy {upcoming.mentorName}
-                    </p>
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Mentor</p>
+                    <p className="font-extrabold text-slate-900 truncate">{upcoming.mentorName}</p>
                     {upcomingMentor && (
-                      <p className="text-xs text-ai font-semibold truncate">
-                        {toMentorCard(upcomingMentor).title}
-                      </p>
+                      <p className="text-xs text-ai font-semibold truncate">{toMentorCard(upcomingMentor).title}</p>
                     )}
                   </div>
                 </div>
-
-                <div className="rounded-input bg-slate-50 border border-slate-200/70 p-3">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-0.5">
-                    Nội dung buổi kèm
-                  </p>
-                  <p className="text-sm font-bold text-slate-800">
-                    Buổi kèm riêng 1-1 · {BOOKING_STATUS_LABEL[upcoming.status]}
-                  </p>
-                </div>
-              </div>
-
-              {/* CTA */}
-              <div className="shrink-0 flex flex-col items-stretch md:items-end gap-2">
-                <Button
-                  variant="success"
-                  size="lg"
-                  leftIcon={Video}
-                  rightIcon={ArrowRight}
-                  disabled={!upcoming.meetingUrl}
-                  onClick={() => upcoming.meetingUrl && window.open(upcoming.meetingUrl, '_blank')}
-                  className="relative"
-                >
-                  <span className="absolute -left-1.5 top-1/2 -translate-y-1/2 flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-200" />
-                  </span>
-                  Tham gia phòng học trực tuyến
-                </Button>
-                <p className="text-[11px] text-slate-500 text-center md:text-right">
-                  {upcoming.meetingUrl
-                    ? 'Vui lòng vào phòng trước giờ hẹn 5 phút'
-                    : 'Giảng viên chưa cập nhật link phòng học'}
-                </p>
-              </div>
-            </div>
-          </Card>
-        )}
-      </section>
-
-      {/* ============== SECTION 2: ĐẶT LỊCH KÈM RIÊNG 1-1 ============== */}
-      <section aria-label="Đặt lịch kèm riêng 1-1" ref={bookingSectionRef} className="scroll-mt-28">
-        <SectionHeader
-          title={rescheduling ? 'Đổi lịch kèm riêng 1-1' : 'Đặt lịch kèm riêng 1-1'}
-          subtitle={
-            rescheduling
-              ? 'Chọn khung giờ mới của cùng giảng viên để đổi buổi học'
-              : 'Chọn ngày trong tuần và khung giờ phù hợp để đặt buổi kèm riêng'
-          }
-        />
-
-        {!mentorForBooking ? (
-          <Card>
-            <p className="text-sm text-slate-500 text-center py-6">
-              Chưa có giảng viên nào để đặt lịch.
-            </p>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
-            {/* ==== LEFT: Chọn mentor + Mentor card + Date strip + Slot grid ==== */}
-            <div className="space-y-5 min-w-0">
-              {!rescheduling && mentorList.length > 1 && (
-                <MentorPicker
-                  mentors={mentorList}
-                  selectedId={mentorId}
-                  onSelect={handleSelectMentor}
-                />
-              )}
-
-              <Card>
-                <div className="flex items-start gap-4">
-                  <img
-                    src={mentorForBooking.avatarUrl}
-                    alt={mentorForBooking.fullName}
-                    className="w-16 h-16 rounded-full bg-slate-100 border-2 border-white shadow-md shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-base font-extrabold text-slate-900">
-                        Thầy {mentorForBooking.fullName}
-                      </h3>
-                      <Badge variant="ai" size="sm" icon={Sparkles}>
-                        Top Mentor
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-ai font-semibold mt-0.5">
-                      {mentorForBooking.title}
-                    </p>
-                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                      {mentorForBooking.bio}
-                    </p>
-                    <div className="mt-3 flex items-center gap-4 text-xs">
-                      <span className="inline-flex items-center gap-1 font-bold text-amber-600">
-                        <Star
-                          className="w-3.5 h-3.5 fill-amber-400 text-amber-400"
-                        />
-                        {mentorForBooking.rating.toFixed(1)}
-                        <span className="text-slate-500 font-medium">
-                          ({mentorForBooking.ratingCount.toLocaleString('vi-VN')} đánh giá)
-                        </span>
-                      </span>
-                      <span className="text-slate-300">|</span>
-                      <span className="font-extrabold text-primary">
-                        {formatVND(mentorForBooking.pricePerHour)}/giờ
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Date strip */}
-              <Card>
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-3">
-                  Chọn ngày học trong tuần
-                </p>
-                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                  {days.map((d, idx) => {
-                    const active = idx === selectedDay;
-                    return (
-                      <button
-                        key={d.toISOString()}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDay(idx);
-                          setSelectedSlot(null);
-                        }}
-                        className={cn(
-                          'shrink-0 w-16 h-20 rounded-input border flex flex-col items-center justify-center transition-all',
-                          active
-                            ? 'border-primary bg-primary-tint ring-2 ring-primary/20'
-                            : 'border-slate-200 bg-white hover:border-slate-300',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'text-[10px] font-extrabold uppercase tracking-wider',
-                            active ? 'text-primary' : 'text-slate-400',
-                          )}
-                        >
-                          {weekdayShort(d)}
-                        </span>
-                        <span
-                          className={cn(
-                            'text-sm font-extrabold mt-1',
-                            active ? 'text-primary' : 'text-slate-800',
-                          )}
-                        >
-                          {String(d.getDate()).padStart(2, '0')}/{String(d.getMonth() + 1).padStart(2, '0')}
-                        </span>
-                        <span
-                          className={cn(
-                            'text-[9px] mt-0.5',
-                            active ? 'text-primary font-bold' : 'text-slate-400',
-                          )}
-                        >
-                          {slotsByDay[idx]?.filter((s) => s.status === 'available').length ?? 0}{' '}
-                          khung giờ
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </Card>
-
-              {/* Slot grid */}
-              <Card>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
-                    Khung giờ mở · {weekdayFull(days[selectedDay])}
-                  </p>
-                  <div className="flex items-center gap-3 text-[10px] text-slate-500">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-sm bg-slate-200" />
-                      Đã có người đặt
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-sm bg-status-success" />
-                      Còn trống
-                    </span>
-                  </div>
-                </div>
-
-                {availabilityQuery.isLoading ? (
-                  <p className="text-sm text-slate-500 text-center py-6">
-                    Đang tải khung giờ…
-                  </p>
-                ) : availabilityQuery.isError ? (
-                  <p className="text-sm text-status-danger text-center py-6">
-                    {getErrorMessage(availabilityQuery.error)}
-                  </p>
-                ) : slots.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-6">
-                    Giảng viên chưa mở khung giờ cho ngày này.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {slots.map((slot) => {
-                      const active = selectedSlot?.scheduleId === slot.scheduleId;
-                      const booked = slot.status !== 'available';
-                      return (
-                        <button
-                          key={slot.scheduleId}
-                          type="button"
-                          disabled={booked}
-                          onClick={() => handleSelectSlot(slot)}
-                          className={cn(
-                            'h-14 rounded-input border flex items-center justify-center gap-1.5 font-bold text-sm transition-all',
-                            booked
-                              ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                              : active
-                                ? 'border-status-success bg-status-success-bg text-status-success ring-2 ring-status-success/20'
-                                : 'border-slate-200 bg-white text-slate-700 hover:border-status-success/40 hover:bg-status-success-bg/40',
-                          )}
-                        >
-                          <Clock className="w-3.5 h-3.5" />
-                          <span className="tabular-nums">
-                            {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
-                          </span>
-                          {booked && (
-                            <span className="ml-1 text-[9px] uppercase tracking-wider font-extrabold text-slate-400">
-                              Đã đặt
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </Card>
-            </div>
-
-            {/* ==== RIGHT: Tóm tắt đặt lịch ==== */}
-            <aside className="lg:sticky lg:top-[112px] rounded-card border border-slate-200/80 bg-white shadow-elevation h-fit">
-              <div className="p-5 border-b border-slate-100">
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
-                  {rescheduling ? 'Tóm tắt đổi lịch' : 'Tóm tắt đặt lịch'}
-                </p>
-                <h3 className="mt-1 text-base font-extrabold text-slate-900">
-                  Phiên kèm riêng 1-1
-                </h3>
-              </div>
-
-              <div className="p-5 space-y-4">
-                <SummaryRow
-                  label="Giảng viên"
-                  value={`Thầy ${mentorForBooking.fullName}`}
-                  icon={User}
-                />
-                {rescheduling && (
-                  <SummaryRow
-                    label="Lịch hiện tại"
-                    value={`${formatDate(rescheduling.startTime)} · ${formatTime(rescheduling.startTime)} – ${formatTime(rescheduling.endTime)}`}
-                    icon={RefreshCw}
-                  />
-                )}
-                <SummaryRow
-                  label="Ngày học"
-                  value={
-                    selectedSlot
-                      ? `${weekdayFull(new Date(selectedSlot.startTime))}, ${formatDate(selectedSlot.startTime)}`
-                      : 'Chưa chọn ngày'
-                  }
-                  icon={Calendar}
-                />
-                <SummaryRow
-                  label="Khung giờ"
-                  value={
-                    selectedSlot
-                      ? `${formatTime(selectedSlot.startTime)} – ${formatTime(selectedSlot.endTime)}`
-                      : 'Chưa chọn giờ'
-                  }
-                  icon={Clock}
-                />
-                <SummaryRow
-                  label="Hình thức"
-                  value="Trực tuyến (Video call)"
-                  icon={Video}
-                />
-
-                <div className="h-px bg-slate-100" />
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-500">Học phí</span>
-                  <span className="text-lg font-extrabold text-primary">
-                    {formatVND(selectedSlot?.price ?? mentorForBooking.pricePerHour)}
-                  </span>
-                </div>
-
-                {rescheduling ? (
-                  <>
-                    <Button
-                      variant="ai"
-                      size="lg"
-                      fullWidth
-                      rightIcon={ArrowRight}
-                      disabled={!selectedSlot}
-                      isLoading={rescheduleMutation.isPending}
-                      onClick={handleConfirmReschedule}
-                    >
-                      Xác nhận đổi lịch
-                    </Button>
-                    <Button variant="ghost" size="md" fullWidth onClick={handleCancelReschedule}>
-                      Hủy đổi lịch
-                    </Button>
-                  </>
-                ) : (
+                <div className="shrink-0 flex flex-col items-stretch md:items-end gap-2">
                   <Button
-                    variant="ai"
+                    variant="success"
                     size="lg"
-                    fullWidth
+                    leftIcon={Video}
                     rightIcon={ArrowRight}
-                    disabled={!selectedSlot || !isStudent}
-                    isLoading={bookMutation.isPending}
-                    onClick={handleBookAndPay}
+                    disabled={!upcoming.meetingUrl}
+                    onClick={() => upcoming.meetingUrl && window.open(upcoming.meetingUrl, '_blank')}
                   >
-                    Xác nhận & Thanh toán học phí
+                    Vào phòng học
                   </Button>
-                )}
-                <p className="text-[10px] text-slate-500 text-center leading-relaxed">
-                  {isStudent
-                    ? 'Slot được giữ trong thời hạn thanh toán (15 phút). Thanh toán xong hệ thống tự xác nhận và gửi thông báo cho bạn và giảng viên.'
-                    : 'Đăng nhập bằng tài khoản học viên để đặt lịch.'}
-                </p>
+                  <p className="text-[11px] text-slate-500 text-center md:text-right">
+                    {upcoming.meetingUrl ? 'Vui lòng vào phòng trước giờ hẹn 5 phút' : 'Mentor chưa cập nhật link phòng học'}
+                  </p>
+                </div>
               </div>
-            </aside>
-          </div>
-        )}
-      </section>
-
-      {/* ============== SECTION 3: LỊCH CỦA TÔI ============== */}
-      {isStudent && (
-        <MyBookingsSection onReschedule={handleStartReschedule} onPay={setPaymentOrderCode} />
+            </Card>
+          )}
+        </section>
       )}
+
+      {/* ============== SECTION 2: GÓI KÈM 1-1 ============== */}
+      {isLearner ? (
+        <MyPlansSection onPay={setPaymentOrderCode} />
+      ) : (
+        <Card>
+          <p className="text-sm text-slate-500 text-center py-6">Đăng nhập bằng tài khoản học viên để xem lộ trình 1-1.</p>
+        </Card>
+      )}
+
+      {/* ============== SECTION 3: TƯ VẤN LỘ TRÌNH ============== */}
+      {isLearner && <ConsultationRequestCard />}
+
+      {/* ============== SECTION 4: LỊCH CỦA TÔI ============== */}
+      {isStudent && <MyBookingsSection />}
 
       {/* ============== THANH TOÁN SEPAY (QR thật, tự xác nhận qua webhook) ============== */}
       {paymentOrderCode && (
         <SessionPaymentModal orderCode={paymentOrderCode} onClose={() => setPaymentOrderCode(null)} />
       )}
+    </div>
+  );
+};
+
+/* ============================================================
+ *  MyPlansSection — Gói kèm 1-1 mentor tạo cho học viên
+ * ============================================================ */
+const MyPlansSection: React.FC<{ onPay: (orderCode: string) => void }> = ({ onPay }) => {
+  const toast = useToast();
+  const plansQuery = useMyPlans(true);
+  const checkoutMutation = useCheckoutPlan();
+  const [rejecting, setRejecting] = useState<MentoringPlan | null>(null);
+  const plans = plansQuery.data ?? [];
+
+  const handlePay = (plan: MentoringPlan) => {
+    if (plan.paymentOrderCode) {
+      onPay(plan.paymentOrderCode);
+      return;
+    }
+    checkoutMutation.mutate(plan.planId, {
+      onSuccess: (order) => onPay(order.orderCode),
+      onError: (err) => toast.error(getErrorMessage(err)),
+    });
+  };
+
+  return (
+    <section aria-label="Gói kèm 1-1 của tôi">
+      <SectionHeader
+        title="Gói kèm 1-1 của tôi"
+        subtitle="Mentor tạo sau khi tư vấn chốt lộ trình. Thanh toán cả gói để giữ lịch các buổi."
+      />
+      {plansQuery.isLoading ? (
+        <Card>
+          <p className="text-sm text-slate-500 text-center py-6">Đang tải…</p>
+        </Card>
+      ) : plansQuery.isError ? (
+        <Card>
+          <p className="text-sm text-status-danger text-center py-6">{getErrorMessage(plansQuery.error)}</p>
+        </Card>
+      ) : plans.length === 0 ? (
+        <Card>
+          <p className="text-sm text-slate-500 text-center py-6">
+            Bạn chưa có gói kèm 1-1 nào. Để lại số điện thoại ở mục bên dưới để mentor tư vấn lộ trình.
+          </p>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {plans.map((plan) => (
+            <Card key={plan.planId} className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-extrabold text-slate-900">{plan.title}</h3>
+                    <Badge variant={PLAN_STATUS_VARIANT[plan.status]} size="sm">
+                      {PLAN_STATUS_LABEL[plan.status]}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 flex-wrap">
+                    Mentor {plan.mentorName}
+                    {plan.learningPathName && (
+                      <>
+                        <Route className="w-3 h-3 ml-1" /> {plan.learningPathName}
+                      </>
+                    )}
+                    <span>
+                      · {plan.totalSessions} buổi · <b>{formatVND(plan.totalPrice)}</b>
+                    </span>
+                  </p>
+                  {plan.note && <p className="text-xs text-slate-500 mt-1">Ghi chú của mentor: {plan.note}</p>}
+                  {plan.cancelReason && <p className="text-xs text-slate-500 mt-1">Lý do hủy: {plan.cancelReason}</p>}
+                </div>
+                {plan.status === 'pending_payment' && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={CreditCard}
+                      isLoading={checkoutMutation.isPending && checkoutMutation.variables === plan.planId}
+                      onClick={() => handlePay(plan)}
+                    >
+                      Thanh toán cả gói
+                    </Button>
+                    <Button variant="ghost" size="sm" leftIcon={XCircle} onClick={() => setRejecting(plan)}>
+                      Từ chối
+                    </Button>
+                  </div>
+                )}
+                {plan.status === 'active' && (
+                  <p className="text-sm font-bold text-slate-700 shrink-0">
+                    Đã học {plan.completedSessions}/{plan.totalSessions} buổi
+                  </p>
+                )}
+              </div>
+              <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {plan.sessions.map((s, i) => (
+                  <li key={s.bookingId} className="rounded-input border border-slate-200/70 bg-slate-50/50 px-3 py-2 text-xs">
+                    <span className="font-bold text-slate-400 mr-1.5">#{i + 1}</span>
+                    <span className="font-semibold text-slate-800 tabular-nums">
+                      {formatDayLabel(s.startTime)} · {formatTime(s.startTime)} – {formatTime(s.endTime)}
+                    </span>
+                    {plan.status !== 'pending_payment' && (
+                      <Badge variant={BOOKING_STATUS_VARIANT[s.status]} size="sm" className="ml-1.5">
+                        {BOOKING_STATUS_LABEL[s.status]}
+                      </Badge>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ))}
+        </div>
+      )}
+      {rejecting && <RejectPlanModal plan={rejecting} onClose={() => setRejecting(null)} />}
+    </section>
+  );
+};
+
+/** Học viên từ chối gói chưa thanh toán (lý do không bắt buộc) */
+const RejectPlanModal: React.FC<{ plan: MentoringPlan; onClose: () => void }> = ({ plan, onClose }) => {
+  const toast = useToast();
+  const [reason, setReason] = useState('');
+  const rejectMutation = useRejectPlan();
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-900/60 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="w-full max-w-md bg-white rounded-card shadow-elevation border border-slate-200 p-5 space-y-3">
+        <p className="text-sm font-extrabold text-slate-900">Từ chối gói "{plan.title}"?</p>
+        <p className="text-xs text-slate-500">Mentor sẽ nhận thông báo và có thể tư vấn, xếp lại lịch khác cho bạn.</p>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          maxLength={500}
+          rows={3}
+          placeholder="Lý do (VD: giờ học chưa phù hợp, muốn học tối T7)"
+          className="w-full rounded-input border border-slate-200 p-2.5 text-sm text-slate-800 focus:outline-none focus:border-primary"
+        />
+        {rejectMutation.isError && (
+          <p className="text-xs text-status-danger font-semibold">{getErrorMessage(rejectMutation.error)}</p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="md" onClick={onClose}>
+            Đóng
+          </Button>
+          <Button
+            variant="danger"
+            size="md"
+            isLoading={rejectMutation.isPending}
+            onClick={() =>
+              rejectMutation.mutate(
+                { planId: plan.planId, reason: reason.trim() || undefined },
+                {
+                  onSuccess: () => {
+                    toast.success('Đã từ chối gói');
+                    onClose();
+                  },
+                },
+              )
+            }
+          >
+            Từ chối gói
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -642,52 +380,6 @@ const toMentorCard = (mentor: MentorDto) => ({
  *  Sub components
  * ============================================================ */
 
-/** Dải chọn giảng viên — bấm 1 mentor để xem lịch trống của mentor đó */
-const MentorPicker: React.FC<{
-  mentors: MentorDto[];
-  selectedId?: string;
-  onSelect: (mentorId: string) => void;
-}> = ({ mentors, selectedId, onSelect }) => (
-  <Card>
-    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-3">
-      Chọn giảng viên ({mentors.length})
-    </p>
-    <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
-      {mentors.map((m) => {
-        const card = toMentorCard(m);
-        const active = m.userId === selectedId;
-        return (
-          <button
-            key={m.userId}
-            type="button"
-            onClick={() => onSelect(m.userId)}
-            aria-pressed={active}
-            className={cn(
-              'shrink-0 w-48 text-left flex items-center gap-3 p-3 rounded-xl border transition-all',
-              active
-                ? 'border-[#0052CC] bg-blue-50/60 ring-2 ring-[#0052CC]/15'
-                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
-            )}
-          >
-            <img
-              src={card.avatarUrl}
-              alt={card.fullName}
-              className="w-10 h-10 rounded-full bg-slate-100 shrink-0"
-            />
-            <div className="min-w-0">
-              <p className={cn('text-sm truncate', active ? 'font-extrabold text-[#0052CC]' : 'font-bold text-slate-900')}>
-                {card.fullName}
-              </p>
-              <p className="text-[11px] text-slate-500 truncate">{card.title}</p>
-              <p className="text-[11px] font-bold text-slate-700 mt-0.5">{formatVND(card.pricePerHour)}/giờ</p>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  </Card>
-);
-
 const SectionHeader: React.FC<{ title: string; subtitle: string }> = ({
   title,
   subtitle,
@@ -700,34 +392,10 @@ const SectionHeader: React.FC<{ title: string; subtitle: string }> = ({
   </div>
 );
 
-const SummaryRow: React.FC<{
-  label: string;
-  value: string;
-  icon: React.ElementType;
-}> = ({ label, value, icon: Icon }) => (
-  <div className="flex items-start gap-2.5">
-    <div className="w-8 h-8 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-      <Icon className="w-3.5 h-3.5" />
-    </div>
-    <div className="min-w-0 flex-1">
-      <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
-        {label}
-      </p>
-      <p className="text-sm font-bold text-slate-800 mt-0.5 truncate">
-        {value}
-      </p>
-    </div>
-  </div>
-);
-
 /* ============================================================
- *  MyBookingsSection — Lịch của tôi (sắp tới / đã qua), hủy & đổi lịch
+ *  MyBookingsSection — Lịch của tôi (sắp tới / đã qua), hủy buổi đã thanh toán
  * ============================================================ */
-const MyBookingsSection: React.FC<{
-  onReschedule: (booking: Booking) => void;
-  /** Mở lại hộp thoại thanh toán của booking đang chờ thanh toán */
-  onPay: (orderCode: string) => void;
-}> = ({ onReschedule, onPay }) => {
+const MyBookingsSection: React.FC = () => {
   const [listType, setListType] = useState<ScheduleListType>('upcoming');
   const [page, setPage] = useState(0);
   const [cancelling, setCancelling] = useState<Booking | null>(null);
@@ -738,7 +406,7 @@ const MyBookingsSection: React.FC<{
     <section aria-label="Lịch của tôi">
       <SectionHeader
         title="Lịch của tôi"
-        subtitle="Các buổi kèm 1-1 bạn đã đặt. Có thể hủy hoặc đổi lịch trước giờ học theo quy định"
+        subtitle="Các buổi kèm 1-1 trong gói của bạn. Có thể hủy buổi đã thanh toán trước giờ học theo quy định"
       />
       <Card>
         <div className="flex gap-2 mb-4">
@@ -791,9 +459,7 @@ const MyBookingsSection: React.FC<{
                       {BOOKING_STATUS_LABEL[b.status]}
                     </Badge>
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Thầy {b.mentorName} · {formatVND(b.price)}
-                  </p>
+                  <p className="text-xs text-slate-600 mt-0.5">Mentor {b.mentorName}</p>
                   {b.cancelReason && (
                     <p className="text-[11px] text-slate-500 mt-0.5">Lý do hủy: {b.cancelReason}</p>
                   )}
@@ -810,25 +476,12 @@ const MyBookingsSection: React.FC<{
                         Vào phòng
                       </Button>
                     )}
-                    {b.status === 'pending' && b.paymentOrderCode && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        leftIcon={CreditCard}
-                        onClick={() => onPay(b.paymentOrderCode as string)}
-                      >
-                        Thanh toán
-                      </Button>
-                    )}
-                    {/* Chỉ đổi lịch buổi đã thanh toán (BE chặn booking pending) */}
+                    {/* Buổi của gói chưa thanh toán: thanh toán / từ chối cả gói ở mục Gói kèm 1-1 */}
                     {b.status === 'confirmed' && (
-                      <Button variant="outline" size="sm" leftIcon={RefreshCw} onClick={() => onReschedule(b)}>
-                        Đổi lịch
+                      <Button variant="ghost" size="sm" leftIcon={XCircle} onClick={() => setCancelling(b)}>
+                        Hủy
                       </Button>
                     )}
-                    <Button variant="ghost" size="sm" leftIcon={XCircle} onClick={() => setCancelling(b)}>
-                      Hủy
-                    </Button>
                   </div>
                 )}
               </li>
@@ -896,7 +549,7 @@ const CancelBookingModal: React.FC<{ booking: Booking; onClose: () => void }> = 
               label="Buổi học"
               value={`${formatDayLabel(booking.startTime)} · ${formatTime(booking.startTime)} – ${formatTime(booking.endTime)}`}
             />
-            <Row label="Giảng viên" value={`Thầy ${booking.mentorName}`} />
+            <Row label="Mentor" value={booking.mentorName} />
           </div>
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-1">
@@ -936,9 +589,9 @@ const CancelBookingModal: React.FC<{ booking: Booking; onClose: () => void }> = 
  *  - Hủy thanh toán → BE hủy đơn, hủy booking pending và mở lại slot.
  * ============================================================ */
 const PAYMENT_DONE_MESSAGE: Record<Exclude<SessionPaymentStatus, 'PENDING'>, string> = {
-  PAID: 'Đã nhận thanh toán. Buổi kèm 1-1 của bạn đã được xác nhận, xem lại trong mục Lịch của tôi.',
-  CANCELLED: 'Bạn đã hủy thanh toán. Lịch hẹn đã được hủy và slot được mở lại cho người khác.',
-  EXPIRED: 'Đơn đã hết hạn thanh toán. Lịch hẹn đã được hủy, vui lòng chọn slot và đặt lại.',
+  PAID: 'Đã nhận thanh toán. Các buổi kèm 1-1 trong gói đã được xác nhận, xem lại trong mục Lịch của tôi.',
+  CANCELLED: 'Bạn đã hủy đơn thanh toán. Gói vẫn được giữ, bấm "Thanh toán cả gói" để tạo đơn mới.',
+  EXPIRED: 'Đơn đã hết hạn thanh toán. Gói vẫn được giữ, bấm "Thanh toán cả gói" để tạo đơn mới.',
   REVIEW_REQUIRED:
     'Giao dịch chưa khớp (sai số tiền hoặc chuyển sau khi đơn hết hạn). Quản trị viên sẽ kiểm tra và liên hệ bạn.',
 };
@@ -949,6 +602,7 @@ const SessionPaymentModal: React.FC<{ orderCode: string; onClose: () => void }> 
 }) => {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const fetchProfile = useAuthStore((s) => s.fetchMyProfile);
   const paymentQuery = useSessionPayment(orderCode);
   const cancelMutation = useCancelSessionPayment();
   const order = paymentQuery.data;
@@ -966,11 +620,12 @@ const SessionPaymentModal: React.FC<{ orderCode: string; onClose: () => void }> 
   // Đơn kết thúc (PAID / hết hạn / hủy) → tải lại lịch + thông báo
   useEffect(() => {
     if (status && status !== 'PENDING') {
-      queryClient.invalidateQueries({ queryKey: ['schedule', 'me'] });
-      queryClient.invalidateQueries({ queryKey: ['schedule', 'availability'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.schedule.all });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.notification.all });
+      // Learner (USER) trả tiền gói thì BE nâng lên STUDENT → tải lại hồ sơ để mở menu Mentor 1-1
+      if (status === 'PAID') void fetchProfile().catch(() => undefined);
     }
-  }, [status, queryClient]);
+  }, [status, queryClient, fetchProfile]);
 
   const secondsLeft = order ? Math.max(0, Math.floor((new Date(order.expiresAt).getTime() - now) / 1000)) : 0;
   const countdown = `${String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:${String(secondsLeft % 60).padStart(2, '0')}`;
@@ -988,7 +643,7 @@ const SessionPaymentModal: React.FC<{ orderCode: string; onClose: () => void }> 
   const handleCancelPayment = () => {
     cancelMutation.mutate(orderCode, {
       onSuccess: () => {
-        toast.success('Đã hủy thanh toán và lịch hẹn');
+        toast.success('Đã hủy đơn thanh toán');
         paymentQuery.refetch();
       },
       onError: (err) => toast.error(getErrorMessage(err)),
@@ -1052,7 +707,7 @@ const SessionPaymentModal: React.FC<{ orderCode: string; onClose: () => void }> 
               )}
             </div>
             <h3 className="text-xl font-extrabold text-slate-900">
-              {order.status === 'PAID' ? 'Đặt lịch thành công!' : 'Lịch hẹn chưa được xác nhận'}
+              {order.status === 'PAID' ? 'Thanh toán thành công!' : 'Lịch học chưa được xác nhận'}
             </h3>
             <p className="text-sm text-slate-600 mt-2 max-w-sm mx-auto">{PAYMENT_DONE_MESSAGE[order.status]}</p>
             <Button variant="primary" size="md" className="mt-6" onClick={onClose}>

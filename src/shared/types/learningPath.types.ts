@@ -28,6 +28,10 @@ export interface LearningPath {
   certificateId: string;
   name: string;
   description: string | null;
+  /** Số buổi kèm 1-1 của lộ trình (VD 12), null = không quy định */
+  totalSessions: number | null;
+  /** Người tạo (Admin / Mentor) — mentor chỉ sửa / xóa lộ trình của mình */
+  createdByUserId: string | null;
   totalItems: number;
   enrolledCount: number;
   items: LearningPathItem[];
@@ -72,6 +76,8 @@ export interface LearningPathPayload {
   certificateId: string;
   name: string;
   description?: string;
+  /** Số buổi kèm 1-1 (1 - 100), bỏ trống = không quy định */
+  totalSessions?: number | null;
   items: LearningPathItemPayload[];
 }
 

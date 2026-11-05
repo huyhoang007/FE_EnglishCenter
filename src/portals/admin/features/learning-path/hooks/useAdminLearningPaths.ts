@@ -15,6 +15,7 @@ import {
   getPracticeOptionsApi,
   updateLearningPathApi,
   type AdminLearningPathFilter,
+  type LearningPathManageMode,
 } from '../services/adminLearningPathService';
 
 export function useAdminLearningPaths(filter: AdminLearningPathFilter) {
@@ -33,23 +34,23 @@ function useInvalidateLearningPaths() {
   };
 }
 
-export function useSaveLearningPath() {
+export function useSaveLearningPath(mode: LearningPathManageMode = 'admin') {
   const invalidate = useInvalidateLearningPaths();
   return useMutation({
     mutationFn: async (vars: { learningPathId?: string; payload: LearningPathPayload }) =>
       unwrapOrThrow(
         vars.learningPathId
-          ? await updateLearningPathApi(vars.learningPathId, vars.payload)
-          : await createLearningPathApi(vars.payload),
+          ? await updateLearningPathApi(vars.learningPathId, vars.payload, mode)
+          : await createLearningPathApi(vars.payload, mode),
       ),
     onSuccess: invalidate,
   });
 }
 
-export function useDeleteLearningPath() {
+export function useDeleteLearningPath(mode: LearningPathManageMode = 'admin') {
   const invalidate = useInvalidateLearningPaths();
   return useMutation({
-    mutationFn: async (learningPathId: string) => unwrapOrThrow(await deleteLearningPathApi(learningPathId)),
+    mutationFn: async (learningPathId: string) => unwrapOrThrow(await deleteLearningPathApi(learningPathId, mode)),
     onSuccess: invalidate,
   });
 }

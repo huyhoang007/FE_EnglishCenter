@@ -76,6 +76,8 @@ export interface CourseDto {
   level: string | null;
   price: number;
   targetScore: number | null;
+  /** Điểm đầu vào (VD khóa 4.0 - 5.0 thì 4.0) — dùng gợi ý khóa vừa sức */
+  entryScore?: number | null;
   thumbnailUrl: string | null;
   status: CourseStatus;
   certificateId: string | null;
@@ -361,6 +363,7 @@ export interface CreateCoursePayload {
   level?: string;
   price?: number;
   targetScore?: number;
+  entryScore?: number;
   thumbnailUrl?: string;
   certificateId?: string;
   certificatePartId?: string;
@@ -373,6 +376,7 @@ export interface UpdateCoursePayload {
   level?: string;
   price?: number;
   targetScore?: number;
+  entryScore?: number;
   thumbnailUrl?: string;
   certificateId?: string;
   certificatePartId?: string;

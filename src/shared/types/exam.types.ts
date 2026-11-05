@@ -215,6 +215,30 @@ export interface EssayAiEvaluation {
   suggestions: string[];
   model?: string;
   evaluatedAt?: string;
+  /** Điểm yếu cụ thể (trích câu của học viên) */
+  weaknesses?: string[] | null;
+  /** Speaking: từ nghi phát âm sai (suy ra từ bản ghi giọng nói) */
+  pronunciationIssues?: PronunciationIssue[] | null;
+}
+
+/** 1 từ nghi phát âm sai trong bài Speaking */
+export interface PronunciationIssue {
+  /** Từ học viên muốn nói */
+  word: string;
+  /** Từ máy nhận dạng được trong bản ghi */
+  heardAs: string;
+  /** Cách sửa (tiếng Việt) */
+  tip: string;
+}
+
+/** Kết quả 1 part (section) trong kỹ năng của test level */
+export interface PracticePartResult {
+  name: string;
+  questionCount: number;
+  answeredCount: number;
+  /** null = part toàn câu tự luận */
+  correctCount: number | null;
+  percentage: number;
 }
 
 /** Trình độ từ đề luyện tập theo chứng chỉ mục tiêu (cũng là giá trị lưu vào hồ sơ) */
@@ -236,7 +260,16 @@ export interface PracticeLevel {
     name?: string;
     /** true = điểm riêng, không tính vào điểm tổng (VD Aptis Core) */
     excludeFromTotal?: boolean;
+    questionCount?: number;
+    answeredCount?: number;
+    /** Số câu đúng (câu chấm tự động), null nếu kỹ năng toàn tự luận */
+    correctCount?: number | null;
+    /** Nhận xét: đúng bao nhiêu câu, yếu ở part / tiêu chí nào */
+    comment?: string | null;
+    parts?: PracticePartResult[];
   }[];
+  /** Giải thích vì sao ra điểm tổng này */
+  summary?: string[];
 }
 
 export interface AttemptResult {

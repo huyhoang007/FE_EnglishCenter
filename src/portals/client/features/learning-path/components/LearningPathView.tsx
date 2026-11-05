@@ -68,6 +68,8 @@ const STATUS_BADGE: Record<LearningPathStatus, { label: string; variant: 'primar
 export const LearningPathView: React.FC = () => {
   const role = useRole();
   const isStudent = role === 'STUDENT';
+  // Learner / Student chỉ xem lộ trình của chứng chỉ mục tiêu (BE lọc theo hồ sơ) → ẩn bộ lọc chứng chỉ
+  const isGoalFiltered = role === 'STUDENT' || role === 'USER';
   const [certificateId, setCertificateId] = useState('');
 
   const progressQuery = useMyLearningPathProgress(isStudent);
@@ -127,9 +129,13 @@ export const LearningPathView: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <SectionHeader
             title="Khám phá lộ trình"
-            subtitle="Chọn lộ trình phù hợp với chứng chỉ bạn muốn chinh phục"
+            subtitle={
+              isGoalFiltered
+                ? 'Các lộ trình theo chứng chỉ mục tiêu trong hồ sơ của bạn'
+                : 'Chọn lộ trình phù hợp với chứng chỉ bạn muốn chinh phục'
+            }
           />
-          {certificates.length > 0 && (
+          {!isGoalFiltered && certificates.length > 0 && (
             <select
               value={certificateId}
               onChange={(e) => setCertificateId(e.target.value)}
@@ -154,7 +160,9 @@ export const LearningPathView: React.FC = () => {
         {pathsQuery.isError && <Card className="text-sm text-red-600">{getErrorMessage(pathsQuery.error)}</Card>}
         {pathsQuery.isSuccess && paths.length === 0 && (
           <Card className="text-sm text-slate-500 text-center py-6">
-            Chưa có lộ trình nào. Admin cần tạo lộ trình trước.
+            {isGoalFiltered
+              ? 'Chưa có lộ trình cho chứng chỉ mục tiêu của bạn. Hãy cập nhật nguyện vọng trong hồ sơ hoặc nhờ mentor tư vấn.'
+              : 'Chưa có lộ trình nào.'}
           </Card>
         )}
 

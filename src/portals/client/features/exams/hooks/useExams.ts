@@ -69,6 +69,8 @@ export function useAiGradeAttempt(attemptId: string) {
       queryClient.invalidateQueries({ queryKey: ['exam', 'my-attempts'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.account.profile });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.notification.all });
+      // Trình độ vừa đổi → gợi ý khóa học tính lại
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.practice.recommendations });
     },
   });
 }

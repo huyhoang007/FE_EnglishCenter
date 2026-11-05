@@ -5,7 +5,13 @@
  */
 
 import type { BadgeVariant } from '@/shared/components/Badge';
-import type { BookingStatus, ScheduleSlotStatus, StudyRepeatRule, StudyStatus } from '@/shared/types';
+import type {
+  BookingStatus,
+  ConsultationStatus,
+  MentoringPlanStatus,
+  StudyRepeatRule,
+  StudyStatus,
+} from '@/shared/types';
 
 const WEEKDAY_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const WEEKDAY_FULL = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
@@ -81,21 +87,70 @@ export const BOOKING_STATUS_VARIANT: Record<BookingStatus, BadgeVariant> = {
   no_show: 'danger',
 };
 
-export const SLOT_STATUS_LABEL: Record<ScheduleSlotStatus, string> = {
-  available: 'Đang mở',
-  booked: 'Đã có người đặt',
-  cancelled: 'Đã đóng',
-  completed: 'Đã dạy',
+/* ---------------- Giới hạn xếp lịch (khớp BE app.schedule.*) ---------------- */
+
+/** Chỉ xếp buổi trong N ngày tới (BE: app.schedule.max-days-ahead) */
+export const SCHEDULE_MAX_DAYS_AHEAD = 90;
+/** Mỗi buổi dài từ … tới … phút (BE: app.schedule.min/max-session-minutes) */
+export const SESSION_MIN_MINUTES = 30;
+export const SESSION_MAX_MINUTES = 180;
+
+/** min / max cho <input type="date">: hôm nay → hôm nay + 90 ngày */
+export const scheduleDateBounds = (): { min: string; max: string } => {
+  const today = startOfDay(new Date());
+  return {
+    min: toDateInput(today.toISOString()),
+    max: toDateInput(addDays(today, SCHEDULE_MAX_DAYS_AHEAD).toISOString()),
+  };
 };
 
-export const SLOT_STATUS_VARIANT: Record<ScheduleSlotStatus, BadgeVariant> = {
-  available: 'success',
-  booked: 'primary',
+/** Kiểm tra 1 buổi trước khi gửi BE; trả về lỗi tiếng Việt hoặc null */
+export const validateSessionTime = (date: string, start: string, end: string): string | null => {
+  if (!date || !start || !end) return 'Nhập đủ ngày, giờ bắt đầu và kết thúc';
+  const startAt = new Date(`${date}T${start}`);
+  const endAt = new Date(`${date}T${end}`);
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) return 'Ngày giờ không hợp lệ';
+  if (startAt.getTime() <= Date.now()) return 'Giờ bắt đầu phải ở tương lai';
+  if (startAt.getTime() > addDays(startOfDay(new Date()), SCHEDULE_MAX_DAYS_AHEAD + 1).getTime()) {
+    return `Chỉ được xếp lịch trong ${SCHEDULE_MAX_DAYS_AHEAD} ngày tới`;
+  }
+  const minutes = (endAt.getTime() - startAt.getTime()) / 60000;
+  if (minutes <= 0) return 'Giờ kết thúc phải sau giờ bắt đầu';
+  if (minutes < SESSION_MIN_MINUTES || minutes > SESSION_MAX_MINUTES) {
+    return `Mỗi buổi dài từ ${SESSION_MIN_MINUTES} đến ${SESSION_MAX_MINUTES} phút`;
+  }
+  return null;
+};
+
+export const PLAN_STATUS_LABEL: Record<MentoringPlanStatus, string> = {
+  pending_payment: 'Chờ thanh toán',
+  active: 'Đang học',
+  completed: 'Hoàn thành',
+  cancelled: 'Đã hủy',
+};
+
+export const PLAN_STATUS_VARIANT: Record<MentoringPlanStatus, BadgeVariant> = {
+  pending_payment: 'warning',
+  active: 'primary',
+  completed: 'success',
   cancelled: 'neutral',
-  completed: 'neutral',
 };
 
-/** Booking còn hiệu lực: được hủy / đổi lịch */
+export const CONSULTATION_STATUS_LABEL: Record<ConsultationStatus, string> = {
+  pending: 'Chờ mentor nhận',
+  contacted: 'Mentor đang liên hệ',
+  agreed: 'Đã chốt lộ trình',
+  closed: 'Đã kết thúc',
+};
+
+export const CONSULTATION_STATUS_VARIANT: Record<ConsultationStatus, BadgeVariant> = {
+  pending: 'warning',
+  contacted: 'primary',
+  agreed: 'success',
+  closed: 'neutral',
+};
+
+/** Booking còn hiệu lực: được hủy */
 export const isActiveBooking = (status: BookingStatus): boolean =>
   status === 'pending' || status === 'confirmed';
 

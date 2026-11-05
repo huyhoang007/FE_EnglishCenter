@@ -49,10 +49,18 @@ export const QUERY_KEYS = {
     bookings: ['schedule', 'bookings'] as const,
     /* ---------- Dev 5: Schedule & Booking ---------- */
     all: ['schedule'] as const,
-    availability: (mentorId: string, from: string, to: string) =>
-      ['schedule', 'availability', mentorId, from, to] as const,
     mySchedule: (type: string, page: number) => ['schedule', 'me', type, page] as const,
-    mentorSlots: (page: number) => ['schedule', 'mentor-slots', page] as const,
+    /** Gói kèm 1-1 theo lộ trình (V21) */
+    myPlans: ['schedule', 'me', 'plans'] as const,
+    mentorPlans: (page: number) => ['schedule', 'mentor-plans', page] as const,
+    /** Tư vấn lộ trình (V21) */
+    myConsultation: ['schedule', 'me', 'consultation'] as const,
+    mentorConsultations: (mine: boolean, page: number) => ['schedule', 'consultations', mine, page] as const,
+    students: (keyword: string, page: number) => ['schedule', 'students', keyword, page] as const,
+    student: (studentId: string) => ['schedule', 'student', studentId] as const,
+    studentLevelTests: (studentId: string, page: number) => ['schedule', 'student', studentId, 'tests', page] as const,
+    studentLevelTest: (studentId: string, attemptId: string) =>
+      ['schedule', 'student', studentId, 'test', attemptId] as const,
     mentorSchedule: (type: string, page: number) => ['schedule', 'mentor', type, page] as const,
     adminBookings: (params?: unknown) => ['schedule', 'admin', params] as const,
     /** Đơn SePay của buổi kèm 1-1 */

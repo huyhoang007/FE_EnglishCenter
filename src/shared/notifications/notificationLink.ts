@@ -14,6 +14,10 @@ export function getNotificationLink(type: NotificationType, role: UserRole, titl
     if (t.includes('test trình độ') || t.includes('trình độ miễn phí') || t.includes('kiểm tra trình độ')) {
       return CLIENT_ROUTES.practice;
     }
+    // Dev 5: tư vấn lộ trình (type general) — mentor sang trang Học viên, học viên sang Mentor 1-1
+    if (t.includes('tư vấn')) {
+      return role === 'MENTOR' ? CLIENT_ROUTES.mentorStudents : CLIENT_ROUTES.schedule;
+    }
   }
   switch (type) {
     case 'mentor_session':

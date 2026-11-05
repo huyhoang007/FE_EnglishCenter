@@ -145,18 +145,19 @@ export const MentorDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Đặt lịch 1-1 với giảng viên này (Dev 5) */}
+        {/* Tư vấn & học kèm 1-1 theo lộ trình (Dev 5) */}
         <div className="mt-2 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-3">
           <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <div className="space-y-1 flex-1">
-            <p className="font-bold">Chức năng đặt lịch học 1-kèm-1:</p>
+            <p className="font-bold">Học kèm 1-1 theo lộ trình:</p>
             <p className="text-amber-800 leading-normal">
-              Xem các khung giờ trống của giảng viên và đặt buổi kèm riêng phù hợp với bạn.
+              Để lại số điện thoại để mentor xem kết quả test level và tư vấn lộ trình. Chốt xong mentor sẽ xếp lịch các
+              buổi cho bạn, bạn thanh toán 1 lần cả gói.
             </p>
           </div>
-          <Link to={`/schedule?mentorId=${mentor.userId}`} className="shrink-0">
+          <Link to="/schedule" className="shrink-0">
             <Button variant="primary" size="sm">
-              Đặt lịch 1-1
+              Nhờ tư vấn 1-1
             </Button>
           </Link>
         </div>

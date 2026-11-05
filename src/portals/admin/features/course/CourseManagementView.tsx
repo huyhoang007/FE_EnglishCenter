@@ -789,6 +789,7 @@ const CourseFormModal: React.FC<{
     description: '',
     level: '',
     price: '',
+    entryScore: '',
     targetScore: '',
     thumbnailUrl: '',
     certificateId: '',
@@ -817,6 +818,8 @@ const CourseFormModal: React.FC<{
             description: editing.description ?? '',
             level: toFormLevel(editing.level),
             price: editing.price != null ? String(editing.price) : '',
+            entryScore:
+              editing.entryScore != null ? String(editing.entryScore) : '',
             targetScore:
               editing.targetScore != null ? String(editing.targetScore) : '',
             thumbnailUrl: editing.thumbnailUrl ?? '',
@@ -868,6 +871,13 @@ const CourseFormModal: React.FC<{
       form.targetScore && Number(form.targetScore) < 0
         ? 'Điểm mục tiêu phải ≥ 0'
         : '',
+    // Điểm đầu vào < điểm mục tiêu (VD khóa 4.0 → 5.0), dùng để gợi ý khóa vừa sức cho học viên
+    entryScore:
+      form.entryScore && Number(form.entryScore) < 0
+        ? 'Điểm đầu vào phải ≥ 0'
+        : form.entryScore && form.targetScore && Number(form.entryScore) >= Number(form.targetScore)
+          ? 'Điểm đầu vào phải nhỏ hơn điểm mục tiêu'
+          : '',
     thumbnailUrl:
       form.thumbnailUrl && form.thumbnailUrl.length > 500
         ? 'URL tối đa 500 ký tự'
@@ -886,6 +896,7 @@ const CourseFormModal: React.FC<{
       level: form.level.trim() || undefined,
       price: form.price ? Number(form.price) : undefined,
       targetScore: form.targetScore ? Number(form.targetScore) : undefined,
+      entryScore: form.entryScore ? Number(form.entryScore) : undefined,
       thumbnailUrl: form.thumbnailUrl.trim() || undefined,
       certificateId: form.certificateId || undefined,
     };
@@ -1040,6 +1051,18 @@ const CourseFormModal: React.FC<{
               onChange={(e) => setForm({ ...form, price: e.target.value })}
               placeholder="3490000"
               className={cn(inputCls(Boolean(errors.price && touched)), 'bg-white')}
+            />
+          </Field>
+
+          <Field label="Điểm đầu vào" error={touched ? errors.entryScore : ''}>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={form.entryScore}
+              onChange={(e) => setForm({ ...form, entryScore: e.target.value })}
+              placeholder="4.0"
+              className={cn(inputCls(Boolean(errors.entryScore && touched)), 'bg-white')}
             />
           </Field>
 

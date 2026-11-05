@@ -99,6 +99,8 @@ const toPracticeEvaluation = (answer: AnswerResult, e: EssayAiEvaluation): Pract
   grammaticalAccuracy: e.grammaticalAccuracy,
   feedback: e.feedback,
   suggestions: e.suggestions ?? [],
+  weaknesses: e.weaknesses ?? [],
+  pronunciationIssues: e.pronunciationIssues ?? [],
   model: e.model ?? 'claude',
   evaluatedAt: e.evaluatedAt ?? answer.gradedDate ?? '',
 });

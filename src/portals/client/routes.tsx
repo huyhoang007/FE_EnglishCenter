@@ -17,7 +17,8 @@
  *   /schedule          → SchedulePage
  *   /learning-path     → LearningPathPage (lộ trình học — Dev 5)
  *   /practice          → PracticePage (luyện đề Writing/Speaking, AI chấm — Dev 5)
- *   /teaching-schedule → TeachingSchedulePage (mentor mở khung giờ dạy 1-1 — Dev 5)
+ *   /teaching-schedule → TeachingSchedulePage (mentor tạo gói kèm 1-1 + lịch dạy — Dev 5)
+ *   /mentor-students   → MentorStudentsPage (mentor tìm học viên, xem test level, nhận tư vấn — Dev 5)
  *   /exam-grading      → ExamGradingPage (mentor chấm Writing/Speaking — flow Dev 3)
  *   /study-schedule    → StudySchedulePage (lịch học cá nhân USER/STUDENT — Dev 5)
  *
@@ -53,6 +54,7 @@ import SchedulePage from '@/portals/client/pages/student/SchedulePage';
 import LearningPathPage from '@/portals/client/pages/student/LearningPathPage';
 import PracticePage from '@/portals/client/pages/student/PracticePage';
 import TeachingSchedulePage from '@/portals/client/pages/mentors/TeachingSchedulePage';
+import MentorStudentsPage from '@/portals/client/pages/mentors/MentorStudentsPage';
 import ExamGradingPage from '@/portals/client/pages/mentors/ExamGradingPage';
 import StudySchedulePage from '@/portals/client/pages/student/StudySchedulePage';
 import MentorDirectoryPage from '@/portals/client/pages/mentors/MentorDirectoryPage';
@@ -273,7 +275,7 @@ const ClientRoutesComponent: React.FC = () => {
           <Route path="/payments" element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><PaymentHistoryView /></ProtectedRoute>} />
           <Route
             path={CLIENT_ROUTES.schedule}
-            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><RoleRedirect deniedRoles={['USER']} to="/courses"><SchedulePage /></RoleRedirect></RoleRedirect>}
+            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><SchedulePage /></RoleRedirect>}
           />
           {/* Lịch học cá nhân — BE chỉ cho USER / STUDENT (TASK-D5-01) */}
           <Route
@@ -289,6 +291,14 @@ const ClientRoutesComponent: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={['MENTOR']}>
                 <TeachingSchedulePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={CLIENT_ROUTES.mentorStudents}
+            element={
+              <ProtectedRoute allowedRoles={['MENTOR']}>
+                <MentorStudentsPage />
               </ProtectedRoute>
             }
           />

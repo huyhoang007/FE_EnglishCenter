@@ -5,7 +5,7 @@
  *  - 100% English navigation labels
  *  - Compact search + notifications + user dropdown (đã bỏ streak giả "5 Days")
  *  - Truly generic — does NOT contain page-specific content
- *  - Menu theo role: MENTOR chỉ có Teaching Schedule, Exam Grading, Learning Paths
+ *  - Menu theo role: MENTOR chỉ có Teaching Schedule, Students, Exam Grading, Learning Paths (tạo được lộ trình)
  *    (không có khóa học, thi thử, luyện đề AI, ô tìm khóa học)
  *  - Learner (USER) / khách: Courses | Free Level Test
  *  - Student: My Courses | Learning Paths | AI Practice | Final Exams | Mentor 1-1
@@ -47,6 +47,12 @@ const NAV_ITEMS: NavItem[] = [
     // Dev 5: mentor mở / quản lý khung giờ dạy ngay trong layout client
     label: 'Teaching Schedule',
     to: CLIENT_ROUTES.teachingSchedule,
+    roles: ['MENTOR'],
+  },
+  {
+    // Dev 5: mentor tìm học viên, xem điểm test level, nhận yêu cầu tư vấn
+    label: 'Students',
+    to: CLIENT_ROUTES.mentorStudents,
     roles: ['MENTOR'],
   },
   {

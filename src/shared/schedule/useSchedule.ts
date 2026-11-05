@@ -1,35 +1,38 @@
 /**
- * useSchedule — hooks TanStack Query cho lịch hẹn 1-1 (dùng chung Client / Mentor / Admin — Dev 5)
+ * useSchedule — hooks TanStack Query cho lịch 1-1, gói kèm 1-1 và tư vấn lộ trình (Client / Mentor / Admin — Dev 5)
  * -----------------------------------------------------------
  * View chỉ gọi các hook này, không gọi service trực tiếp.
- * Đặt / hủy / đổi lịch xong thì tải lại lịch + thông báo (BE tự tạo thông báo).
+ * Thay đổi xong thì tải lại toàn bộ dữ liệu lịch + thông báo (BE tự tạo thông báo).
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { unwrapOrThrow } from '@/shared/api/axiosClient';
-import type {
-  AdminBookingFilter,
-  CreateSlotPayload,
-  ScheduleListType,
-  UpdateSlotPayload,
-} from '@/shared/types';
+import type { AdminBookingFilter, CreateMentoringPlanPayload, ScheduleListType } from '@/shared/types';
 import {
   adminCancelBookingApi,
-  bookSlotApi,
   cancelBookingApi,
+  cancelMentoringPlanApi,
   cancelSessionPaymentApi,
-  createSlotApi,
-  deleteSlotApi,
+  checkoutPlanApi,
+  claimConsultationApi,
+  createMentoringPlanApi,
   getAdminBookingsApi,
-  getMentorAvailabilityApi,
+  getMentorConsultationsApi,
+  getMentorPlansApi,
   getMentorScheduleApi,
+  getMyConsultationApi,
+  getMyPlansApi,
   getMyScheduleApi,
-  getMySlotsApi,
   getSessionPaymentApi,
-  rescheduleBookingApi,
+  getStudentLevelTestResultApi,
+  getStudentLevelTestsApi,
+  getStudentOverviewApi,
+  rejectPlanApi,
+  requestConsultationApi,
+  searchStudentsApi,
   updateBookingStatusApi,
-  updateSlotApi,
+  updateConsultationStatusApi,
 } from './scheduleService';
 
 /** Tải lại toàn bộ dữ liệu lịch + thông báo sau khi thay đổi */
@@ -43,15 +46,6 @@ function useInvalidateSchedule() {
 
 /* ---------------- Học viên ---------------- */
 
-/** Lịch trống + đã đặt của 1 mentor trong khoảng [from, to) */
-export function useMentorAvailability(mentorId: string | undefined, from: string, to: string) {
-  return useQuery({
-    queryKey: QUERY_KEYS.schedule.availability(mentorId ?? '', from, to),
-    queryFn: async () => unwrapOrThrow(await getMentorAvailabilityApi(mentorId as string, from, to)),
-    enabled: !!mentorId,
-  });
-}
-
 /** Lịch của học viên đang đăng nhập (chỉ STUDENT) */
 export function useMySchedule(type: ScheduleListType, page: number, enabled: boolean) {
   return useQuery({
@@ -61,19 +55,48 @@ export function useMySchedule(type: ScheduleListType, page: number, enabled: boo
   });
 }
 
-export function useBookSlot() {
+/** Các gói kèm 1-1 của học viên (USER / STUDENT) */
+export function useMyPlans(enabled: boolean) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.myPlans,
+    queryFn: async () => unwrapOrThrow(await getMyPlansApi()),
+    enabled,
+  });
+}
+
+/** Học viên bấm thanh toán cả gói → đơn SePay (dùng orderCode để mở QR) */
+export function useCheckoutPlan() {
   const invalidate = useInvalidateSchedule();
   return useMutation({
-    mutationFn: async (scheduleId: string) => unwrapOrThrow(await bookSlotApi(scheduleId)),
+    mutationFn: async (planId: string) => unwrapOrThrow(await checkoutPlanApi(planId)),
     onSuccess: invalidate,
   });
 }
 
-export function useRescheduleBooking() {
+export function useRejectPlan() {
   const invalidate = useInvalidateSchedule();
   return useMutation({
-    mutationFn: async (vars: { bookingId: string; newScheduleId: string }) =>
-      unwrapOrThrow(await rescheduleBookingApi(vars.bookingId, vars.newScheduleId)),
+    mutationFn: async (vars: { planId: string; reason?: string }) =>
+      unwrapOrThrow(await rejectPlanApi(vars.planId, vars.reason)),
+    onSuccess: invalidate,
+  });
+}
+
+/** Yêu cầu tư vấn gần nhất của học viên (null = chưa gửi) */
+export function useMyConsultation(enabled: boolean) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.myConsultation,
+    queryFn: async () => unwrapOrThrow(await getMyConsultationApi()),
+    enabled,
+  });
+}
+
+/** Học viên để lại SĐT nhờ mentor tư vấn lộ trình */
+export function useRequestConsultation() {
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: async (vars: { phone: string; note?: string }) =>
+      unwrapOrThrow(await requestConsultationApi(vars.phone, vars.note)),
     onSuccess: invalidate,
   });
 }
@@ -82,7 +105,7 @@ export function useRescheduleBooking() {
 const PAYMENT_POLL_MS = 3000;
 
 /**
- * Đơn SePay của buổi kèm 1-1: tự kiểm tra lại mỗi 3 giây khi còn PENDING,
+ * Đơn SePay (buổi kèm / cả gói): tự kiểm tra lại mỗi 3 giây khi còn PENDING,
  * dừng khi đơn đã PAID / CANCELLED / EXPIRED / REVIEW_REQUIRED.
  */
 export function useSessionPayment(orderCode: string | null | undefined) {
@@ -94,7 +117,7 @@ export function useSessionPayment(orderCode: string | null | undefined) {
   });
 }
 
-/** Học viên hủy thanh toán: BE hủy đơn, hủy booking pending và mở lại slot */
+/** Học viên hủy đơn thanh toán đang chờ */
 export function useCancelSessionPayment() {
   const invalidate = useInvalidateSchedule();
   return useMutation({
@@ -103,7 +126,7 @@ export function useCancelSessionPayment() {
   });
 }
 
-/** Học viên hoặc mentor của lịch hẹn hủy */
+/** Học viên hoặc mentor của lịch hẹn hủy 1 buổi đã thanh toán */
 export function useCancelBooking() {
   const invalidate = useInvalidateSchedule();
   return useMutation({
@@ -114,38 +137,6 @@ export function useCancelBooking() {
 }
 
 /* ---------------- Mentor ---------------- */
-
-export function useMySlots(page: number) {
-  return useQuery({
-    queryKey: QUERY_KEYS.schedule.mentorSlots(page),
-    queryFn: async () => unwrapOrThrow(await getMySlotsApi(page)),
-  });
-}
-
-export function useCreateSlot() {
-  const invalidate = useInvalidateSchedule();
-  return useMutation({
-    mutationFn: async (payload: CreateSlotPayload) => unwrapOrThrow(await createSlotApi(payload)),
-    onSuccess: invalidate,
-  });
-}
-
-export function useUpdateSlot() {
-  const invalidate = useInvalidateSchedule();
-  return useMutation({
-    mutationFn: async (vars: { scheduleId: string; payload: UpdateSlotPayload }) =>
-      unwrapOrThrow(await updateSlotApi(vars.scheduleId, vars.payload)),
-    onSuccess: invalidate,
-  });
-}
-
-export function useDeleteSlot() {
-  const invalidate = useInvalidateSchedule();
-  return useMutation({
-    mutationFn: async (scheduleId: string) => unwrapOrThrow(await deleteSlotApi(scheduleId)),
-    onSuccess: invalidate,
-  });
-}
 
 /** Lịch dạy của mentor đang đăng nhập */
 export function useMentorSchedule(type: ScheduleListType, page: number) {
@@ -162,6 +153,87 @@ export function useUpdateBookingStatus() {
     mutationFn: async (vars: { bookingId: string; status: 'completed' | 'no_show' }) =>
       unwrapOrThrow(await updateBookingStatusApi(vars.bookingId, vars.status)),
     onSuccess: invalidate,
+  });
+}
+
+export function useMentorPlans(page: number) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.mentorPlans(page),
+    queryFn: async () => unwrapOrThrow(await getMentorPlansApi(page)),
+  });
+}
+
+export function useCreateMentoringPlan() {
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: async (payload: CreateMentoringPlanPayload) => unwrapOrThrow(await createMentoringPlanApi(payload)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCancelMentoringPlan() {
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: async (vars: { planId: string; reason?: string }) =>
+      unwrapOrThrow(await cancelMentoringPlanApi(vars.planId, vars.reason)),
+    onSuccess: invalidate,
+  });
+}
+
+/** mine = false: yêu cầu chưa ai nhận; mine = true: tôi phụ trách */
+export function useMentorConsultations(mine: boolean, page: number) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.mentorConsultations(mine, page),
+    queryFn: async () => unwrapOrThrow(await getMentorConsultationsApi(mine, page)),
+  });
+}
+
+export function useClaimConsultation() {
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: async (requestId: string) => unwrapOrThrow(await claimConsultationApi(requestId)),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateConsultationStatus() {
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: async (vars: { requestId: string; status: 'contacted' | 'closed' }) =>
+      unwrapOrThrow(await updateConsultationStatusApi(vars.requestId, vars.status)),
+    onSuccess: invalidate,
+  });
+}
+
+/** Mentor tìm học viên theo tên / email / SĐT */
+export function useStudentSearch(keyword: string, page: number) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.students(keyword, page),
+    queryFn: async () => unwrapOrThrow(await searchStudentsApi(keyword, page)),
+  });
+}
+
+export function useStudentOverview(studentId: string | null) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.student(studentId ?? ''),
+    queryFn: async () => unwrapOrThrow(await getStudentOverviewApi(studentId as string)),
+    enabled: !!studentId,
+  });
+}
+
+export function useStudentLevelTests(studentId: string | null, page: number) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.studentLevelTests(studentId ?? '', page),
+    queryFn: async () => unwrapOrThrow(await getStudentLevelTestsApi(studentId as string, page)),
+    enabled: !!studentId,
+  });
+}
+
+export function useStudentLevelTestResult(studentId: string | null, attemptId: string | null) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.studentLevelTest(studentId ?? '', attemptId ?? ''),
+    queryFn: async () => unwrapOrThrow(await getStudentLevelTestResultApi(studentId as string, attemptId as string)),
+    enabled: !!studentId && !!attemptId,
   });
 }
 

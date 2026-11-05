@@ -1,12 +1,14 @@
 /**
  * PracticeLevelCard — trình độ sau khi làm đề luyện tập AI (Dev 5)
  * -----------------------------------------------------------
- * Chỉ hiện thứ người học cần biết: điểm theo thang chứng chỉ mục tiêu (VD IELTS Band 5.5) + level CEFR,
- * và điểm từng kỹ năng. Số liệu do BE tính (practiceLevel), trùng với trình độ lưu ở trang Hồ sơ.
+ * Điểm theo thang chứng chỉ mục tiêu (VD IELTS Band 5.5) + level CEFR, điểm từng kỹ năng,
+ * và phần giải thích "vì sao được điểm này": cách tính điểm tổng, đúng bao nhiêu câu, yếu ở part / tiêu chí nào.
+ * Số liệu do BE tính (practiceLevel), trùng với trình độ lưu ở trang Hồ sơ.
+ * forMentor: mentor xem kết quả của học viên (đổi câu chữ "của bạn").
  */
 
 import React from 'react';
-import { BookOpen, Headphones, Mic, PenLine, SpellCheck } from 'lucide-react';
+import { BookOpen, Headphones, Info, Mic, PenLine, SpellCheck } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import type { PracticeLevel } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
@@ -44,7 +46,7 @@ const fmt = (value: number, max: number) => (max <= 10 ? Number(value).toFixed(1
 /** "IELTS Academic" → "Band"; TOEIC / TOEFL → "Điểm" */
 const unitOf = (name: string) => (name.toUpperCase().includes('IELTS') ? 'Band' : 'Điểm');
 
-export const PracticeLevelCard: React.FC<{ level: PracticeLevel }> = ({ level }) => (
+export const PracticeLevelCard: React.FC<{ level: PracticeLevel; forMentor?: boolean }> = ({ level, forMentor }) => (
   <Card className="space-y-5">
     <div className="grid md:grid-cols-[auto,1fr] gap-5 items-center">
       {/* Điểm tổng + CEFR */}
@@ -95,14 +97,45 @@ export const PracticeLevelCard: React.FC<{ level: PracticeLevel }> = ({ level })
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, s.percentage)}%` }} />
               </div>
+              {s.comment && <p className="text-xs text-slate-600 leading-relaxed">{s.comment}</p>}
+              {s.parts && s.parts.length > 1 && (
+                <ul className="space-y-0.5">
+                  {s.parts.map((p) => (
+                    <li key={p.name} className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                      <span className="truncate">{p.name}</span>
+                      <span className="tabular-nums font-semibold text-slate-700 shrink-0">
+                        {p.correctCount != null ? `${p.correctCount}/${p.questionCount} đúng` : `${Math.round(p.percentage)}%`}
+                        {p.answeredCount < p.questionCount ? ` · bỏ trống ${p.questionCount - p.answeredCount}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           );
         })}
       </div>
     </div>
+    {level.summary && level.summary.length > 0 && (
+      <div className="rounded-2xl bg-slate-50 border border-slate-200/70 p-4">
+        <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <Info className="w-4 h-4 text-primary" />
+          {forMentor ? 'Vì sao học viên được điểm này' : 'Vì sao bạn được điểm này'}
+        </p>
+        <ul className="mt-2 space-y-1">
+          {level.summary.map((line, i) => (
+            <li key={i} className="flex gap-2 text-sm text-slate-700">
+              <span className="text-primary font-bold">•</span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
     <p className="text-[11px] text-slate-400">
       Điểm ước tính theo thang {level.certificateName}: Listening / Reading quy từ tỷ lệ câu đúng, Writing / Speaking
-      theo band AI chấm. Trình độ này đã được lưu vào hồ sơ của bạn.
+      theo band AI chấm (bài không viết / nói bằng tiếng Anh được 0 điểm).
+      {forMentor ? '' : ' Trình độ này đã được lưu vào hồ sơ của bạn; xem chi tiết từng câu ở phần bên dưới.'}
     </p>
   </Card>
 );

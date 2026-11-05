@@ -5,6 +5,7 @@
  *   POST   /api/v1/admin/learning-paths                      → LearningPath
  *   PUT    /api/v1/admin/learning-paths/{id}                 → LearningPath (thay toàn bộ danh sách chặng)
  *   DELETE /api/v1/admin/learning-paths/{id}                 → (6022 nếu đã có học viên ghi danh)
+ * Mentor (Dev 5): cùng payload ở /api/v1/mentor/learning-paths (chỉ sửa / xóa lộ trình mình tạo).
  *
  * Dữ liệu cho dropdown khi thêm chặng:
  *   GET /api/v1/courses          (Dev 2, fetchCourses trong shared/api) — chặng COURSE
@@ -23,6 +24,11 @@ import type {
 } from '@/shared/types';
 
 const ADMIN_BASE = '/api/v1/admin/learning-paths';
+const MENTOR_BASE = '/api/v1/mentor/learning-paths';
+
+/** admin: Admin Portal · mentor: mentor tạo lộ trình của mình (trang Learning Paths) */
+export type LearningPathManageMode = 'admin' | 'mentor';
+const baseOf = (mode: LearningPathManageMode) => (mode === 'mentor' ? MENTOR_BASE : ADMIN_BASE);
 /** Đủ lớn để dropdown có toàn bộ lựa chọn của 1 trung tâm */
 const OPTION_SIZE = 200;
 
@@ -43,16 +49,21 @@ export const getLearningPathsApi = (
     },
   });
 
-export const createLearningPathApi = (payload: LearningPathPayload): Promise<ApiResponse<LearningPath>> =>
-  apiPost<LearningPath>(ADMIN_BASE, payload);
+export const createLearningPathApi = (
+  payload: LearningPathPayload,
+  mode: LearningPathManageMode = 'admin',
+): Promise<ApiResponse<LearningPath>> => apiPost<LearningPath>(baseOf(mode), payload);
 
 export const updateLearningPathApi = (
   learningPathId: string,
   payload: LearningPathPayload,
-): Promise<ApiResponse<LearningPath>> => apiPut<LearningPath>(`${ADMIN_BASE}/${learningPathId}`, payload);
+  mode: LearningPathManageMode = 'admin',
+): Promise<ApiResponse<LearningPath>> => apiPut<LearningPath>(`${baseOf(mode)}/${learningPathId}`, payload);
 
-export const deleteLearningPathApi = (learningPathId: string): Promise<ApiResponse<void>> =>
-  apiDelete<void>(`${ADMIN_BASE}/${learningPathId}`);
+export const deleteLearningPathApi = (
+  learningPathId: string,
+  mode: LearningPathManageMode = 'admin',
+): Promise<ApiResponse<void>> => apiDelete<void>(`${baseOf(mode)}/${learningPathId}`);
 
 /* ---------- Lựa chọn cho từng loại chặng ---------- */
 

@@ -36,8 +36,10 @@ export const CLIENT_ROUTES = {
   study: (slug: string = ':slug', lessonId?: string) =>
     lessonId ? `/study/${slug}/${lessonId}` : `/study/${slug}`,
   schedule: '/schedule',
-  /** Mentor quản lý khung giờ dạy 1-1 (Dev 5) — trong layout client */
+  /** Mentor quản lý gói kèm 1-1 + lịch dạy (Dev 5) — trong layout client */
   teachingSchedule: '/teaching-schedule',
+  /** Mentor xem học viên, điểm test level, nhận yêu cầu tư vấn (Dev 5) — trong layout client */
+  mentorStudents: '/mentor-students',
   /** Mentor chấm Writing/Speaking bài thi (flow Dev 3) — trong layout client */
   examGrading: '/exam-grading',
   /** Lịch học cá nhân của người học USER / STUDENT (Dev 5 — TASK-D5-01) */

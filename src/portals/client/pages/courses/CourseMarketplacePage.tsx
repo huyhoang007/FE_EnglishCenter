@@ -41,6 +41,7 @@ import { formatVND } from '@/shared/utils/format';
 import { fetchCourses } from '@/shared/api/courseService';
 import { fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
 import {
   CEFR_OPTIONS,
   cefrLabel,
@@ -65,6 +66,10 @@ const PAGE_SIZE = 12;
  * ========================================================= */
 const CourseMarketplacePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  // Dev 5: Learner / Student chỉ thấy khóa đúng chứng chỉ mục tiêu và liên quan nguyện vọng (BE lọc theo hồ sơ)
+  // → ẩn bộ lọc chứng chỉ / điểm mục tiêu để không gây hiểu nhầm
+  const role = useAuthStore((s) => s.role);
+  const isGoalFiltered = role === 'USER' || role === 'STUDENT';
 
   // --- Filter state, nguồn sự thật là URL ---
   const keyword = searchParams.get('keyword') ?? '';
@@ -185,6 +190,7 @@ const CourseMarketplacePage: React.FC = () => {
           </div>
 
           {/* Certificate — nguồn thật từ GET /certificates */}
+          {!isGoalFiltered && (
           <select
             value={certificateId}
             onChange={(e) => patchParams({ certificateId: e.target.value || null })}
@@ -198,6 +204,7 @@ const CourseMarketplacePage: React.FC = () => {
               </option>
             ))}
           </select>
+          )}
 
           {/* Level */}
           <select
@@ -215,6 +222,7 @@ const CourseMarketplacePage: React.FC = () => {
           </select>
 
           {/* Target score */}
+          {!isGoalFiltered && (
           <select
             value={targetScore}
             onChange={(e) => patchParams({ targetScore: e.target.value || null })}
@@ -229,6 +237,7 @@ const CourseMarketplacePage: React.FC = () => {
             <option value="7.5">Band 7.5+</option>
             <option value="8.0">Band 8.0+</option>
           </select>
+          )}
 
           {/* Reset */}
           {hasActiveFilter && (

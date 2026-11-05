@@ -66,6 +66,10 @@ export interface PracticeEvaluation {
   suggestions: string[];
   model: string;
   evaluatedAt: string;
+  /** Điểm yếu cụ thể (trích câu của học viên) — chỉ có ở bài chấm mới */
+  weaknesses?: string[] | null;
+  /** Speaking: từ nghi phát âm sai (suy ra từ bản ghi giọng nói) */
+  pronunciationIssues?: { word: string; heardAs: string; tip: string }[] | null;
 }
 
 /** Admin tạo / sửa đề luyện tập — POST/PUT /api/v1/admin/practice-exams */
@@ -91,4 +95,6 @@ export interface RecommendationResponse {
   courses: CourseDto[];
   learningPaths: LearningPath[];
   summary: string;
+  /** true = chưa có khóa vừa sức với trình độ hiện tại → mời để lại SĐT nhờ mentor tư vấn */
+  needConsultation?: boolean;
 }

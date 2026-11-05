@@ -72,5 +72,8 @@ export function useRecommendations(enabled = true) {
     queryKey: QUERY_KEYS.practice.recommendations,
     queryFn: async () => unwrapOrThrow(await getRecommendationsApi()),
     enabled,
+    // Gợi ý tính theo trình độ vừa lưu sau khi chấm → luôn lấy lại, không dùng bản cũ (trước khi có điểm)
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }

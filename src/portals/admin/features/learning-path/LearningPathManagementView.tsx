@@ -6,6 +6,10 @@
  * Tiến độ học viên do BE tự tính: COURSE = đã ghi danh khóa, EXAM = thi đậu,
  * PRACTICE_EXAM = AI chấm đạt band mục tiêu.
  *
+ * Dev 5: mentor dùng lại màn này ở trang Learning Paths (mode="mentor") để tự tạo lộ trình
+ * (VD lộ trình 12 buổi nâng band) dùng khi tư vấn / tạo gói kèm 1-1; mentor chỉ sửa / xóa lộ trình của mình.
+ * "Số buổi kèm 1-1" của lộ trình: gói kèm 1-1 theo lộ trình phải có đúng số buổi này.
+ *
  * Layout giữ nguyên AdminLayout: StatCard → title bar → filter bar → bảng → modal,
  * bo góc 16-24px, viền slate-200/80, màu nhấn #0052CC (giống Certificates / Courses).
  */
@@ -40,6 +44,7 @@ import { fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { cn } from '@/shared/utils';
 import { formatDate } from '@/shared/utils/format';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
 import type {
   LearningPath,
   LearningPathItem,
@@ -52,6 +57,7 @@ import {
   useLearningPathItemOptions,
   useSaveLearningPath,
 } from './hooks/useAdminLearningPaths';
+import type { LearningPathManageMode } from './services/adminLearningPathService';
 
 const PAGE_SIZE = 10;
 
@@ -104,8 +110,12 @@ const toItemForm = (item: LearningPathItem): ItemForm => ({
 /* =========================================================
  * View
  * ========================================================= */
-export const LearningPathManagementView: React.FC = () => {
+export const LearningPathManagementView: React.FC<{ mode?: LearningPathManageMode }> = ({ mode = 'admin' }) => {
   const toast = useToast();
+  const isMentor = mode === 'mentor';
+  const currentUserId = useAuthStore((s) => s.user?.id ?? '');
+  /** Admin sửa mọi lộ trình; mentor chỉ sửa / xóa lộ trình do mình tạo */
+  const canManage = (path: LearningPath) => !isMentor || path.createdByUserId === currentUserId;
 
   const [certificateId, setCertificateId] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -119,7 +129,7 @@ export const LearningPathManagementView: React.FC = () => {
   const listQuery = useAdminLearningPaths({ certificateId, page, size: PAGE_SIZE });
   // Thống kê toàn hệ thống (1 trung tâm có ít lộ trình nên lấy 1 trang lớn)
   const statsQuery = useAdminLearningPaths({ page: 0, size: 200 });
-  const deleteMutation = useDeleteLearningPath();
+  const deleteMutation = useDeleteLearningPath(mode);
 
   const { data: certificates = [] } = useQuery({
     queryKey: QUERY_KEYS.catalog.certificates,
@@ -208,9 +218,13 @@ export const LearningPathManagementView: React.FC = () => {
       {/* ============ 2. TITLE BAR ============ */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Quản lý lộ trình học</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            {isMentor ? 'Lộ trình học' : 'Quản lý lộ trình học'}
+          </h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Lộ trình theo chứng chỉ, mỗi chặng gắn khóa học / đề thi / đề luyện tập AI. Tiến độ học viên được tính tự động.
+            {isMentor
+              ? 'Tạo lộ trình (VD 12 buổi nâng band) để tư vấn và tạo gói kèm 1-1 cho học viên. Bạn chỉ sửa / xóa được lộ trình của mình.'
+              : 'Lộ trình theo chứng chỉ, mỗi chặng gắn khóa học / đề thi / đề luyện tập AI. Tiến độ học viên được tính tự động.'}
           </p>
         </div>
         <Button
@@ -312,7 +326,14 @@ export const LearningPathManagementView: React.FC = () => {
                 {visible.map((path) => (
                   <tr key={path.learningPathId} className="hover:bg-slate-50/60 transition-colors">
                     <td className="py-3 px-4 max-w-[340px]">
-                      <span className="font-bold text-slate-900 block truncate">{path.name}</span>
+                      <span className="font-bold text-slate-900 block truncate">
+                        {path.name}
+                        {isMentor && path.createdByUserId === currentUserId && (
+                          <span className="ml-1.5 align-middle text-[9px] font-extrabold uppercase text-[#0052CC] bg-blue-50 border border-blue-100 rounded px-1 py-0.5">
+                            Của tôi
+                          </span>
+                        )}
+                      </span>
                       <span className="text-[10px] text-slate-400 block truncate">
                         {path.description ?? 'Chưa có mô tả'}
                       </span>
@@ -322,6 +343,9 @@ export const LearningPathManagementView: React.FC = () => {
                       <Badge variant="primary" size="sm" icon={Layers3}>
                         {path.totalItems} chặng
                       </Badge>
+                      {path.totalSessions != null && (
+                        <span className="block text-[10px] text-slate-500 mt-1">{path.totalSessions} buổi kèm 1-1</span>
+                      )}
                     </td>
                     <td className="py-3 px-3">
                       <Badge variant={path.enrolledCount > 0 ? 'success' : 'neutral'} size="sm" icon={Users}>
@@ -342,6 +366,7 @@ export const LearningPathManagementView: React.FC = () => {
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
+                        {canManage(path) && (<>
                         <button
                           type="button"
                           onClick={() => {
@@ -363,6 +388,7 @@ export const LearningPathManagementView: React.FC = () => {
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                        </>)}
                       </div>
                     </td>
                   </tr>
@@ -378,6 +404,7 @@ export const LearningPathManagementView: React.FC = () => {
 
       {/* ============ MODALS ============ */}
       <LearningPathFormModal
+        mode={mode}
         open={isFormOpen}
         editing={editing}
         certificates={certificates}
@@ -437,19 +464,21 @@ export const LearningPathManagementView: React.FC = () => {
  * Modal: Create / Edit learning path
  * ========================================================= */
 const LearningPathFormModal: React.FC<{
+  mode: LearningPathManageMode;
   open: boolean;
   editing: LearningPath | null;
   certificates: { certificateId: string; certificateName: string }[];
   onClose: () => void;
   onSaved: () => void;
-}> = ({ open, editing, certificates, onClose, onSaved }) => {
+}> = ({ mode, open, editing, certificates, onClose, onSaved }) => {
   const toast = useToast();
-  const saveMutation = useSaveLearningPath();
+  const saveMutation = useSaveLearningPath(mode);
   const options = useLearningPathItemOptions(open);
 
   const [certificateId, setCertificateId] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [totalSessions, setTotalSessions] = useState('');
   const [items, setItems] = useState<ItemForm[]>([]);
   const [touched, setTouched] = useState(false);
 
@@ -467,6 +496,7 @@ const LearningPathFormModal: React.FC<{
     setCertificateId(editing?.certificateId ?? '');
     setName(editing?.name ?? '');
     setDescription(editing?.description ?? '');
+    setTotalSessions(editing?.totalSessions != null ? String(editing.totalSessions) : '');
     setItems(
       editing
         ? [...editing.items].sort((a, b) => a.order - b.order).map(toItemForm)
@@ -511,6 +541,11 @@ const LearningPathFormModal: React.FC<{
   const nameError = !name.trim() ? 'Tên lộ trình là bắt buộc' : name.trim().length > 255 ? 'Tối đa 255 ký tự' : '';
   const descriptionError = description.trim().length > 5000 ? 'Tối đa 5000 ký tự' : '';
   const itemsError = items.length === 0 ? 'Lộ trình phải có ít nhất 1 chặng' : '';
+  const sessionsNumber = Number(totalSessions);
+  const totalSessionsError =
+    totalSessions.trim() && (!Number.isInteger(sessionsNumber) || sessionsNumber < 1 || sessionsNumber > 100)
+      ? 'Số buổi từ 1 đến 100'
+      : '';
   const seen = new Set<string>();
   const itemErrors = items.map((it) => {
     if (!it.stage.trim()) return 'Nhập tên giai đoạn';
@@ -528,7 +563,8 @@ const LearningPathFormModal: React.FC<{
     return '';
   });
   const hasError =
-    Boolean(certificateError || nameError || descriptionError || itemsError) || itemErrors.some(Boolean);
+    Boolean(certificateError || nameError || descriptionError || itemsError || totalSessionsError) ||
+    itemErrors.some(Boolean);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -538,6 +574,7 @@ const LearningPathFormModal: React.FC<{
       certificateId,
       name: name.trim(),
       description: description.trim() || undefined,
+      totalSessions: totalSessions.trim() ? sessionsNumber : null,
       items: items.map((it, index) => ({
         stage: it.stage.trim(),
         order: index + 1,
@@ -606,6 +643,18 @@ const LearningPathFormModal: React.FC<{
             />
           </Field>
         </div>
+
+        <Field label="Số buổi kèm 1-1 (VD 12)" error={touched ? totalSessionsError : ''}>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={totalSessions}
+            onChange={(e) => setTotalSessions(e.target.value)}
+            placeholder="Bỏ trống nếu lộ trình không có buổi kèm 1-1"
+            className={inputCls(Boolean(touched && totalSessionsError))}
+          />
+        </Field>
 
         <Field label="Mô tả" error={touched ? descriptionError : ''}>
           <textarea

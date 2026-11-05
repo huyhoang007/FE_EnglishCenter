@@ -1,18 +1,21 @@
 /**
- * TestRecommendations — Gợi ý khóa học & lộ trình học phù hợp sau test (TASK-DEV1 T8)
+ * TestRecommendations — Gợi ý khóa học phù hợp sau test (TASK-DEV1 T8)
  * -----------------------------------------------------------------------------------
  * Hiển thị:
  *   - "Khóa học phù hợp với trình độ của bạn"
- *   - "Lộ trình gợi ý để đạt điểm mục tiêu"
+ *   - Không gợi ý lộ trình: lộ trình do mentor tư vấn riêng (khóa học / gói kèm 1-1).
+ *   - Dev 5: chỉ gợi ý khóa vừa sức (điểm đầu vào ≤ trình độ hiện tại). Không có khóa nào vừa sức
+ *     (VD band 1.0 mà khóa thấp nhất đầu vào 4.0) thì báo rõ và mời để lại SĐT cho mentor tư vấn.
  */
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, BookOpen, Compass, ArrowRight, Target, Award } from 'lucide-react';
+import { Sparkles, BookOpen, ArrowRight, Target, Info } from 'lucide-react';
 import { useRecommendations } from '../hooks/usePractice';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import { ConsultationRequestCard } from '@/portals/client/features/schedules/components/ConsultationRequestCard';
 
 interface TestRecommendationsProps {
   className?: string;
@@ -38,17 +41,13 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
   }
 
   if (!recommendations) {
-    return null;
+    return <ConsultationRequestCard className={className} />;
   }
 
-  const { courses, learningPaths, summary, targetCertificateName, targetScore, currentLevel, currentScore } = recommendations;
+  const { courses, summary, targetCertificateName, targetScore, currentLevel, currentScore } = recommendations;
 
   const hasCourses = courses && courses.length > 0;
-  const hasPaths = learningPaths && learningPaths.length > 0;
-
-  if (!hasCourses && !hasPaths) {
-    return null;
-  }
+  const needConsultation = Boolean(recommendations.needConsultation);
 
   return (
     <div className={`space-y-6 ${className}`}>
@@ -76,6 +75,20 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
           </div>
         </div>
       </div>
+
+      {/* Chưa có khóa nào vừa sức (VD band 0 mà khóa thấp nhất đầu vào 4.0): báo rõ, không gợi ý khóa cao hơn */}
+      {!hasCourses && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 flex items-start gap-3">
+          <Info className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-base font-bold text-slate-900">Chưa có khóa học phù hợp với trình độ của bạn</p>
+            <p className="text-sm text-slate-600 mt-1">
+              Trung tâm đang bổ sung thêm khóa học theo từng trình độ. Bạn có thể để lại thông tin liên hệ bên dưới để
+              mentor tư vấn.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 1. Khóa học phù hợp với trình độ của bạn */}
       {hasCourses && (
@@ -109,7 +122,10 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
                     </span>
                     {course.targetScore && (
                       <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1 whitespace-nowrap">
-                        <Target className="w-3 h-3" /> Mục tiêu {formatScore(course.targetScore)}
+                        <Target className="w-3 h-3" />
+                        {course.entryScore != null
+                          ? `${formatScore(course.entryScore)} → ${formatScore(course.targetScore)}`
+                          : `Mục tiêu ${formatScore(course.targetScore)}`}
                       </span>
                     )}
                   </div>
@@ -144,64 +160,8 @@ export const TestRecommendations: React.FC<TestRecommendationsProps> = ({ classN
         </div>
       )}
 
-      {/* 2. Lộ trình gợi ý để đạt điểm mục tiêu */}
-      {hasPaths && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Compass className="w-5 h-5 text-indigo-600" />
-              <h4 className="text-base font-bold text-slate-900">
-                Lộ trình gợi ý để đạt điểm mục tiêu
-              </h4>
-            </div>
-            <button
-              onClick={() => navigate(CLIENT_ROUTES.learningPath)}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 transition-colors"
-            >
-              Xem tất cả lộ trình <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
-            {learningPaths.slice(0, 2).map((path) => (
-              <div
-                key={path.learningPathId}
-                className="group flex flex-col justify-between rounded-xl bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all p-5"
-              >
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="ai" size="sm">
-                      <Award className="w-3.5 h-3.5 mr-1 inline" /> {path.totalItems} chặng học
-                    </Badge>
-                  </div>
-                  <h5 className="font-bold text-slate-900 text-base group-hover:text-indigo-600 transition-colors mb-1.5">
-                    {path.name}
-                  </h5>
-                  {path.description && (
-                    <p className="text-xs text-slate-500 line-clamp-2 mb-4">
-                      {path.description}
-                    </p>
-                  )}
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 mt-auto">
-                  <span className="text-xs text-slate-500">
-                    {path.enrolledCount || 0} học viên đang theo học
-                  </span>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => navigate(CLIENT_ROUTES.learningPath)}
-                    className="text-xs h-8 bg-indigo-600 hover:bg-indigo-700"
-                  >
-                    Khám phá lộ trình <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Dev 5: tư vấn lộ trình 1-1 — nổi bật khi chưa có khóa vừa sức */}
+      <ConsultationRequestCard highlight={needConsultation} />
     </div>
   );
 };
