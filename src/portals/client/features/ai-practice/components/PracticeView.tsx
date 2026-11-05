@@ -63,6 +63,8 @@ export const PracticeView: React.FC = () => {
     queryFn: getProfile,
     enabled: isStudent,
     initialData: authUser || undefined,
+    // User lúc đăng nhập có thể thiếu mục tiêu → coi là cũ để luôn tải lại GET /account/me khi vào trang
+    initialDataUpdatedAt: 0,
   });
   const { data: certificates = [] } = useQuery({
     queryKey: QUERY_KEYS.catalog.certificates,
@@ -75,7 +77,8 @@ export const PracticeView: React.FC = () => {
   const targetCertificate = certificates.find((c) => c.certificateId === targetCertificateId) ?? null;
 
   // Chưa có mục tiêu → bắt buộc chọn (TASK DEV1 - T2); có rồi thì mở lại được bằng nút "Sửa mục tiêu"
-  const isGoalRequired = isStudent && !profileQuery.isLoading && !targetCertificateId;
+  // Chờ tải xong hồ sơ thật rồi mới bắt chọn mục tiêu (tránh hiện modal theo dữ liệu tạm lúc đăng nhập)
+  const isGoalRequired = isStudent && !profileQuery.isFetching && !targetCertificateId;
   const [isEditingGoal, setEditingGoal] = useState(false);
   const isGoalModalOpen = isGoalRequired || isEditingGoal;
 

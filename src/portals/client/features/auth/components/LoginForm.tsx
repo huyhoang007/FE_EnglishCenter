@@ -115,7 +115,7 @@ export const LoginForm: React.FC = () => {
             <Sparkles className="w-3.5 h-3.5" />
             Chuẩn Cambridge / IDP / ETS · IELTS · TOEIC · VSTEP
           </span>
-          <h1 className="text-3xl xl:text-4xl font-extrabold leading-tight tracking-tight">
+          <h1 className="text-3xl xl:text-4xl font-extrabold leading-tight tracking-tight text-white">
             Hệ thống đào tạo Tiếng Anh <br />
             chuyên nghiệp & hiện đại.
           </h1>

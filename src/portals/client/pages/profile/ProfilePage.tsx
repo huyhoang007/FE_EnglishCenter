@@ -48,6 +48,8 @@ export const ProfilePage = () => {
     queryFn: getProfile,
     enabled: Boolean(authUser),
     initialData: authUser || undefined,
+    // User lúc đăng nhập có thể thiếu mục tiêu → luôn tải lại GET /account/me
+    initialDataUpdatedAt: 0,
   });
   const { data: certificates = [] } = useQuery({
     queryKey: QUERY_KEYS.catalog.certificates,
