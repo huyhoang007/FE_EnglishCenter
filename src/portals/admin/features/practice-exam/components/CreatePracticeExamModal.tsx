@@ -44,7 +44,7 @@ import { Button } from '@/shared/components/Button';
 import { useToast } from '@/shared/components/Toast';
 import { uploadToCloudinary } from '@/shared/hooks/useCloudinaryUpload';
 import { getErrorMessage, unwrapOrThrow } from '@/shared/api/axiosClient';
-import { fetchCertificates } from '@/shared/api/certificateService';
+import { fetchCertificateById, fetchCertificates } from '@/shared/api/certificateService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
 import { scaleFromCertificate, toSkill, type ScaleInfo } from '@/shared/constants/examScales';
@@ -207,8 +207,41 @@ export const CreatePracticeExamModal: React.FC<{
     queryFn: fetchCertificates,
     staleTime: 5 * 60_000,
   });
-  const certificate = certificates.find((c) => c.certificateId === certificateId) ?? null;
+  const summary = certificates.find((c) => c.certificateId === certificateId) ?? null;
+  // GET /certificates chỉ trả bản tóm tắt (không có phần thi) → lấy chi tiết để biết các phần thi của chứng chỉ
+  // (VD Aptis có phần "Grammar & Vocabulary" → hiện tab Core). Dùng chung cache với trang Chứng chỉ.
+  const certificateDetail = useQuery({
+    queryKey: QUERY_KEYS.catalog.certificate(certificateId),
+    queryFn: () => fetchCertificateById(certificateId),
+    enabled: Boolean(certificateId),
+    staleTime: 5 * 60_000,
+  });
+  const certificate =
+    (certificateDetail.data?.certificateId === certificateId ? certificateDetail.data : null) ?? summary;
   const scale = useMemo(() => scaleFromCertificate(certificate), [certificate]);
+  /** Đã biết đủ phần thi của chứng chỉ (không gắn chứng chỉ thì luôn đủ) */
+  const scaleReady = !certificateId || certificateDetail.isSuccess;
+
+  // Chứng chỉ không có phần Core (chỉ Aptis có) → phần Core chưa lưu chuyển về Reading
+  useEffect(() => {
+    if (!scaleReady || corePartOf(scale)) return;
+    setRows((prev) =>
+      prev.some((r) => r.skill === 'OTHER' && !isKept(r))
+        ? prev.map((r) =>
+            r.skill === 'OTHER' && !isKept(r)
+              ? {
+                  ...r,
+                  skill: 'READING',
+                  status: 'idle',
+                  result: undefined,
+                  error: undefined,
+                  duration: r.durationEdited ? r.duration : String(defaultDuration(scale.preset, 'READING')),
+                }
+              : r,
+          )
+        : prev,
+    );
+  }, [scale, scaleReady]);
 
   /* ---------- Chế độ sửa: tải đề và đổ vào form (1 lần) ---------- */
   const examQuery = useAdminExam(examId ?? '');
@@ -639,10 +672,7 @@ export const CreatePracticeExamModal: React.FC<{
               value={certificateId}
               onChange={(e) => {
                 const nextCert = certificates.find((c) => c.certificateId === e.target.value) ?? null;
-                const nextScale = scaleFromCertificate(nextCert);
-                const nextPreset = nextScale.preset;
-                // Chứng chỉ mới không có phần Core (chỉ Aptis có) → phần Core chưa lưu chuyển về Reading
-                const keepCore = Boolean(corePartOf(nextScale));
+                const nextPreset = scaleFromCertificate(nextCert).preset;
                 setCertificateId(e.target.value);
                 // Đổi chứng chỉ thì phần thi mới phải đọc lại theo chứng chỉ mới; gợi ý lại thời gian các phần chưa tự sửa.
                 // Phần đã có trong đề giữ nguyên — BE tự gắn lại phần thi theo kỹ năng khi lưu.
@@ -650,17 +680,13 @@ export const CreatePracticeExamModal: React.FC<{
                   prev.map((r) =>
                     isKept(r)
                       ? r
-                      : (() => {
-                          const skill: PracticeSkill = r.skill === 'OTHER' && !keepCore ? 'READING' : r.skill;
-                          return {
-                            ...r,
-                            skill,
-                            status: 'idle' as const,
-                            result: undefined,
-                            error: undefined,
-                            duration: r.durationEdited ? r.duration : String(defaultDuration(nextPreset, skill)),
-                          };
-                        })(),
+                      : {
+                          ...r,
+                          status: 'idle',
+                          result: undefined,
+                          error: undefined,
+                          duration: r.durationEdited ? r.duration : String(defaultDuration(nextPreset, r.skill)),
+                        },
                   ),
                 );
               }}
