@@ -3,7 +3,9 @@
  * -----------------------------------------------------------
  * Luôn chọn chứng chỉ trước (IELTS / TOEIC / VSTEP…) → hiện thang điểm của chứng chỉ.
  * Thang điểm và điểm đạt lấy tự động theo chứng chỉ (VD IELTS 5.5), admin không nhập; FE đổi sang % cho backend.
- * trial: chỉ cần chứng chỉ; course: chọn thêm khóa học thuộc chứng chỉ đó.
+ * trial: chỉ cần chứng chỉ, chỉ dùng cho Kiểm tra đầu vào (thi thử đầy đủ nằm ở Luyện tập AI);
+ * course: chọn thêm khóa học thuộc chứng chỉ đó, loại đề là Quiz / Giữa kỳ / Cuối kỳ (đề đầu ra của khóa, mở nối tiếp).
+ * Mô tả bắt buộc, tối thiểu MIN_DESCRIPTION ký tự — BE chặn tương tự (5028 / 5029).
  */
 
 import React, { useMemo, useState } from 'react';
@@ -17,6 +19,15 @@ import { EXAM_TYPE_LABEL, type ExamScope, type ExamType } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { useCreateExam, useExamFormOptions } from '../hooks/useAdminExams';
 import { Checkbox, ExamModal, FIELD_CLASS, Field } from './ExamFormParts';
+
+/** Khớp ExamServiceImpl.MIN_DESCRIPTION_LENGTH */
+const MIN_DESCRIPTION = 30;
+
+/** Loại đề được phép theo phạm vi — khớp ExamServiceImpl.validateType */
+const TYPES_BY_SCOPE: Partial<Record<ExamScope, ExamType[]>> = {
+  trial: ['placement_test'],
+  course: ['quiz', 'midterm', 'final'],
+};
 
 const EMPTY = {
   examScope: 'trial' as ExamScope,
@@ -52,12 +63,20 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
   /** Đổi chứng chỉ: bỏ khóa học không còn thuộc chứng chỉ. */
   const changeCertificate = (certificateId: string) => setForm((f) => ({ ...f, certificateId, courseId: '' }));
+  /** Đổi phạm vi: loại đề về loại đầu tiên hợp lệ của phạm vi mới. */
+  const changeScope = (examScope: ExamScope) =>
+    setForm((f) => ({ ...f, examScope, examType: (TYPES_BY_SCOPE[examScope] ?? ['placement_test'])[0] }));
+  const typeOptions = TYPES_BY_SCOPE[form.examScope] ?? [];
+  const descriptionLength = form.description.trim().length;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.certificateId) return setFieldError('Chọn chứng chỉ của đề');
     if (form.examScope === 'course' && !form.courseId) return setFieldError('Đề khóa học phải chọn khóa học');
     if (!form.examTitle.trim()) return setFieldError('Nhập tiêu đề đề thi');
+    if (descriptionLength < MIN_DESCRIPTION) {
+      return setFieldError(`Mô tả tối thiểu ${MIN_DESCRIPTION} ký tự: ghi rõ đề gồm những phần nào, dành cho ai`);
+    }
     if (Number(form.durationMinutes) < 1) return setFieldError('Thời lượng tối thiểu 1 phút');
     setFieldError(null);
     const isTrial = form.examScope === 'trial';
@@ -69,7 +88,7 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
         examCode: form.examCode.trim() || undefined,
         examType: form.examType,
         examTitle: form.examTitle.trim(),
-        description: form.description.trim() || undefined,
+        description: form.description.trim(),
         durationMinutes: Number(form.durationMinutes),
         // Điểm đạt lấy tự động theo chứng chỉ, backend lưu dạng %
         passingScore: passToPercent(scale, scale.defaultPass),
@@ -110,13 +129,18 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
         <Field label="Phạm vi">
           <select
             value={form.examScope}
-            onChange={(e) => set('examScope', e.target.value as ExamScope)}
+            onChange={(e) => changeScope(e.target.value as ExamScope)}
             className={FIELD_CLASS}
           >
-            <option value="trial">Thi thử chứng chỉ</option>
-            <option value="course">Đề của khóa học</option>
+            <option value="trial">Kiểm tra đầu vào</option>
+            <option value="course">Đề đầu ra của khóa học</option>
           </select>
         </Field>
+        <p className="sm:col-span-2 -mt-2 text-xs text-slate-500">
+          {form.examScope === 'trial'
+            ? 'Học viên làm để xác định năng lực hiện tại. Đề thi thử đầy đủ tạo ở mục Luyện tập AI.'
+            : 'Chỉ học viên đã mua khóa mới thấy đề. Thi nối tiếp: Giữa kỳ mở khi đã đạt hết Quiz của khóa; Cuối kỳ mở khi đã đạt Giữa kỳ và đạt đủ bài tập.'}
+        </p>
 
         {form.examScope === 'course' && (
           <Field label="Khóa học *" className="sm:col-span-2">
@@ -154,8 +178,13 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
           />
         </Field>
         <Field label="Loại đề">
-          <select value={form.examType} onChange={(e) => set('examType', e.target.value as ExamType)} className={FIELD_CLASS}>
-            {(Object.keys(EXAM_TYPE_LABEL) as ExamType[]).map((t) => (
+          <select
+            value={form.examType}
+            onChange={(e) => set('examType', e.target.value as ExamType)}
+            className={FIELD_CLASS}
+            disabled={typeOptions.length < 2}
+          >
+            {typeOptions.map((t) => (
               <option key={t} value={t}>
                 {EXAM_TYPE_LABEL[t]}
               </option>
@@ -193,13 +222,22 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
             placeholder="VD: B1"
           />
         </Field>
-        <Field label="Mô tả" className="sm:col-span-2">
+        <Field label="Mô tả *" className="sm:col-span-2">
           <textarea
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
-            rows={2}
+            rows={3}
             className={FIELD_CLASS}
+            placeholder="VD: Đề cuối kỳ khóa IELTS Foundation: Listening 2 part, Reading 1 bài đọc, Writing Task 2. Làm trong 60 phút, đạt từ band 5.0."
           />
+          <span
+            className={cn(
+              'mt-1 block text-xs',
+              descriptionLength >= MIN_DESCRIPTION ? 'text-emerald-600' : 'text-slate-500',
+            )}
+          >
+            {descriptionLength}/{MIN_DESCRIPTION} ký tự tối thiểu — ghi rõ đề gồm những phần nào, dành cho ai
+          </span>
         </Field>
         <div className="sm:col-span-2 flex flex-wrap items-center gap-4 text-sm text-slate-700">
           <Checkbox label="Cho xem điểm" checked={form.showScore} onChange={(v) => set('showScore', v)} />

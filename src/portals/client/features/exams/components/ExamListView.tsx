@@ -1,8 +1,8 @@
 /**
  * ExamListView — Ngân hàng đề thi (Dev 3)
  * -----------------------------------------------------------
- * Lọc theo từ khóa, loại đề, phạm vi (thi thử / khóa học), level; phân trang phía server.
- * API: GET /api/v1/exams
+ * Lọc theo từ khóa, loại đề, phạm vi (kiểm tra đầu vào / khóa học), level; phân trang phía server.
+ * API: GET /api/v1/exams — BE chỉ trả đề kiểm tra đầu vào + đề của khóa học viên đã mua (không trả hết).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -20,8 +20,8 @@ import { ExamCard } from './ExamCard';
 
 const SCOPE_OPTIONS: { value: ExamScope | ''; label: string }[] = [
   { value: '', label: 'Tất cả' },
-  { value: 'trial', label: 'Thi thử chứng chỉ' },
-  { value: 'course', label: 'Đề của khóa học' },
+  { value: 'trial', label: 'Kiểm tra đầu vào' },
+  { value: 'course', label: 'Khóa học của tôi' },
 ];
 
 export const ExamListView: React.FC = () => {
@@ -57,7 +57,7 @@ export const ExamListView: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">Khảo thí & Luyện đề</h1>
-          <p className="text-sm text-slate-500 mt-1">Chọn đề, làm bài có tính giờ và xem kết quả chấm tự động.</p>
+          <p className="text-sm text-slate-500 mt-1">Đề kiểm tra đầu vào và đề của các khóa bạn đã mua. Giữa kỳ mở khi bạn đạt hết Quiz; Cuối kỳ mở khi bạn đạt Giữa kỳ và đạt đủ bài tập của khóa.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {isAuthenticated && canGrade && (
@@ -152,7 +152,7 @@ export const ExamListView: React.FC = () => {
       ) : isError ? (
         <ErrorState message={error.message} onRetry={() => refetch()} />
       ) : !data || data.data.length === 0 ? (
-        <EmptyState title="Chưa có đề phù hợp" description="Thử bỏ bớt bộ lọc hoặc tìm từ khóa khác." />
+        <EmptyState title="Chưa có đề phù hợp" description="Thử bỏ bớt bộ lọc. Đề của khóa học chỉ hiện sau khi bạn mua khóa đó." />
       ) : (
         <>
           <div className={cn('grid sm:grid-cols-2 xl:grid-cols-3 gap-4', isFetching && 'opacity-70')}>
