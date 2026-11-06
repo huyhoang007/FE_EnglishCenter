@@ -4,6 +4,7 @@
  * Header: quay lại, tên đề, trạng thái, thông tin tổng quan; hành động chính theo trạng thái
  * (Công khai đề / Chuyển về nháp / Khôi phục về nháp), Lưu trữ + Xóa đề nằm trong menu phụ.
  * Vùng làm việc: danh sách phần thi theo chiều dọc; "Thêm phần thi" mở form tại chỗ; "Nhập từ Word".
+ * Đề của khóa: hiện cảnh báo khi bộ đề của khóa chưa đủ (BE trả `warnings`), luật thi nối tiếp bị bỏ qua.
  * Chỉ sửa cấu trúc khi đề là nháp và chưa có lượt thi (backend chặn với mã 5005 / 5006).
  * URL: /admin/exams/:examId
  */
@@ -13,6 +14,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
+  AlertTriangle,
   ArrowLeft,
   Copy,
   EyeOff,
@@ -141,7 +143,15 @@ export const ExamEditorView: React.FC = () => {
       leftIcon={Rocket}
       className="h-10"
       isLoading={actions.publish.isPending}
-      onClick={() => actions.publish.mutate(undefined, { onSuccess: () => toast.success('Đã công khai đề'), onError })}
+      onClick={() =>
+        actions.publish.mutate(undefined, {
+          onSuccess: (detail) => {
+            toast.success('Đã công khai đề');
+            detail.warnings?.forEach((w) => toast.warning(w));
+          },
+          onError,
+        })
+      }
     >
       Công khai đề
     </Button>
@@ -215,6 +225,18 @@ export const ExamEditorView: React.FC = () => {
         ))}
       </div>
       </div>
+
+      {/* ---------- Cảnh báo bộ đề của khóa chưa đủ (luật Quiz → Giữa kỳ → Cuối kỳ bị bỏ qua) ---------- */}
+      {data.warnings && data.warnings.length > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <ul className="space-y-1">
+            {data.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ---------- Thông báo trạng thái ---------- */}
       {!isDraft && (

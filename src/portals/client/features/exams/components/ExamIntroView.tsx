@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Clock, FileQuestion, Play, RotateCcw, Target, Trophy } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Clock, FileQuestion, Hourglass, Play, RotateCcw, Target, Trophy } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
@@ -129,8 +129,16 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
           </p>
           {!isAuthenticated && <p className="text-status-warning font-semibold">Bạn cần đăng nhập để làm bài.</p>}
           {isAuthenticated && data.accessible === false && (
-            <p className="text-status-danger font-semibold flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4" /> {data.accessMessage}
+            // 5033: bài trước đang chờ mentor chấm - chỉ cần chờ, không phải lỗi của học viên
+            <p
+              className={
+                data.accessCode === 5033
+                  ? 'text-blue-700 font-semibold flex items-center gap-1.5'
+                  : 'text-status-danger font-semibold flex items-center gap-1.5'
+              }
+            >
+              {data.accessCode === 5033 ? <Hourglass className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              {data.accessMessage}
             </p>
           )}
           {start.error && <p className="text-status-danger font-semibold">{start.error.message}</p>}
