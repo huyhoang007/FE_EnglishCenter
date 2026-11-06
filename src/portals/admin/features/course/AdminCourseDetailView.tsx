@@ -474,7 +474,10 @@ export const AdminCourseDetailView: React.FC = () => {
         courseTitle={course.title}
         defaultContentType={contentType}
         editing={editingContent}
-        nextContentOrder={contents.length + 1}
+        nextContentOrder={
+          contents.reduce((max, c) => Math.max(max, c.contentOrder ?? 0), 0) + 1
+        }
+        certificateId={course.certificateId}
       />
 
       <ConfirmDialog

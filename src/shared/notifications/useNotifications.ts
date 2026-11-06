@@ -1,7 +1,7 @@
 /**
  * useNotifications — hooks TanStack Query cho thông báo (dùng chung 3 portal)
  * -----------------------------------------------------------
- * - Chỉ gọi API khi đã đăng nhập thật bằng BE (token demo bắt đầu bằng "mock." thì bỏ qua).
+ * - Chỉ gọi API khi đã đăng nhập (có access token).
  * - Realtime qua WebSocket STOMP (useNotificationRealtime): có thông báo mới thì tải lại ngay.
  * - Vẫn tự cập nhật mỗi 30 giây để dự phòng khi mất kết nối WebSocket.
  */
@@ -24,7 +24,7 @@ const POLL_INTERVAL_MS = 30_000;
 /** true nếu đang đăng nhập bằng tài khoản BE thật */
 export function useCanCallNotificationApi(): boolean {
   const accessToken = useAuthStore((s) => s.accessToken);
-  return !!accessToken && !accessToken.startsWith('mock.');
+  return !!accessToken;
 }
 
 /**

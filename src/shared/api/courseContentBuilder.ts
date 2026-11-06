@@ -96,8 +96,6 @@ export interface HomeworkPayloadInput {
    * cùng một khái niệm "phần trăm điểm tối thiểu để đạt".
    */
   passingScore?: number | null;
-  /** Thời gian làm bài (phút). */
-  timeLimitMinutes?: number | null;
   attachmentUrl?: string;
   /** Tên file tài liệu đính kèm (để hiển thị cho học viên). */
   attachmentName?: string;
@@ -151,11 +149,6 @@ export function buildHomeworkContentData(
   const passingScore = Number(input.passingScore);
   if (Number.isFinite(passingScore) && passingScore >= 0) {
     data.passingScore = Math.round(passingScore);
-  }
-
-  const timeLimit = Number(input.timeLimitMinutes);
-  if (Number.isFinite(timeLimit) && timeLimit > 0) {
-    data.timeLimitMinutes = Math.round(timeLimit);
   }
 
   const maxAttempts = Number(input.maxAttempts);

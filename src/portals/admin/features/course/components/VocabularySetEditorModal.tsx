@@ -356,7 +356,7 @@ export const VocabularySetEditorModal: React.FC<
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={t('vocab.bank.descriptionPlaceholder')}
-                rows={3}
+                rows={2}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none transition-colors placeholder:text-slate-300 focus:border-[#0052CC] resize-y"
               />
             </div>
@@ -416,7 +416,7 @@ export const VocabularySetEditorModal: React.FC<
                           : t('vocab.bank.dragDropHint')}
                       </p>
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        Hỗ trợ file .xlsx, .xls, .csv
+                        .xlsx, .xls, .csv · cột: Word, IPA, Meaning, Part of Speech, Example, Audio URL
                       </p>
                     </div>
                     <Button
@@ -434,14 +434,6 @@ export const VocabularySetEditorModal: React.FC<
                     </Button>
                   </div>
                 )}
-              </div>
-
-              {/* Hướng dẫn cột */}
-              <div className="rounded-xl bg-slate-100/70 p-2.5 text-[11px] text-slate-500 leading-relaxed">
-                <p className="font-semibold text-slate-600 mb-0.5">Các cột trong file:</p>
-                <p className="font-mono text-[10px] text-slate-600">
-                  Word, IPA, Meaning, Part of Speech, Example, Audio URL
-                </p>
               </div>
             </div>
           </div>
@@ -513,7 +505,7 @@ export const VocabularySetEditorModal: React.FC<
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-slate-200/80 overflow-hidden bg-white max-h-[460px] flex flex-col">
+                  <div className="rounded-xl border border-slate-200/80 overflow-hidden bg-white max-h-[50vh] flex flex-col">
                     <div className="overflow-y-auto overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead className="sticky top-0 bg-slate-50 border-b border-slate-200/80 z-10">

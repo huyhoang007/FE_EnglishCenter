@@ -9,7 +9,6 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { MentorLayout } from '@/portals/mentor/layouts/MentorLayout';
 import { ProtectedRoute } from '@/shared/components/ProtectedRoute';
 import { MentorDashboardView } from '@/portals/mentor/features/assignment';
-import { GradingQueueView } from '@/portals/mentor/features/assignment';
 import { MentorScheduleView } from '@/portals/mentor/features/schedule';
 import { ExamGradingView } from '@/portals/mentor/features/exam-grading';
 import { HomeworkGradingView } from '@/portals/mentor/features/homework-grading';
@@ -27,7 +26,6 @@ const MentorRoutes: React.FC = () => {
         <Routes>
           <Route element={<MentorLayout />}>
             <Route index element={<MentorDashboardView />} />
-            <Route path="grading" element={<GradingQueueView />} />
             <Route path="schedule" element={<MentorScheduleView />} />
             {/* Chấm bài thi tự luận — Dev 3 */}
             <Route path="exam-grading" element={<ExamGradingView />} />

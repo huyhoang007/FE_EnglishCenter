@@ -22,7 +22,7 @@
  *
  *   HOMEWORK → khớp `CourseContent` (homework) + `HomeworkSubmission`:
  *            { submissionType, instructions?, dueDate?, maxScore?,
- *              passingScore?, timeLimitMinutes?, attachmentUrl?,
+ *              passingScore?, attachmentUrl?,
  *              maxAttempts?, examId?, rubric: [...] }
  *            `submissionType` bám sát 2 cột nội dung của `homework_submissions`:
  *              - `text`            → học viên gõ vào `answer_content`
@@ -34,7 +34,7 @@
  *   lesson      → { isPreview, videoUrl?, durationMinutes? }
  *   vocabulary  → { setIds: string[] }
  *   homework    → { submissionType, instructions?, dueDate?, maxScore?,
- *                  passingScore?, timeLimitMinutes?, attachmentUrl?,
+ *                  passingScore?, attachmentUrl?,
  *                  maxAttempts?, examId?, rubric: [{ criterion, … }] }
  *
  * `contentData` gửi lên là JSON **string** (backend `JsonUtil.normalize()`
@@ -48,15 +48,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ClipboardList,
-  Layers3,
-  Link2,
-  Plus,
-  Save,
-  Trash2,
-  Type,
-} from 'lucide-react';
+import { Layers3, Plus, Save, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { Modal } from '@/shared/components/Modal';
 import { useToast } from '@/shared/components/Toast';
@@ -132,8 +124,6 @@ interface HomeworkForm extends CommonForm {
   maxScore: string;
   /** Điểm đạt (%) — tương đương `Exam.passingScore`. */
   passingScore: string;
-  /** Thời gian làm bài (phút). */
-  timeLimitMinutes: string;
   maxAttempts: string;
   /** URL công khai của tài liệu đính kèm (file `upload` trên Cloudinary). */
   attachmentUrl: string;
@@ -171,12 +161,12 @@ const EMPTY_VOCABULARY: VocabularyForm = {
 
 const EMPTY_HOMEWORK: HomeworkForm = {
   ...EMPTY_COMMON,
-  submissionType: 'text',
+  // Mặc định nộp file PDF; `text` chỉ còn cho bài tập cũ.
+  submissionType: 'file',
   instructions: '',
   dueDate: '',
   maxScore: '',
   passingScore: '',
-  timeLimitMinutes: '',
   maxAttempts: '',
   attachmentUrl: '',
   attachmentName: '',
@@ -214,7 +204,7 @@ const createEmptyFormForType = (contentType: ContentType): AnyForm => {
  */
 const normalizeSubmissionType = (raw: unknown): HomeworkSubmissionType => {
   if (raw === 'file' || raw === 'multiple_choice' || raw === 'text') return raw;
-  return 'text';
+  return 'file';
 };
 
 /* =========================================================
@@ -233,6 +223,8 @@ export interface CourseContentModalProps {
   editing?: CourseContentDto | null;
   /** `contentOrder` gợi ý cho bản ghi mới. */
   nextContentOrder?: number;
+  /** Chứng chỉ của khóa học — lọc kỹ năng bài tập đo lường. */
+  certificateId?: string | null;
 }
 
 export const CourseContentModal: React.FC<CourseContentModalProps> = ({
@@ -243,6 +235,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
   defaultContentType = 'lesson',
   editing = null,
   nextContentOrder = 1,
+  certificateId = null,
 }) => {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -310,10 +303,6 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           maxScore: data.maxScore != null ? String(data.maxScore) : '',
           passingScore:
             data.passingScore != null ? String(data.passingScore) : '',
-          timeLimitMinutes:
-            data.timeLimitMinutes != null
-              ? String(data.timeLimitMinutes)
-              : '',
           maxAttempts:
             data.maxAttempts != null ? String(data.maxAttempts) : '',
           attachmentUrl: (data.attachmentUrl as string) ?? '',
@@ -379,7 +368,14 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
    * (Thời gian làm bài + Số lần làm chỉ dành cho trắc nghiệm).
    */
   const hwSubmissionType: HomeworkSubmissionType =
-    homework.submissionType ?? 'text';
+    homework.submissionType ?? 'file';
+  const isMultipleChoice = hwSubmissionType === 'multiple_choice';
+  /** Bài tập cũ dạng gõ trả lời — vẫn hiển thị lựa chọn này để không mất dữ liệu. */
+  const isLegacyText =
+    isEditing &&
+    normalizeSubmissionType(
+      (editing?.contentData as Record<string, unknown> | undefined)?.submissionType,
+    ) === 'text';
 
   /**
    * Mảng rubric LUÔN là mảng (không bao giờ `undefined`).
@@ -430,7 +426,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
     // với `contentType` (ví dụ server trả `contentData` thiếu field).
     const title = (common.title ?? '').trim();
     const order = Number(common.contentOrder);
-    const submissionType = homework.submissionType ?? 'text';
+    const submissionType = homework.submissionType ?? 'file';
     return {
       /**
        * Nội dung 'vocabulary' KHÔNG có tiêu đề do admin gõ (chỉ tick bộ trong
@@ -441,7 +437,9 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           ? ''
           : !title
             ? t('content.validation.titleRequired')
-            : title.length > 255
+            : title.length < 3
+              ? t('content.validation.titleTooShort')
+              : title.length > 255
               ? t('content.validation.titleTooLong')
               : '',
       contentOrder: !Number.isFinite(order) || order < 0
@@ -461,7 +459,9 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
             : ''
           : '',
       maxScore:
-        contentType === 'homework' && (homework.maxScore ?? '').trim()
+        contentType === 'homework' &&
+        submissionType !== 'multiple_choice' &&
+        (homework.maxScore ?? '').trim()
           ? !Number.isFinite(Number(homework.maxScore)) ||
             Number(homework.maxScore) <= 0
             ? t('content.validation.maxScoreInvalid')
@@ -477,14 +477,6 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
             Number(homework.passingScore) < 0 ||
             Number(homework.passingScore) > 100
             ? t('content.validation.passingScoreInvalid')
-            : ''
-          : '',
-      timeLimit:
-        contentType === 'homework' &&
-        (homework.timeLimitMinutes ?? '').trim()
-          ? !Number.isFinite(Number(homework.timeLimitMinutes)) ||
-            Number(homework.timeLimitMinutes) <= 0
-            ? t('content.validation.timeLimitInvalid')
             : ''
           : '',
       maxAttempts:
@@ -569,27 +561,23 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
     }
     return JSON.stringify(
       buildHomeworkContentData({
-        submissionType: homework.submissionType ?? 'text',
+        submissionType: hwSubmissionType,
         instructions: homework.instructions,
         dueDate: homework.dueDate,
-        maxScore: homework.maxScore ? Number(homework.maxScore) : null,
+        // Trắc nghiệm lấy thang điểm của đề → không gửi điểm tối đa / rubric / đính kèm.
+        maxScore:
+          !isMultipleChoice && homework.maxScore ? Number(homework.maxScore) : null,
         passingScore: homework.passingScore
           ? Number(homework.passingScore)
-          : null,
-        timeLimitMinutes: homework.timeLimitMinutes
-          ? Number(homework.timeLimitMinutes)
           : null,
         maxAttempts: homework.maxAttempts
           ? Number(homework.maxAttempts)
           : null,
-        attachmentUrl: homework.attachmentUrl,
-        attachmentName: homework.attachmentName,
-        attachmentPublicId: homework.attachmentPublicId,
-        examId:
-          (homework.submissionType ?? 'text') === 'multiple_choice'
-            ? homework.examId
-            : null,
-        rubric: rubricItems,
+        attachmentUrl: isMultipleChoice ? '' : homework.attachmentUrl,
+        attachmentName: isMultipleChoice ? '' : homework.attachmentName,
+        attachmentPublicId: isMultipleChoice ? '' : homework.attachmentPublicId,
+        examId: isMultipleChoice ? homework.examId : null,
+        rubric: isMultipleChoice ? [] : rubricItems,
       }),
     );
   };
@@ -639,8 +627,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           contentType === 'vocabulary' ? selectedSetIds : undefined,
         // Nội dung 'homework' trắc nghiệm → gửi kèm id đề thi (FK `exam_id`).
         examId:
-          contentType === 'homework' &&
-          (homework.submissionType ?? 'text') === 'multiple_choice'
+          contentType === 'homework' && isMultipleChoice
             ? homework.examId || undefined
             : undefined,
         // Bài tập → gắn kỹ năng chứng chỉ (FK `course_content.certificate_part_id`).
@@ -674,8 +661,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
         vocabularySetIds:
           contentType === 'vocabulary' ? selectedSetIds : undefined,
         examId:
-          contentType === 'homework' &&
-          (homework.submissionType ?? 'text') === 'multiple_choice'
+          contentType === 'homework' && isMultipleChoice
             ? homework.examId || undefined
             : undefined,
         certificatePartId:
@@ -766,6 +752,17 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  /** Cập nhật field riêng của bài tập. */
+  const setHomework = (patch: Partial<HomeworkForm>) =>
+    setForm((f) => ({ ...(f as HomeworkForm), ...patch }) as AnyForm);
+  const setLesson = (patch: Partial<LessonForm>) =>
+    setForm((f) => ({ ...(f as LessonForm), ...patch }) as AnyForm);
+
+  /*
+   * Bố cục: modal rộng, form chia hàng / cột để vừa 1 màn hình (không phải cuộn).
+   * Đã bỏ cột "Hiện có" (chỉ lặp lại giá trị đang nhập) và các field trùng nghĩa
+   * (bài tập dùng "Hướng dẫn" thay cho "Mô tả").
+   */
   return (
     <Modal
       open={open}
@@ -774,518 +771,305 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
       icon={Layers3}
       title={isEditing ? t('content.modal.updateTitle') : t('content.modal.createTitle')}
       subtitle={courseTitle ?? t('content.modal.subtitle')}
+      bodyClassName="py-4"
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* ============ DROPDOWN LOẠI NỘI DUNG ============ */}
-        <Field label={t('content.form.contentType')} required>
-          <Select
-            value={contentType}
-            onChange={(e) => handleTypeChange(e.target.value as ContentType)}
-            disabled={isEditing}
-          >
-            <option value="lesson">{t('content.type.lesson')}</option>
-            <option value="vocabulary">{t('content.type.vocabulary')}</option>
-            <option value="homework">{t('content.type.homework')}</option>
-          </Select>
-          {isEditing && (
-            <p className="text-[11px] text-slate-400 mt-1">
-              {t('content.form.typeLockedHint')}
-            </p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* ============ HÀNG 1: loại nội dung + tiêu đề + thứ tự ============ */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <Field label={t('content.form.contentType')} required>
+            <Select
+              value={contentType}
+              onChange={(e) => handleTypeChange(e.target.value as ContentType)}
+              disabled={isEditing}
+              title={isEditing ? t('content.form.typeLockedHint') : undefined}
+            >
+              <option value="lesson">{t('content.type.lesson')}</option>
+              <option value="vocabulary">{t('content.type.vocabulary')}</option>
+              <option value="homework">{t('content.type.homework')}</option>
+            </Select>
+          </Field>
+
+          {/* 'vocabulary' chỉ là con trỏ tới kho từ vựng chung → không có tiêu đề / thứ tự riêng */}
+          {contentType !== 'vocabulary' && (
+            <>
+              <Field
+                className="md:col-span-2"
+                label={t('content.form.title')}
+                required
+                error={touched ? errors.title : ''}
+              >
+                <TextInput
+                  value={common.title ?? ''}
+                  onChange={(e) => setCommon({ title: e.target.value })}
+                  placeholder={t('content.form.titlePlaceholder')}
+                  invalid={Boolean(touched && errors.title)}
+                />
+              </Field>
+              <Field
+                label={t('content.form.contentOrder')}
+                error={touched ? errors.contentOrder : ''}
+              >
+                <TextInput
+                  type="number"
+                  min={0}
+                  value={common.contentOrder ?? 1}
+                  onChange={(e) => setCommon({ contentOrder: Number(e.target.value) })}
+                  invalid={Boolean(touched && errors.contentOrder)}
+                />
+              </Field>
+            </>
           )}
-        </Field>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_1fr] gap-6">
-          {/* ============ CỘT TRÁI: FORM NHẬP THEO CONTENT TYPE ============ */}
-          <div className="space-y-4">
-            {/*
-             * Nội dung 'vocabulary' chỉ là CON TRỎ tới các bộ trong kho từ
-             * vựng chung → không có tiêu đề / mô tả / thứ tự riêng.
-             * Thứ tự hiển thị do `course_vocabulary_sets.display_order` quản lý.
-             */}
-            {contentType !== 'vocabulary' && (
-              <>
-                {/* ---- Common: title ---- */}
+        {/* ============ LESSON ============ */}
+        {contentType === 'lesson' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label={t('content.form.description')}>
+              <TextArea
+                value={common.description ?? ''}
+                onChange={(e) => setCommon({ description: e.target.value })}
+                placeholder={t('content.form.descriptionPlaceholder')}
+                rows={5}
+              />
+            </Field>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
                 <Field
-                  label={t('content.form.title')}
-                  required
-                  error={touched ? errors.title : ''}
-                >
-                  <TextInput
-                    value={common.title ?? ''}
-                    onChange={(e) => setCommon({ title: e.target.value })}
-                    placeholder={t('content.form.titlePlaceholder')}
-                    invalid={Boolean(touched && errors.title)}
-                  />
-                </Field>
-
-                {/* ---- Common: description ---- */}
-                <Field label={t('content.form.description')}>
-                  <TextArea
-                    value={common.description ?? ''}
-                    onChange={(e) => setCommon({ description: e.target.value })}
-                    placeholder={t('content.form.descriptionPlaceholder')}
-                    rows={2}
-                  />
-                </Field>
-              </>
-            )}
-
-            {/* ---- LESSON: order + duration, video, preview ---- */}
-            {contentType === 'lesson' && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field
-                    label={t('content.form.contentOrder')}
-                    error={touched ? errors.contentOrder : ''}
-                  >
-                    <TextInput
-                      type="number"
-                      min={0}
-                      value={common.contentOrder ?? 1}
-                      onChange={(e) =>
-                        setCommon({ contentOrder: Number(e.target.value) })
-                      }
-                      invalid={Boolean(touched && errors.contentOrder)}
-                    />
-                  </Field>
-
-                  <Field
-                    label={t('content.form.durationMinutes')}
-                    error={touched ? errors.duration : ''}
-                  >
-                    <TextInput
-                      type="number"
-                      min={0}
-                      value={lesson.durationMinutes ?? ''}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...(f as LessonForm),
-                          durationMinutes: e.target.value,
-                        }) as AnyForm)
-                      }
-                      placeholder={t('content.form.durationPlaceholder')}
-                      invalid={Boolean(touched && errors.duration)}
-                    />
-                  </Field>
-                </div>
-
-                <Field
+                  className="col-span-2"
                   label={t('content.form.videoUrl')}
-                  hint={t('content.form.videoUrlHint')}
                   error={touched ? errors.videoUrl : ''}
                 >
                   <TextInput
                     type="url"
                     value={lesson.videoUrl ?? ''}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...(f as LessonForm),
-                        videoUrl: e.target.value,
-                      }) as AnyForm)
-                    }
+                    onChange={(e) => setLesson({ videoUrl: e.target.value })}
                     placeholder={t('content.form.videoUrlPlaceholder')}
                     invalid={Boolean(touched && errors.videoUrl)}
                   />
                 </Field>
-
-                {/* Card vàng nhạt — nổi bật cho tuỳ chọn "bài học thử". */}
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
-                  <Checkbox
-                    checked={Boolean(lesson.isPreview)}
-                    onChange={(checked) =>
-                      setForm((f) => ({
-                        ...(f as LessonForm),
-                        isPreview: checked,
-                      }) as AnyForm)
-                    }
-                    label={t('content.form.isPreview')}
-                    description={t('content.form.isPreviewHint')}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* ---- VOCABULARY: chọn bộ từ vựng trong KHO CHUNG ---- */}
-            {contentType === 'vocabulary' && (
-              <>
-                <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Layers3 className="w-4 h-4 text-[#0052CC]" />
-                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      {t('content.vocab.bankTitle')}
-                    </p>
-                  </div>
-
-                  <p className="text-[11px] text-slate-500">
-                    {t('content.vocab.bankHint')}
-                  </p>
-
-                  <VocabularyBankPicker
-                    selectedIds={selectedSetIds}
-                    onToggle={toggleVocabularySet}
-                    courseId={courseId}
-                  />
-
-                  {touched && errors.vocabularySets && (
-                    <p className="text-[11px] text-rose-500">
-                      {errors.vocabularySets}
-                    </p>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* ---- HOMEWORK: hình thức nộp + cấu hình + rubric ---- */}
-            {contentType === 'homework' && (
-              <>
-                {/*
-                 * HÌNH THỨC NỘP BÀI — bám sát cột `homework_submissions`:
-                 *   text            → `answer_content` (gõ trả lời)
-                 *   file            → `file_url` (upload file)
-                 *   multiple_choice → làm đề trắc nghiệm (Exam) chấm tự động
-                 */}
-                <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Type className="w-4 h-4 text-[#0052CC]" />
-                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      {t('content.homework.submissionType')}
-                    </p>
-                  </div>
-
-                  <Field
-                    label={t('content.homework.submissionType')}
-                    hint={t('content.homework.submissionTypeHint')}
-                    required
-                  >
-                    <Select
-                      value={homework.submissionType ?? 'text'}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...(f as HomeworkForm),
-                          submissionType: e.target
-                            .value as HomeworkSubmissionType,
-                        }) as AnyForm)
-                      }
-                    >
-                      <option value="text">
-                        {t('content.homework.type.text')}
-                      </option>
-                      <option value="file">
-                        {t('content.homework.type.file')}
-                      </option>
-                      <option value="multiple_choice">
-                        {t('content.homework.type.multiple_choice')}
-                      </option>
-                    </Select>
-                  </Field>
-
-                  {/* Bài trắc nghiệm → BẮT BUỘC chọn đề thi liên kết. */}
-                  {(homework.submissionType ?? 'text') ===
-                    'multiple_choice' && (
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                        {t('content.homework.examTitle')}
-                      </p>
-                      <ExamPicker
-                        courseId={courseId}
-                        selectedExamId={homework.examId ?? ''}
-                        onSelect={(examId) =>
-                          setForm((f) => ({
-                            ...(f as HomeworkForm),
-                            examId,
-                          }) as AnyForm)
-                        }
-                      />
-                      {touched && errors.examId && (
-                        <p className="text-[11px] text-rose-500">
-                          {errors.examId}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* ---- Kỹ năng chứng chỉ mà bài tập đo lường ---- */}
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                      {t('content.homework.skillTitle')}
-                    </p>
-                    <CertificateSkillPicker
-                      value={homework.certificatePartId ?? ''}
-                      onChange={(certificatePartId) =>
-                        setForm((f) => ({
-                          ...(f as HomeworkForm),
-                          certificatePartId,
-                        }) as AnyForm)
-                      }
-                    />
-                    <p className="text-[11px] text-slate-400">
-                      {t('content.homework.skillHint')}
-                    </p>
-                  </div>
-                </div>
-
-                <Field label={t('content.form.instructions')}>
-                  <TextArea
-                    value={homework.instructions ?? ''}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...(f as HomeworkForm),
-                        instructions: e.target.value,
-                      }) as AnyForm)
-                    }
-                    placeholder={t('content.form.instructionsPlaceholder')}
-                    rows={3}
+                <Field
+                  label={t('content.form.durationMinutes')}
+                  error={touched ? errors.duration : ''}
+                >
+                  <TextInput
+                    type="number"
+                    min={0}
+                    value={lesson.durationMinutes ?? ''}
+                    onChange={(e) => setLesson({ durationMinutes: e.target.value })}
+                    placeholder={t('content.form.durationPlaceholder')}
+                    invalid={Boolean(touched && errors.duration)}
                   />
                 </Field>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
+                <Checkbox
+                  checked={Boolean(lesson.isPreview)}
+                  onChange={(checked) => setLesson({ isPreview: checked })}
+                  label={t('content.form.isPreview')}
+                  description={t('content.form.isPreviewHint')}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field
-                    label={t('content.form.contentOrder')}
-                    error={touched ? errors.contentOrder : ''}
+        {/* ============ VOCABULARY: chọn bộ trong KHO CHUNG ============ */}
+        {contentType === 'vocabulary' && (
+          <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-4 space-y-2">
+            <p className="text-[11px] text-slate-500">{t('content.vocab.bankHint')}</p>
+            <VocabularyBankPicker
+              selectedIds={selectedSetIds}
+              onToggle={toggleVocabularySet}
+              courseId={courseId}
+            />
+            {touched && errors.vocabularySets && (
+              <p className="text-[11px] text-rose-500">{errors.vocabularySets}</p>
+            )}
+          </div>
+        )}
+
+        {/* ============ HOMEWORK ============ */}
+        {contentType === 'homework' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* ---- Cột trái: cấu hình chung ---- */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t('content.homework.submissionType')} required>
+                  <Select
+                    value={hwSubmissionType}
+                    onChange={(e) =>
+                      setHomework({ submissionType: e.target.value as HomeworkSubmissionType })
+                    }
                   >
-                    <TextInput
-                      type="number"
-                      min={0}
-                      value={common.contentOrder ?? 1}
-                      onChange={(e) =>
-                        setCommon({ contentOrder: Number(e.target.value) })
-                      }
-                      invalid={Boolean(touched && errors.contentOrder)}
-                    />
-                  </Field>
+                    {isLegacyText && (
+                      <option value="text">{t('content.homework.type.text')}</option>
+                    )}
+                    <option value="file">{t('content.homework.type.file')}</option>
+                    <option value="multiple_choice">
+                      {t('content.homework.type.multiple_choice')}
+                    </option>
+                  </Select>
+                </Field>
+                <Field label={t('content.homework.skillTitle')}>
+                  <CertificateSkillPicker
+                    certificateId={certificateId}
+                    value={homework.certificatePartId ?? ''}
+                    onChange={(certificatePartId) => setHomework({ certificatePartId })}
+                  />
+                </Field>
+              </div>
 
-                  <Field label={t('content.form.dueDate')}>
-                    <TextInput
-                      type="date"
-                      value={homework.dueDate ?? ''}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...(f as HomeworkForm),
-                          dueDate: e.target.value,
-                        }) as AnyForm)
-                      }
-                    />
-                  </Field>
-                </div>
-
-                {/*
-                 * ĐIỂM ĐẠT + THỜI GIAN LÀM BÀI — tương đương `Exam.passingScore`
-                 * và `Exam.durationMinutes` của backend.
-                 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field
-                    label={t('content.homework.passingScore')}
-                    hint={t('content.homework.passingScoreHint')}
-                    error={touched ? errors.passingScore : ''}
-                  >
-                    <TextInput
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={homework.passingScore ?? ''}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...(f as HomeworkForm),
-                          passingScore: e.target.value,
-                        }) as AnyForm)
-                      }
-                      placeholder={t(
-                        'content.homework.passingScorePlaceholder',
-                      )}
-                      invalid={Boolean(touched && errors.passingScore)}
-                    />
-                  </Field>
-
-                  <Field
-                    label={t('content.homework.timeLimit')}
-                    hint={t('content.homework.timeLimitHint')}
-                    error={touched ? errors.timeLimit : ''}
-                  >
-                    <TextInput
-                      type="number"
-                      min={0}
-                      value={homework.timeLimitMinutes ?? ''}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...(f as HomeworkForm),
-                          timeLimitMinutes: e.target.value,
-                        }) as AnyForm)
-                      }
-                      placeholder={t(
-                        'content.homework.timeLimitPlaceholder',
-                      )}
-                      invalid={Boolean(touched && errors.timeLimit)}
-                      disabled={hwSubmissionType !== 'multiple_choice'}
-                    />
-                  </Field>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field
-                    label={t('content.form.maxAttempts')}
-                    hint={t('content.form.maxAttemptsHint')}
-                    error={touched ? errors.maxAttempts : ''}
-                  >
-                    <TextInput
-                      type="number"
-                      min={1}
-                      value={homework.maxAttempts ?? ''}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...(f as HomeworkForm),
-                          maxAttempts: e.target.value,
-                        }) as AnyForm)
-                      }
-                      placeholder={t('content.form.maxAttemptsPlaceholder')}
-                      invalid={Boolean(touched && errors.maxAttempts)}
-                      disabled={hwSubmissionType !== 'multiple_choice'}
-                    />
-                  </Field>
-
-                  <Field
-                    label={t('content.form.maxScore')}
-                    error={touched ? errors.maxScore : ''}
-                  >
+              <div className={cn('grid gap-3', isMultipleChoice ? 'grid-cols-3' : 'grid-cols-4')}>
+                <Field label={t('content.form.dueDate')} error={touched ? errors.dueDate : ''}>
+                  <TextInput
+                    type="date"
+                    value={homework.dueDate ?? ''}
+                    onChange={(e) => setHomework({ dueDate: e.target.value })}
+                  />
+                </Field>
+                <Field
+                  label={t('content.homework.passingScore')}
+                  error={touched ? errors.passingScore : ''}
+                >
+                  <TextInput
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={homework.passingScore ?? ''}
+                    onChange={(e) => setHomework({ passingScore: e.target.value })}
+                    placeholder={`${t('content.homework.passingScorePlaceholder')} %`}
+                    invalid={Boolean(touched && errors.passingScore)}
+                  />
+                </Field>
+                <Field label={t('content.form.maxAttempts')} error={touched ? errors.maxAttempts : ''}>
+                  <TextInput
+                    type="number"
+                    min={1}
+                    value={homework.maxAttempts ?? ''}
+                    onChange={(e) => setHomework({ maxAttempts: e.target.value })}
+                    placeholder={t('content.homework.unlimitedAttempts')}
+                    invalid={Boolean(touched && errors.maxAttempts)}
+                  />
+                </Field>
+                {!isMultipleChoice && (
+                  <Field label={t('content.form.maxScore')} error={touched ? errors.maxScore : ''}>
                     <TextInput
                       type="number"
                       min={0}
                       value={homework.maxScore ?? ''}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...(f as HomeworkForm),
-                          maxScore: e.target.value,
-                        }) as AnyForm)
-                      }
+                      onChange={(e) => setHomework({ maxScore: e.target.value })}
                       placeholder={t('content.form.maxScorePlaceholder')}
                       invalid={Boolean(touched && errors.maxScore)}
                     />
                   </Field>
-                </div>
+                )}
+              </div>
 
-                {/* ---- Tài liệu đính kèm (upload Cloudinary, file public) ---- */}
-                <AttachmentUpload
-                  value={homework.attachmentUrl || undefined}
-                  fileName={homework.attachmentName || undefined}
-                  onChange={(attachment) =>
-                    setForm((f) => ({
-                      ...(f as HomeworkForm),
-                      attachmentUrl: attachment.url,
-                      attachmentName: attachment.originalName ?? '',
-                      attachmentPublicId: attachment.publicId,
-                    }) as AnyForm)
-                  }
-                  onClear={() =>
-                    setForm((f) => ({
-                      ...(f as HomeworkForm),
-                      attachmentUrl: '',
-                      attachmentName: '',
-                      attachmentPublicId: '',
-                    }) as AnyForm)
-                  }
-                  label={t('content.form.attachmentUrl')}
+              <Field label={t('content.form.instructions')}>
+                <TextArea
+                  value={homework.instructions ?? ''}
+                  onChange={(e) => setHomework({ instructions: e.target.value })}
+                  placeholder={t('content.form.instructionsPlaceholder')}
+                  rows={isMultipleChoice ? 6 : 4}
                 />
+              </Field>
+            </div>
 
-                {/* ---- Rubric ---- */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      {t('content.form.rubric')}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={addRubricRow}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0052CC] hover:text-[#0040A8] transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
-                      {t('content.action.addCriterion')}
-                    </button>
-                  </div>
+            {/* ---- Cột phải: đề trắc nghiệm HOẶC tài liệu + tiêu chí chấm ---- */}
+            <div className="space-y-3 min-w-0">
+              {isMultipleChoice ? (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    {t('content.homework.examTitle')} <span className="text-rose-500">*</span>
+                  </p>
+                  <ExamPicker
+                    courseId={courseId}
+                    selectedExamId={homework.examId ?? ''}
+                    onSelect={(examId) => setHomework({ examId })}
+                  />
+                  {touched && errors.examId && (
+                    <p className="text-[11px] text-rose-500">{errors.examId}</p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <AttachmentUpload
+                    value={homework.attachmentUrl || undefined}
+                    fileName={homework.attachmentName || undefined}
+                    onChange={(attachment) =>
+                      setHomework({
+                        attachmentUrl: attachment.url,
+                        attachmentName: attachment.originalName ?? '',
+                        attachmentPublicId: attachment.publicId,
+                      })
+                    }
+                    onClear={() =>
+                      setHomework({ attachmentUrl: '', attachmentName: '', attachmentPublicId: '' })
+                    }
+                    label={t('content.form.attachmentUrl')}
+                  />
 
-                  {rubricItems.length === 0 ? (
-                    <p className="text-[11px] text-slate-400 py-2">
-                      {t('content.form.rubricEmpty')}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {rubricItems.map((row, index) => (
-                        <div
-                          key={index}
-                          className="rounded-xl border border-slate-200/80 bg-white p-2.5 space-y-2"
-                        >
-                          <div className="flex items-center gap-2">
+                  {/* ---- Tiêu chí chấm (mentor chấm tay) ---- */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        {t('content.form.rubric')}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addRubricRow}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0052CC] hover:text-[#0040A8] transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                        {t('content.action.addCriterion')}
+                      </button>
+                    </div>
+                    {rubricItems.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 py-1">{t('content.form.rubricEmpty')}</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
+                        {rubricItems.map((row, index) => (
+                          <div key={index} className="grid grid-cols-[1fr_1fr_72px_32px] gap-1.5 items-center">
                             <TextInput
                               value={row.criterion ?? ''}
-                              onChange={(e) =>
-                                updateRubricRow(index, {
-                                  criterion: e.target.value,
-                                })
-                              }
+                              onChange={(e) => updateRubricRow(index, { criterion: e.target.value })}
                               placeholder={t('content.form.criterionPlaceholder')}
                             />
-                            <button
-                              type="button"
-                              onClick={() => removeRubricRow(index)}
-                              aria-label={t('content.action.removeCriterion')}
-                              className="shrink-0 p-2 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_88px] gap-2">
                             <TextInput
                               value={row.description ?? ''}
-                              onChange={(e) =>
-                                updateRubricRow(index, {
-                                  description: e.target.value,
-                                })
-                              }
+                              onChange={(e) => updateRubricRow(index, { description: e.target.value })}
                               placeholder={t('content.form.criterionDescPlaceholder')}
                             />
                             <TextInput
                               type="number"
                               min={0}
                               value={row.maxScore ?? ''}
-                              onChange={(e) =>
-                                updateRubricRow(index, {
-                                  maxScore: e.target.value,
-                                })
-                              }
+                              onChange={(e) => updateRubricRow(index, { maxScore: e.target.value })}
                               placeholder="10"
                             />
+                            <button
+                              type="button"
+                              onClick={() => removeRubricRow(index)}
+                              aria-label={t('content.action.removeCriterion')}
+                              className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-
-          {/* ============ CỘT PHẢI: "HIỆN CÓ" ============ */}
-          <div className="min-w-0">
-            {contentType === 'homework' ? (
-              <HomeworkPreview
-                form={homework}
-                rubric={rubricItems}
-              />
-            ) : contentType === 'vocabulary' ? (
-              <VocabularyPreview form={vocabulary} />
-            ) : (
-              <LessonPreview form={lesson} />
-            )}
-          </div>
-        </div>
+        )}
 
         {/* ============ ACTIONS ============ */}
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            disabled={isPending}
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={isPending}>
             {t('common.cancel')}
           </Button>
           <Button
@@ -1305,263 +1089,8 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
 };
 
 /* =========================================================
- * Shell của cột phải — "HIỆN CÓ"
+ * Helpers
  * ========================================================= */
-const ExistingPanel: React.FC<{
-  hint: string;
-  count?: number;
-  children: React.ReactNode;
-}> = ({ hint, count, children }) => {
-  const { t } = useTranslation();
-
-  return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50/70 border-b border-slate-200/80">
-        <div className="min-w-0">
-          <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-            {t('content.existing.title')}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-0.5 truncate">{hint}</p>
-        </div>
-        {count !== undefined && (
-          <span className="shrink-0 text-[10px] font-bold text-slate-400">
-            {t('vocab.modal.total', { count })}
-          </span>
-        )}
-      </div>
-      <div className="p-4">{children}</div>
-    </div>
-  );
-};
-
-/* =========================================================
- * Preview: bài tập + rubric
- * ========================================================= */
-const HomeworkPreview: React.FC<{
-  form: HomeworkForm;
-  rubric: RubricInput[];
-}> = ({ form, rubric }) => {
-  const { t } = useTranslation();
-
-  /** Luôn là mảng — `rubric` có thể `undefined` nếu shape form lệch. */
-  const safeRubric = Array.isArray(rubric) ? rubric : [];
-
-  /** Nhãn hình thức nộp — hiển thị tiếng Việt/Anh theo locale. */
-  const submissionTypeLabel = (() => {
-    switch (form.submissionType ?? 'text') {
-      case 'file':
-        return t('content.homework.type.file');
-      case 'multiple_choice':
-        return t('content.homework.type.multiple_choice');
-      case 'text':
-      default:
-        return t('content.homework.type.text');
-    }
-  })();
-
-  return (
-    <ExistingPanel hint={t('content.existing.homeworkHint')}>
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 space-y-3">
-          <PreviewRow label={t('content.homework.submissionType')}>
-            {submissionTypeLabel}
-          </PreviewRow>
-          <PreviewRow label={t('content.form.instructions')}>
-            {form.instructions || t('common.none')}
-          </PreviewRow>
-          <PreviewRow label={t('content.form.dueDate')}>
-            {form.dueDate || t('common.none')}
-          </PreviewRow>
-          <PreviewRow label={t('content.homework.timeLimit')}>
-            {form.timeLimitMinutes
-              ? `${form.timeLimitMinutes} ${t('content.lesson.minutes')}`
-              : t('common.none')}
-          </PreviewRow>
-          <PreviewRow label={t('content.homework.passingScore')}>
-            {form.passingScore
-              ? `${form.passingScore}%`
-              : t('common.none')}
-          </PreviewRow>
-          <PreviewRow label={t('content.form.maxAttempts')}>
-            {form.maxAttempts || t('content.homework.unlimitedAttempts')}
-          </PreviewRow>
-          <PreviewRow label={t('content.form.maxScore')}>
-            {form.maxScore || t('common.none')}
-          </PreviewRow>
-          {(form.submissionType ?? 'text') === 'multiple_choice' && (
-            <PreviewRow label={t('content.homework.examId')}>
-              {form.examId || t('common.none')}
-            </PreviewRow>
-          )}
-          <PreviewRow label={t('content.form.attachmentUrl')}>
-            {form.attachmentUrl || t('common.none')}
-          </PreviewRow>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-              {t('content.form.rubric')}
-            </p>
-            <span className="text-[10px] font-bold text-slate-400">
-              {t('vocab.modal.total', { count: safeRubric.length })}
-            </span>
-          </div>
-
-          {safeRubric.length === 0 ? (
-            <p className="text-[11px] text-slate-400 py-2">
-              {t('content.form.rubricEmpty')}
-            </p>
-          ) : (
-            <ol className="space-y-2">
-              {safeRubric.map((row, index) => (
-                <li
-                  key={index}
-                  className="flex items-start gap-2.5 rounded-xl bg-slate-50/70 px-3 py-2"
-                >
-                  <span className="w-5 h-5 rounded-md bg-[#0052CC] text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-slate-800 truncate">
-                      {row.criterion || '—'}
-                    </p>
-                    {row.description && (
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        {row.description}
-                      </p>
-                    )}
-                  </div>
-                  {row.maxScore && (
-                    <span className="text-[11px] font-bold text-[#0052CC] shrink-0">
-                      {row.maxScore}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      </div>
-    </ExistingPanel>
-  );
-};
-
-/* =========================================================
- * Preview: từ vựng — danh sách bộ đã tick trong kho chung
- * ========================================================= */
-const VocabularyPreview: React.FC<{ form: VocabularyForm }> = ({ form }) => {
-  const { t } = useTranslation();
-
-  const setIds = Array.isArray(form.setIds) ? form.setIds : [];
-
-  return (
-    <ExistingPanel hint={t('content.existing.vocabHint')} count={setIds.length}>
-      <div className="space-y-3">
-        {setIds.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 px-4 py-6 text-center">
-            <Layers3 className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-            <p className="text-[11px] text-slate-500">
-              {t('content.vocab.bankSelectedEmpty')}
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {setIds.map((setId, index) => (
-              <li
-                key={setId}
-                className="flex items-start gap-2.5 rounded-xl bg-slate-50/70 px-3 py-2"
-              >
-                <span className="w-5 h-5 rounded-md bg-[#0052CC] text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">
-                  {index + 1}
-                </span>
-                <span className="text-xs font-semibold text-slate-800 truncate">
-                  {form.setTitles?.[setId] ?? setId}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </ExistingPanel>
-  );
-};
-
-/* =========================================================
- * Preview: bài học
- * ========================================================= */
-const LessonPreview: React.FC<{ form: LessonForm }> = ({ form }) => {
-  const { t } = useTranslation();
-
-  return (
-    <ExistingPanel hint={t('content.existing.lessonHint')}>
-      <div className="space-y-3">
-        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 space-y-3">
-          <PreviewRow label={t('content.form.durationMinutes')}>
-            {form.durationMinutes
-              ? `${form.durationMinutes} ${t('content.lesson.minutes')}`
-              : t('common.none')}
-          </PreviewRow>
-          <PreviewRow label={t('content.form.videoUrl')}>
-            {form.videoUrl ? (
-              <a
-                href={form.videoUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[#0052CC] hover:underline break-all"
-              >
-                <Link2 className="w-3 h-3 shrink-0" />
-                <span className="truncate">{form.videoUrl}</span>
-              </a>
-            ) : (
-              <span className="text-slate-400">
-                {t('content.lesson.noVideo')}
-              </span>
-            )}
-          </PreviewRow>
-          <PreviewRow label={t('content.form.isPreview')}>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 text-[11px] font-bold',
-                form.isPreview ? 'text-emerald-600' : 'text-slate-400',
-              )}
-            >
-              <span
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full',
-                  form.isPreview ? 'bg-emerald-500' : 'bg-slate-300',
-                )}
-              />
-              {form.isPreview ? t('common.yes') : t('common.no')}
-            </span>
-          </PreviewRow>
-        </div>
-
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 px-4 py-6 text-center">
-          <ClipboardList className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-          <p className="text-[11px] text-slate-500">
-            {t('content.lesson.previewHint')}
-          </p>
-        </div>
-      </div>
-    </ExistingPanel>
-  );
-};
-
-/* =========================================================
- * Preview row
- * ========================================================= */
-const PreviewRow: React.FC<{
-  label: string;
-  children: React.ReactNode;
-}> = ({ label, children }) => (
-  <div className="flex items-start justify-between gap-3 text-xs">
-    <span className="text-slate-500 font-medium shrink-0">{label}</span>
-    <span className="text-slate-800 font-semibold text-right min-w-0 truncate">
-      {children}
-    </span>
-  </div>
-);
 
 /**
  * Hạn nộp có nằm ở quá khứ không.

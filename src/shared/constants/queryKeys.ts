@@ -30,7 +30,6 @@ export const QUERY_KEYS = {
   },
   learning: {
     myCourses: ['learning', 'my-courses'] as const,
-    studyRoom: (slug: string) => ['learning', 'study', slug] as const,
   },
   exam: {
     room: (id: string) => ['exam', id] as const,

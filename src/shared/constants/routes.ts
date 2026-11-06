@@ -33,8 +33,6 @@ export const CLIENT_ROUTES = {
   /** Màn làm bài trắc nghiệm của một bài tập (không đi qua phòng thi của module Exam). */
   homeworkAttempt: (attemptId: string = ':attemptId') =>
     `/homework/attempts/${attemptId}`,
-  study: (slug: string = ':slug', lessonId?: string) =>
-    lessonId ? `/study/${slug}/${lessonId}` : `/study/${slug}`,
   schedule: '/schedule',
   /** Mentor quản lý gói kèm 1-1 + lịch dạy (Dev 5) — trong layout client */
   teachingSchedule: '/teaching-schedule',

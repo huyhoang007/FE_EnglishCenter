@@ -5,22 +5,21 @@
  *   GET  /api/v1/courses                     → bảng + bộ lọc + phân trang
  *   POST /api/v1/admin/courses               → modal tạo khóa học
  *   PUT  /api/v1/admin/courses/{id}          → sửa + toggle trạng thái
- *   POST /api/v1/admin/courses/{id}/contents → modal thêm bài học
  *   GET  /api/v1/certificates                → dropdown chứng chỉ
  *
- * Lưu ý: `contentData` gửi lên là JSON **string** (backend normalize vào
- * cột JSONB), còn khi đọc về backend đã parse sẵn thành object.
+ * Nội dung khóa học (bài học / từ vựng / bài tập) được quản lý ở trang chi tiết
+ * `/admin/courses/:id` (AdminCourseDetailView + CourseContentModal).
+ *
  *
  * Layout giữ nguyên AdminLayout mới: bo góc 16px, viền slate-200/80,
  * font Be Vietnam Pro, màu nhấn #0052CC.
  */
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatCard } from '@/portals/admin/components/StatCard';
 import { Button } from '@/shared/components/Button';
-import { Badge } from '@/shared/components/Badge';
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog';
 import {
   EmptyState,
@@ -46,15 +45,16 @@ import {
   Target,
   Trash2,
   Users,
-  Video,
   X,
 } from 'lucide-react';
 import { cn } from '@/shared/utils';
 import { formatVND } from '@/shared/utils/format';
 import {
+  parseCertificateScale,
+  validateScoreOnScale,
+} from '@/shared/utils/certificateScale';
+import {
   createCourse,
-  createCourseContent,
-  fetchCourseContents,
   fetchCourses,
   updateCourse,
 } from '@/shared/api/courseService';
@@ -67,17 +67,10 @@ import {
   toFormLevel,
 } from '@/shared/constants/cefrLevels';
 import type {
-  ContentType,
   CourseDto,
   CourseStatus,
-  HomeworkSubmissionType,
   UpdateCoursePayload,
 } from '@/shared/types/catalog.types';
-import { ExamPicker } from './components/ExamPicker';
-import { VocabularyBankPicker } from './components/VocabularyBankPicker';
-import { AttachmentUpload } from './components/AttachmentUpload';
-import { CertificateSkillPicker } from './components/CertificateSkillPicker';
-import { buildVocabularyTitle } from '@/shared/api/courseContentBuilder';
 
 /** Backend trả status lowercase — map sang nhãn tiếng Việt + màu. */
 const STATUS_META: Record<
@@ -90,12 +83,6 @@ const STATUS_META: Record<
 };
 
 const PAGE_SIZE = 12;
-
-const CONTENT_TYPE_LABEL: Record<ContentType, string> = {
-  lesson: 'Bài học',
-  vocabulary: 'Từ vựng',
-  homework: 'Bài tập',
-};
 
 /** Component dropdown chọn trạng thái khóa học trực tiếp */
 export const StatusSelect: React.FC<{
@@ -144,8 +131,11 @@ export const CourseManagementView: React.FC = () => {
   // Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [detailCourse, setDetailCourse] = useState<CourseDto | null>(null);
-  const [contentCourse, setContentCourse] = useState<CourseDto | null>(null);
   const [editingCourse, setEditingCourse] = useState<CourseDto | null>(null);
+
+  // Quản lý nội dung (bài học / từ vựng / bài tập: thêm, sửa, xoá) ở trang chi tiết khóa học.
+  const navigate = useNavigate();
+  const openContents = (c: CourseDto) => navigate(`/admin/courses/${c.courseId}`);
 
   /* ---------- Queries ---------- */
   const queryParams = {
@@ -435,7 +425,7 @@ export const CourseManagementView: React.FC = () => {
             setEditingCourse(c);
             setIsCreateOpen(true);
           }}
-          onManageContents={setContentCourse}
+          onManageContents={openContents}
           onStatusChange={(c, next) =>
             updateStatusMutation.mutate({ courseId: c.courseId, status: next })
           }
@@ -453,7 +443,7 @@ export const CourseManagementView: React.FC = () => {
                 setEditingCourse(x);
                 setIsCreateOpen(true);
               }}
-              onManageContents={setContentCourse}
+              onManageContents={openContents}
               onStatusChange={(next) =>
                 updateStatusMutation.mutate({ courseId: c.courseId, status: next })
               }
@@ -486,8 +476,6 @@ export const CourseManagementView: React.FC = () => {
         course={detailCourse}
         onClose={() => setDetailCourse(null)}
       />
-
-      <ContentModal course={contentCourse} onClose={() => setContentCourse(null)} />
 
       <ConfirmDialog
         open={Boolean(archiveTarget)}
@@ -707,7 +695,7 @@ const AdminCourseCard: React.FC<{
           {course.targetScore != null && (
             <span className="inline-flex items-center gap-1 h-5 px-2 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
               <Target className="w-3 h-3" />
-              Band {course.targetScore}+
+              Mục tiêu {course.targetScore}+
             </span>
           )}
           <span className="inline-flex items-center gap-1 h-5 px-2 rounded-md bg-blue-50 text-[#0052CC] text-[10px] font-bold border border-blue-100">
@@ -778,7 +766,11 @@ const CourseFormModal: React.FC<{
   open: boolean;
   onClose: () => void;
   editing: CourseDto | null;
-  certificates: { certificateId: string; certificateName: string }[];
+  certificates: {
+    certificateId: string;
+    certificateName: string;
+    description?: string | null;
+  }[];
 }> = ({ open, onClose, editing, certificates }) => {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -854,30 +846,52 @@ const CourseFormModal: React.FC<{
       toast.error(err instanceof Error ? err.message : 'Cập nhật thất bại'),
   });
 
-  // Validate theo ràng buộc @NotBlank/@Size/@DecimalMin của backend
+  // Thang điểm của chứng chỉ đang chọn (IELTS 0 – 9 bước 0.5, TOEIC 10 – 990 bước 5...)
+  const selectedCertificate = certificates.find(
+    (c) => c.certificateId === form.certificateId,
+  );
+  const scale = parseCertificateScale(selectedCertificate?.description);
+  const hasScore = Boolean(form.entryScore.trim() || form.targetScore.trim());
+  const priceValue = Number(form.price);
+
+  // Validate khớp `CreateCourseRequest` + `CourseRules` của backend
   const errors = {
-    code: !form.code.trim()
-      ? 'Mã khóa học là bắt buộc'
-      : form.code.trim().length > 50
-        ? 'Tối đa 50 ký tự'
-        : '',
+    code: editing
+      ? ''
+      : !form.code.trim()
+        ? 'Mã khóa học là bắt buộc'
+        : form.code.trim().length < 3 || form.code.trim().length > 50
+          ? 'Mã khóa học phải từ 3 đến 50 ký tự'
+          : !/^[A-Za-z0-9_-]+$/.test(form.code.trim())
+            ? 'Chỉ gồm chữ không dấu, số, dấu - và _'
+            : '',
     title: !form.title.trim()
       ? 'Tiêu đề là bắt buộc'
-      : form.title.trim().length > 255
-        ? 'Tối đa 255 ký tự'
+      : form.title.trim().length < 3
+        ? 'Tiêu đề phải có ít nhất 3 ký tự'
+        : form.title.trim().length > 255
+          ? 'Tối đa 255 ký tự'
+          : '',
+    price: !form.price.trim()
+      ? ''
+      : !Number.isFinite(priceValue) || priceValue < 0
+        ? 'Giá phải ≥ 0'
+        : !Number.isInteger(priceValue)
+          ? 'Học phí phải là số nguyên (VND)'
+          : priceValue > 100_000_000
+            ? 'Học phí tối đa 100.000.000 VND'
+            : '',
+    certificateId:
+      hasScore && !form.certificateId
+        ? 'Chọn chứng chỉ trước khi nhập điểm'
         : '',
-    price: form.price && Number(form.price) < 0 ? 'Giá phải ≥ 0' : '',
-    targetScore:
-      form.targetScore && Number(form.targetScore) < 0
-        ? 'Điểm mục tiêu phải ≥ 0'
-        : '',
+    targetScore: validateScoreOnScale('Điểm mục tiêu', form.targetScore, scale),
     // Điểm đầu vào < điểm mục tiêu (VD khóa 4.0 → 5.0), dùng để gợi ý khóa vừa sức cho học viên
     entryScore:
-      form.entryScore && Number(form.entryScore) < 0
-        ? 'Điểm đầu vào phải ≥ 0'
-        : form.entryScore && form.targetScore && Number(form.entryScore) >= Number(form.targetScore)
-          ? 'Điểm đầu vào phải nhỏ hơn điểm mục tiêu'
-          : '',
+      validateScoreOnScale('Điểm đầu vào', form.entryScore, scale) ||
+      (form.entryScore && form.targetScore && Number(form.entryScore) >= Number(form.targetScore)
+        ? 'Điểm đầu vào phải nhỏ hơn điểm mục tiêu'
+        : ''),
     thumbnailUrl:
       form.thumbnailUrl && form.thumbnailUrl.length > 500
         ? 'URL tối đa 500 ký tự'
@@ -917,7 +931,7 @@ const CourseFormModal: React.FC<{
   if (!open) return null;
 
   return (
-    <ModalShell onClose={onClose}>
+    <ModalShell onClose={onClose} maxWidth="max-w-3xl">
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
           <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl">
@@ -944,7 +958,9 @@ const CourseFormModal: React.FC<{
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+      <form onSubmit={handleSubmit} noValidate className="space-y-3 pt-1">
+        {/* Bố cục 3 cột để form vừa 1 màn hình, không phải cuộn */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Mã khóa học" required={!editing} error={touched ? errors.code : ''}>
           <input
             type="text"
@@ -957,6 +973,7 @@ const CourseFormModal: React.FC<{
           />
         </Field>
 
+        <div className="sm:col-span-2">
         <Field label="Tiêu đề" required error={touched ? errors.title : ''}>
           <input
             type="text"
@@ -967,10 +984,12 @@ const CourseFormModal: React.FC<{
             className={inputCls(Boolean(errors.title && touched))}
           />
         </Field>
+        </div>
+        </div>
 
         <Field label="Mô tả">
           <textarea
-            rows={3}
+            rows={2}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             placeholder="Mô tả ngắn về chương trình…"
@@ -979,7 +998,7 @@ const CourseFormModal: React.FC<{
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Field label="Chứng chỉ">
+          <Field label="Chứng chỉ" error={touched ? errors.certificateId : ''}>
             <select
               value={form.certificateId}
               onChange={(e) => setForm({ ...form, certificateId: e.target.value })}
@@ -1015,7 +1034,7 @@ const CourseFormModal: React.FC<{
             </select>
           </Field>
 
-          {editing ? (
+          {editing && (
             <Field label="Trạng thái">
               <select
                 value={form.status}
@@ -1029,19 +1048,8 @@ const CourseFormModal: React.FC<{
                 <option value="archived">Lưu trữ</option>
               </select>
             </Field>
-          ) : (
-            <Field label="Trạng thái ban đầu">
-              <input
-                type="text"
-                disabled
-                value="Bản nháp"
-                className={inputCls(true)}
-              />
-            </Field>
           )}
-        </div>
 
-        <div className="grid grid-cols-2 gap-3">
           <Field label="Học phí (VND)" error={touched ? errors.price : ''}>
             <input
               type="number"
@@ -1057,11 +1065,12 @@ const CourseFormModal: React.FC<{
           <Field label="Điểm đầu vào" error={touched ? errors.entryScore : ''}>
             <input
               type="number"
-              min="0"
-              step="0.5"
+              min={scale?.min ?? 0}
+              max={scale?.max}
+              step={scale?.step ?? 'any'}
               value={form.entryScore}
               onChange={(e) => setForm({ ...form, entryScore: e.target.value })}
-              placeholder="4.0"
+              placeholder={scale ? `${scale.min} – ${scale.max}` : 'Chọn chứng chỉ trước'}
               className={cn(inputCls(Boolean(errors.entryScore && touched)), 'bg-white')}
             />
           </Field>
@@ -1069,25 +1078,34 @@ const CourseFormModal: React.FC<{
           <Field label="Điểm mục tiêu" error={touched ? errors.targetScore : ''}>
             <input
               type="number"
-              min="0"
-              step="0.5"
+              min={scale?.min ?? 0}
+              max={scale?.max}
+              step={scale?.step ?? 'any'}
               value={form.targetScore}
               onChange={(e) => setForm({ ...form, targetScore: e.target.value })}
-              placeholder="7.5"
+              placeholder={scale ? `${scale.min} – ${scale.max}` : 'Chọn chứng chỉ trước'}
               className={cn(inputCls(Boolean(errors.targetScore && touched)), 'bg-white')}
             />
           </Field>
+
+          <div className={editing ? 'sm:col-span-3' : ''}>
+          <Field label="Ảnh thumbnail (URL)" error={touched ? errors.thumbnailUrl : ''}>
+            <input
+              type="url"
+              value={form.thumbnailUrl}
+              onChange={(e) => setForm({ ...form, thumbnailUrl: e.target.value })}
+              placeholder="https://…"
+              className={inputCls(Boolean(errors.thumbnailUrl && touched))}
+            />
+          </Field>
+          </div>
         </div>
 
-        <Field label="Ảnh thumbnail (URL)" error={touched ? errors.thumbnailUrl : ''}>
-          <input
-            type="url"
-            value={form.thumbnailUrl}
-            onChange={(e) => setForm({ ...form, thumbnailUrl: e.target.value })}
-            placeholder="https://…"
-            className={inputCls(Boolean(errors.thumbnailUrl && touched))}
-          />
-        </Field>
+        {!editing && (
+          <p className="text-[11px] text-slate-400">
+            Khóa học mới được tạo ở trạng thái <b>Bản nháp</b>. Thêm nội dung rồi chuyển sang “Đang mở” để bán.
+          </p>
+        )}
 
         <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
           <Button variant="secondary" size="sm" onClick={onClose}>
@@ -1158,7 +1176,7 @@ const CourseDetailModal: React.FC<{
         />
         <DetailCell
           label="Điểm mục tiêu"
-          value={course.targetScore != null ? `Band ${course.targetScore}+` : '—'}
+          value={course.targetScore != null ? `${course.targetScore}+` : '—'}
         />
         <DetailCell label="Chứng chỉ" value={course.certificateName ?? '—'} />
         <DetailCell label="Kỹ năng" value={course.certificatePartName ?? '—'} />
@@ -1175,600 +1193,6 @@ const CourseDetailModal: React.FC<{
       >
         Đóng
       </Button>
-    </ModalShell>
-  );
-};
-
-/* =========================================================
- * Modal: Manage course contents
- * ========================================================= */
-const ContentModal: React.FC<{
-  course: CourseDto | null;
-  onClose: () => void;
-}> = ({ course, onClose }) => {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-
-  const emptyForm = {
-    contentType: 'lesson' as ContentType,
-    title: '',
-    description: '',
-    contentOrder: '0',
-    /* --- lesson --- */
-    isPreview: false,
-    videoUrl: '',
-    durationMinutes: '',
-    /* --- vocabulary --- */
-    setIds: [] as string[],
-    /** Tên bộ từ vựng (setId → title) — dùng để dựng tiêu đề tự động. */
-    setTitles: {} as Record<string, string>,
-    /* --- homework --- */
-    submissionType: 'text' as HomeworkSubmissionType,
-    examId: '',
-    instructions: '',
-    dueDate: '',
-    maxScore: '',
-    passingScore: '',
-    timeLimitMinutes: '',
-    maxAttempts: '',
-    attachmentUrl: '',
-    attachmentName: '',
-    certificatePartId: '',
-  };
-  const [form, setForm] = useState(emptyForm);
-  const lastCourseId = React.useRef<string | null>(null);
-
-  // Reset form mỗi lần mở modal cho khóa học khác
-  React.useEffect(() => {
-    if (course && lastCourseId.current !== course.courseId) {
-      lastCourseId.current = course.courseId;
-      setForm(emptyForm);
-    }
-    if (!course) lastCourseId.current = null;
-  }, [course]);
-
-  const { data: contents = [], isLoading } = useQuery({
-    queryKey: QUERY_KEYS.catalog.contents(course?.courseId ?? ''),
-    queryFn: () => fetchCourseContents(course!.courseId),
-    enabled: Boolean(course?.courseId),
-  });
-
-  /** Đổi loại nội dung → reset các field riêng của loại cũ. */
-  const handleTypeChange = (next: ContentType) => {
-    setForm((f) => ({
-      ...emptyForm,
-      contentType: next,
-      // Tiêu đề / mô tả / thứ tự KHÔNG áp dụng cho nội dung 'vocabulary'
-      // (nội dung này chỉ là con trỏ tới các bộ trong kho chung) → reset luôn.
-      title: next === 'vocabulary' ? '' : f.title,
-      description: next === 'vocabulary' ? '' : f.description,
-      contentOrder: next === 'vocabulary' ? '0' : f.contentOrder,
-    }));
-  };
-
-  /** Tick / bỏ tick 1 bộ từ vựng trong kho chung. */
-  const toggleSet = (setId: string, title: string) => {
-    setForm((f) => {
-      const setTitles = { ...f.setTitles };
-      if (f.setIds.includes(setId)) {
-        delete setTitles[setId];
-      } else {
-        setTitles[setId] = title;
-      }
-      return {
-        ...f,
-        setTitles,
-        setIds: f.setIds.includes(setId)
-          ? f.setIds.filter((id) => id !== setId)
-          : [...f.setIds, setId],
-      };
-    });
-  };
-  const createMutation = useMutation({
-    mutationFn: () => {
-      if (!course) throw new Error('Chưa chọn khóa học');
-      // Nội dung 'vocabulary' không có tiêu đề do admin gõ → không bắt buộc.
-      const isVocabulary = form.contentType === 'vocabulary';
-      if (!isVocabulary && !form.title.trim()) {
-        throw new Error('Tiêu đề là bắt buộc');
-      }
-
-      // contentData gửi lên là JSON **string** — shape đúng theo contentType.
-      let contentData = '{}';
-      let vocabularySetIds: string[] | undefined;
-      let examId: string | undefined;
-      // Tiêu đề gửi lên — với 'vocabulary' ta tự dựng từ tên các bộ đã tick.
-      let title = form.title.trim();
-
-      if (form.contentType === 'lesson') {
-        contentData = JSON.stringify({
-          isPreview: form.isPreview,
-          videoUrl: form.videoUrl.trim() || undefined,
-          durationMinutes: form.durationMinutes
-            ? Number(form.durationMinutes)
-            : undefined,
-        });
-      } else if (isVocabulary) {
-        if (form.setIds.length === 0) {
-          throw new Error('Cần chọn ít nhất một bộ từ vựng');
-        }
-        vocabularySetIds = form.setIds;
-        contentData = JSON.stringify({ setIds: form.setIds });
-        title = buildVocabularyTitle(
-          form.setIds,
-          form.setTitles,
-          CONTENT_TYPE_LABEL.vocabulary,
-        );
-      } else {
-        if (
-          form.submissionType === 'multiple_choice' &&
-          !form.examId.trim()
-        ) {
-          throw new Error('Hãy chọn đề thi để liên kết');
-        }
-        examId =
-          form.submissionType === 'multiple_choice'
-            ? form.examId.trim()
-            : undefined;
-        contentData = JSON.stringify({
-          submissionType: form.submissionType,
-          instructions: form.instructions.trim() || undefined,
-          dueDate: form.dueDate || undefined,
-          maxScore: form.maxScore ? Number(form.maxScore) : undefined,
-          passingScore: form.passingScore
-            ? Number(form.passingScore)
-            : undefined,
-          timeLimitMinutes: form.timeLimitMinutes
-            ? Number(form.timeLimitMinutes)
-            : undefined,
-          maxAttempts: form.maxAttempts
-            ? Number(form.maxAttempts)
-            : undefined,
-          attachmentUrl: form.attachmentUrl.trim() || undefined,
-          attachmentName: form.attachmentName.trim() || undefined,
-          examId,
-          rubric: [],
-        });
-      }
-
-      return createCourseContent(course.courseId, {
-        contentType: form.contentType,
-        title,
-        description: form.description.trim() || undefined,
-        contentOrder: Number(form.contentOrder) || 0,
-        vocabularySetIds,
-        examId,
-        certificatePartId:
-          form.contentType === 'homework'
-            ? form.certificatePartId.trim() || undefined
-            : undefined,
-        contentData,
-      });
-    },
-    onSuccess: () => {
-      toast.success('Đã thêm nội dung');
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.catalog.contents(course!.courseId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.catalog.vocabularies(course!.courseId),
-      });
-      setForm((f) => ({
-        ...f,
-        title: '',
-        description: '',
-        videoUrl: '',
-        durationMinutes: '',
-        setIds: [],
-        setTitles: {},
-        examId: '',
-        instructions: '',
-        dueDate: '',
-        maxScore: '',
-        passingScore: '',
-        timeLimitMinutes: '',
-        maxAttempts: '',
-        attachmentUrl: '',
-        attachmentName: '',
-        certificatePartId: '',
-      }));
-    },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : 'Thêm thất bại'),
-  });
-
-  if (!course) return null;
-
-  return (
-    <ModalShell onClose={onClose} maxWidth="max-w-2xl">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-        <div>
-          <h3 className="text-lg font-bold text-slate-900">
-            Nội dung khóa học
-          </h3>
-          <p className="text-xs text-slate-500 truncate">{course.title}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
-          aria-label="Đóng"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
-        {/* --- Form thêm nội dung --- */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate();
-          }}
-          className="space-y-3"
-        >
-          <Field label="Loại nội dung">
-            <select
-              value={form.contentType}
-              onChange={(e) => handleTypeChange(e.target.value as ContentType)}
-              className={cn(inputCls(false), 'bg-white')}
-            >
-              {(Object.keys(CONTENT_TYPE_LABEL) as ContentType[]).map((t) => (
-                <option key={t} value={t}>
-                  {CONTENT_TYPE_LABEL[t]}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          {/*
-            * Nội dung 'vocabulary' chỉ là CON TRỎ tới các bộ trong kho từ
-            * vựng chung → không có tiêu đề / mô tả / thứ tự riêng.
-            * Thứ tự hiển thị do `course_vocabulary_sets.display_order` quản lý.
-            */}
-          {form.contentType !== 'vocabulary' && (
-            <>
-              <Field label="Tiêu đề" required>
-                <input
-                  type="text"
-                  required
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="VD: Task 1 Overview"
-                  className={inputCls(false)}
-                />
-              </Field>
-
-              <Field label="Mô tả">
-                <input
-                  type="text"
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  className={inputCls(false)}
-                />
-              </Field>
-            </>
-          )}
-
-          {/* ============ FORM ĐỘNG THEO LOẠI NỘI DUNG ============ */}
-          {form.contentType === 'lesson' && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Thứ tự">
-                  <input
-                    type="number"
-                    value={form.contentOrder}
-                    onChange={(e) =>
-                      setForm({ ...form, contentOrder: e.target.value })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  />
-                </Field>
-                <Field label="Thời lượng (phút)">
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.durationMinutes}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        durationMinutes: e.target.value,
-                      })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  />
-                </Field>
-              </div>
-
-              <Field label="Video URL (MP4 hoặc YouTube)">
-                <input
-                  type="url"
-                  value={form.videoUrl}
-                  onChange={(e) =>
-                    setForm({ ...form, videoUrl: e.target.value })
-                  }
-                  placeholder="https://…"
-                  className={inputCls(false)}
-                />
-              </Field>
-
-              {/* Checkbox học thử */}
-              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.isPreview}
-                  onChange={(e) =>
-                    setForm({ ...form, isPreview: e.target.checked })
-                  }
-                  className="mt-0.5 rounded border-amber-300 text-[#0052CC]"
-                />
-                <span className="text-xs text-amber-900 leading-snug">
-                  <strong className="font-bold">Bài học thử (miễn phí)</strong>
-                  <br />
-                  <span className="text-amber-700">
-                    Ai cũng xem được video bài này mà không cần ghi danh.
-                  </span>
-                </span>
-              </label>
-            </>
-          )}
-
-          {/* ---- TỪ VỰNG: chọn bộ trong KHO TỪ VỰNG CHUNG ---- */}
-          {form.contentType === 'vocabulary' && (
-            <>
-              <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3 space-y-2">
-                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Chọn bộ từ vựng từ kho chung
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  Tìm trong kho từ vựng chung và tick chọn các bộ muốn liên
-                  kết vào khóa học này.
-                </p>
-                <VocabularyBankPicker
-                  selectedIds={form.setIds}
-                  onToggle={toggleSet}
-                  courseId={course.courseId}
-                />
-              </div>
-            </>
-          )}
-
-          {/* ---- BÀI TẬP: chọn đề thi / bài kiểm tra định nghĩa sẵn ---- */}
-          {form.contentType === 'homework' && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Thứ tự">
-                  <input
-                    type="number"
-                    value={form.contentOrder}
-                    onChange={(e) =>
-                      setForm({ ...form, contentOrder: e.target.value })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  />
-                </Field>
-                <Field label="Hình thức nộp">
-                  <select
-                    value={form.submissionType}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        submissionType: e.target
-                          .value as HomeworkSubmissionType,
-                      })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  >
-                    <option value="text">Tự luận (gõ trả lời)</option>
-                    <option value="file">Nộp file</option>
-                    <option value="multiple_choice">
-                      Trắc nghiệm (phòng thi)
-                    </option>
-                  </select>
-                </Field>
-              </div>
-
-              {form.submissionType === 'multiple_choice' && (
-                <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-3 space-y-2">
-                  <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Chọn đề thi / bài kiểm tra
-                  </p>
-                  <ExamPicker
-                    courseId={course.courseId}
-                    selectedExamId={form.examId}
-                    onSelect={(examId) =>
-                      setForm({ ...form, examId })
-                    }
-                  />
-                </div>
-              )}
-
-              <Field label="Hướng dẫn">
-                <textarea
-                  value={form.instructions}
-                  onChange={(e) =>
-                    setForm({ ...form, instructions: e.target.value })
-                  }
-                  rows={3}
-                  placeholder="Học viên cần làm gì?"
-                  className={cn(inputCls(false), 'h-auto py-2 bg-white')}
-                />
-              </Field>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Hạn nộp">
-                  <input
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(e) =>
-                      setForm({ ...form, dueDate: e.target.value })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  />
-                </Field>
-                <Field label="Thời gian làm bài (phút)">
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.timeLimitMinutes}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        timeLimitMinutes: e.target.value,
-                      })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  />
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Điểm tối đa">
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.maxScore}
-                    onChange={(e) =>
-                      setForm({ ...form, maxScore: e.target.value })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  />
-                </Field>
-                <Field label="Điểm đạt (%)">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={form.passingScore}
-                    onChange={(e) =>
-                      setForm({ ...form, passingScore: e.target.value })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  />
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Số lần làm tối đa">
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.maxAttempts}
-                    onChange={(e) =>
-                      setForm({ ...form, maxAttempts: e.target.value })
-                    }
-                    className={cn(inputCls(false), 'bg-white')}
-                  />
-                </Field>
-              </div>
-
-              {/* ---- Tài liệu đính kèm (upload Cloudinary) ---- */}
-              <AttachmentUpload
-                value={form.attachmentUrl || undefined}
-                fileName={form.attachmentName || undefined}
-                onChange={(attachment) =>
-                  setForm({
-                    ...form,
-                    attachmentUrl: attachment.url,
-                    attachmentName: attachment.originalName ?? '',
-                  })
-                }
-                onClear={() =>
-                  setForm({
-                    ...form,
-                    attachmentUrl: '',
-                    attachmentName: '',
-                  })
-                }
-                label="Tài liệu đính kèm"
-              />
-
-              {/* ---- Kỹ năng chứng chỉ mà bài tập đo lường ---- */}
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Kỹ năng chứng chỉ đo lường
-                </p>
-                <CertificateSkillPicker
-                  value={form.certificatePartId}
-                  onChange={(certificatePartId) =>
-                    setForm({ ...form, certificatePartId })
-                  }
-                />
-              </div>
-            </>
-          )}
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            fullWidth
-            isLoading={createMutation.isPending}
-            leftIcon={Plus}
-            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
-          >
-            Thêm nội dung
-          </Button>
-        </form>
-
-        {/* --- Danh sách nội dung hiện có --- */}
-        <div className="bg-slate-50/60 rounded-2xl border border-slate-200 p-4 max-h-[440px] overflow-y-auto">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-3">
-            Hiện có ({contents.length})
-          </p>
-          {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full" />
-              ))}
-            </div>
-          ) : contents.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-8">
-              Chưa có nội dung nào. Thêm bài học đầu tiên ở bên trái.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {contents.map((c) => (
-                <li
-                  key={c.contentId}
-                  className="flex items-start gap-2.5 p-2.5 bg-white rounded-xl border border-slate-200"
-                >
-                  <div
-                    className={cn(
-                      'w-7 h-7 rounded-md flex items-center justify-center shrink-0',
-                      c.isPreview
-                        ? 'bg-amber-50 text-amber-600'
-                        : 'bg-[#E0F2FE] text-[#0052CC]',
-                    )}
-                  >
-                    {c.isPreview ? (
-                      <Video className="w-3.5 h-3.5" />
-                    ) : (
-                      <BookOpen className="w-3.5 h-3.5" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-slate-800 truncate">
-                      {c.title}
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
-                      {CONTENT_TYPE_LABEL[c.contentType] ?? c.contentType} · #
-                      {c.contentOrder}
-                    </p>
-                  </div>
-                  {c.isPreview && (
-                    <Badge variant="warning" size="sm">
-                      Thử
-                    </Badge>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
     </ModalShell>
   );
 };

@@ -21,7 +21,6 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
     { label: 'Lexical Resource', score: evaluation.lexicalResource },
     { label: 'Grammatical Range & Accuracy', score: evaluation.grammaticalAccuracy },
   ];
-  const isMock = evaluation.model === 'mock';
   // Bài trống / không viết bằng tiếng Anh: BE cho 0 điểm theo quy tắc, không gọi AI
   const isRuleBased = evaluation.model === 'rule-based';
   // Thang theo chứng chỉ mục tiêu; bài chấm cũ không có thang → IELTS 0 – 9
@@ -53,8 +52,8 @@ export const EvaluationResult: React.FC<{ evaluation: PracticeEvaluation }> = ({
                 Level {evaluation.cefrLevel}
               </Badge>
             )}
-            <Badge variant={isMock || isRuleBased ? 'warning' : 'neutral'} size="sm">
-              {isMock ? 'Chấm giả lập (mock)' : isRuleBased ? 'Không chấm được (0 điểm)' : evaluation.model}
+            <Badge variant={isRuleBased ? 'warning' : 'neutral'} size="sm">
+              {isRuleBased ? 'Không chấm được (0 điểm)' : evaluation.model}
             </Badge>
           </div>
         </div>

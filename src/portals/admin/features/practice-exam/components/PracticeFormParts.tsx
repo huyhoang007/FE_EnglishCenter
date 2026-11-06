@@ -17,8 +17,9 @@ export const Field: React.FC<{
   required?: boolean;
   error?: string;
   children: React.ReactNode;
-}> = ({ label, required, error, children }) => (
-  <div>
+  className?: string;
+}> = ({ label, required, error, children, className }) => (
+  <div className={className}>
     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
       {label} {required && <span className="text-rose-500">*</span>}
     </label>

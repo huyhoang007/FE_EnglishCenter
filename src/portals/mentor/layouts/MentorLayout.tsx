@@ -11,7 +11,6 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { NotificationBell } from '@/shared/components/NotificationBell';
 import {
   LayoutDashboard,
-  ClipboardList,
   CalendarDays,
   Search,
   LogOut,
@@ -24,7 +23,6 @@ import { useAuthStore } from '@/shared/auth/useAuthStore';
 
 const NAV_ITEMS = [
   { to: '/mentor', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/mentor/grading', label: 'Grading Queue', icon: ClipboardList, end: false },
   { to: '/mentor/schedule', label: 'Schedule', icon: CalendarDays, end: false },
   { to: '/mentor/exam-grading', label: 'Exam Grading', icon: FileCheck2, end: false },
   { to: '/mentor/homework-grading', label: 'Homework Grading', icon: ClipboardCheck, end: false },

@@ -163,7 +163,7 @@ export const ExamPicker: React.FC<ExamPickerProps> = ({
       ) : filteredExams.length === 0 ? (
         <EmptyState title={t('content.homework.examNoResult')} className="py-6" />
       ) : (
-        <ul className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+        <ul className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
           {filteredExams.map((exam) => {
             const checked = selectedExamId === exam.examId;
 

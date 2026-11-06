@@ -298,9 +298,9 @@ export const en = {
   // Homework — hình thức nộp (khớp cột homework_submissions của backend)
   'content.homework.submissionType': 'Submission type',
   'content.homework.submissionTypeHint':
-    'Determines what learners submit. Multiple choice is graded automatically.',
-  'content.homework.type.text': 'Written answer',
-  'content.homework.type.file': 'File upload',
+    'PDF upload: graded by a mentor. Multiple choice: done on the web and graded automatically.',
+  'content.homework.type.text': 'Written answer (legacy)',
+  'content.homework.type.file': 'PDF upload',
   'content.homework.type.multiple_choice': 'Multiple choice',
   'content.homework.passingScore': 'Passing score',
   'content.homework.passingScoreHint':
@@ -418,6 +418,7 @@ export const en = {
 
   // Validation
   'content.validation.titleRequired': 'Title is required',
+  'content.validation.titleTooShort': 'Title must be at least 3 characters',
   'content.validation.titleTooLong': 'Maximum 255 characters',
   'content.validation.orderInvalid': 'Order must be a non-negative number',
   'content.validation.videoUrlInvalid': 'Video URL must be a valid URL',

@@ -294,9 +294,9 @@ export const vi: Record<TranslationKey, string> = {
   // Bài tập — hình thức nộp (khớp cột homework_submissions của backend)
   'content.homework.submissionType': 'Hình thức nộp',
   'content.homework.submissionTypeHint':
-    'Quyết định học viên nộp bài kiểu gì. Trắc nghiệm được chấm tự động.',
-  'content.homework.type.text': 'Tự luận (gõ trả lời)',
-  'content.homework.type.file': 'Nộp file',
+    'Nộp file PDF: mentor chấm tay. Trắc nghiệm: học viên làm trực tiếp trên web, chấm tự động theo đề.',
+  'content.homework.type.text': 'Tự luận (gõ trả lời, dữ liệu cũ)',
+  'content.homework.type.file': 'Nộp file PDF',
   'content.homework.type.multiple_choice': 'Trắc nghiệm',
   'content.homework.passingScore': 'Điểm đạt',
   'content.homework.passingScoreHint':
@@ -412,6 +412,7 @@ export const vi: Record<TranslationKey, string> = {
 
   // Kiểm tra dữ liệu
   'content.validation.titleRequired': 'Tiêu đề là bắt buộc',
+  'content.validation.titleTooShort': 'Tiêu đề phải có ít nhất 3 ký tự',
   'content.validation.titleTooLong': 'Tối đa 255 ký tự',
   'content.validation.orderInvalid': 'Thứ tự phải là số không âm',
   'content.validation.videoUrlInvalid': 'Link video phải là URL hợp lệ',

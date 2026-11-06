@@ -815,7 +815,7 @@ const CertificateFormModal: React.FC<{
   if (!open) return null;
 
   return (
-    <ModalShell onClose={onClose} maxWidth="max-w-3xl">
+    <ModalShell onClose={onClose} maxWidth="max-w-6xl">
       {/* Header */}
       <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
@@ -843,7 +843,10 @@ const CertificateFormModal: React.FC<{
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5 pt-3">
+      <form onSubmit={handleSubmit} className="space-y-4 pt-3">
+        {/* 2 cột: trái = thông tin + thang điểm, phải = kỹ năng → vừa 1 màn hình */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div className="space-y-4">
         {/* ============ THÔNG TIN CHỨNG CHỈ ============ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field
@@ -1074,8 +1077,10 @@ const CertificateFormModal: React.FC<{
           </div>
         </div>
 
+        </div>
+
         {/* ============ CẤU HÌNH KỸ NĂNG (PARTS) ============ */}
-        <div className="pt-2 space-y-3">
+        <div className="space-y-3 min-w-0">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -1222,7 +1227,7 @@ const CertificateFormModal: React.FC<{
               </p>
             </div>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-3 max-h-[52vh] overflow-y-auto pr-1">
               {parts.map((part, idx) => {
                 const partError = skillValidation.partErrors[idx];
                 const nameErr = partNameErrors[idx];
@@ -1439,6 +1444,7 @@ const CertificateFormModal: React.FC<{
             </ul>
           )}
         </div>
+        </div>
 
         {/* Footer actions */}
         <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
@@ -1598,7 +1604,7 @@ const CertificateDetailModal: React.FC<{
   if (!certificateId) return null;
 
   return (
-    <ModalShell onClose={onClose} maxWidth="max-w-2xl">
+    <ModalShell onClose={onClose} maxWidth="max-w-6xl">
       <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
           <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl shadow-2xs">
@@ -1635,7 +1641,9 @@ const CertificateDetailModal: React.FC<{
           className="mt-3"
         />
       ) : (
-        <div className="space-y-4 pt-3">
+        // 2 cột: trái = thông tin + thang điểm, phải = kỹ năng → không phải cuộn cả modal
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-3 items-start">
+        <div className="space-y-4">
           {/* Card thông tin chứng chỉ */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 to-indigo-50/60 border border-blue-100 space-y-1.5">
             <div className="flex items-center justify-between">
@@ -1722,11 +1730,13 @@ const CertificateDetailModal: React.FC<{
 
               {/* Bảng mốc CEFR / Bậc quy chiếu chính thức */}
               {matchedPreset && matchedPreset.benchmarks.length > 0 && (
-                <div className="pt-2 border-t border-slate-200/80 space-y-2">
-                  <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                // Thu gọn mặc định để modal vừa 1 màn hình; bấm để xem bảng mốc CEFR
+                <details className="pt-2 border-t border-slate-200/80 space-y-2 group">
+                  <summary className="text-[11px] font-bold text-slate-700 flex items-center gap-1 cursor-pointer select-none list-none">
                     <BookMarked className="w-3.5 h-3.5 text-[#0052CC]" />
-                    Mốc điểm quy chiếu năng lực chính thức:
-                  </p>
+                    Mốc điểm quy chiếu năng lực chính thức
+                    <span className="text-[10px] font-semibold text-[#0052CC] ml-1 group-open:hidden">(bấm để xem)</span>
+                  </summary>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                     {matchedPreset.benchmarks.map((bm, idx) => (
@@ -1785,7 +1795,7 @@ const CertificateDetailModal: React.FC<{
                       </p>
                     </div>
                   )}
-                </div>
+                </details>
               )}
             </div>
           )}
@@ -1818,8 +1828,10 @@ const CertificateDetailModal: React.FC<{
             </div>
           )}
 
+        </div>
+
           {/* Danh sách kỹ năng */}
-          <div className="pt-2">
+          <div className="min-w-0">
             <div className="flex items-center justify-between mb-2.5">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <Layers3 className="w-4 h-4 text-[#0052CC]" />
@@ -1832,7 +1844,7 @@ const CertificateDetailModal: React.FC<{
               )}
             </div>
 
-            <ul className="space-y-2.5">
+            <ul className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
               {effectiveParts.map((part) => {
                 const certMax = scoring?.maxScore || 1;
                 const contribution =
@@ -1888,16 +1900,6 @@ const CertificateDetailModal: React.FC<{
               })}
             </ul>
           </div>
-
-          <Button
-            variant="primary"
-            size="sm"
-            fullWidth
-            onClick={onClose}
-            className="bg-[#0052CC] hover:bg-[#0040A8] font-bold mt-4"
-          >
-            Đóng
-          </Button>
         </div>
       )}
     </ModalShell>

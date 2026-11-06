@@ -13,7 +13,6 @@
  *   /exams/placement   → ExamPlacementPage (kiểm tra năng lực — Dev 3)
  *   /exams/attempts/:attemptId        → ExamRoomPage (phòng thi — Dev 3)
  *   /exams/attempts/:attemptId/result → ExamResultPage (kết quả — Dev 3)
- *   /study/:slug       → StudyRoomPage (phòng học trực tuyến)
  *   /schedule          → SchedulePage
  *   /learning-path     → LearningPathPage (lộ trình học — Dev 5)
  *   /practice          → PracticePage (luyện đề Writing/Speaking, AI chấm — Dev 5)
@@ -49,7 +48,6 @@ import ExamPlacementPage from '@/portals/client/pages/exams/ExamPlacementPage';
 import HomeworkExamPage from '@/portals/client/pages/homework/HomeworkExamPage';
 import MyCoursesPage from '@/portals/client/pages/student/MyCoursesPage';
 import CoursePlayerPage from '@/portals/client/pages/student/CoursePlayerPage';
-import StudyRoomPage from '@/portals/client/pages/student/StudyRoomPage';
 import SchedulePage from '@/portals/client/pages/student/SchedulePage';
 import LearningPathPage from '@/portals/client/pages/student/LearningPathPage';
 import PracticePage from '@/portals/client/pages/student/PracticePage';
@@ -244,14 +242,6 @@ const ClientRoutesComponent: React.FC = () => {
           <Route
             path={CLIENT_ROUTES.homeworkAttempt()}
             element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><HomeworkExamPage /></ProtectedRoute>}
-          />
-          <Route
-            path={CLIENT_ROUTES.study()}
-            element={<StudyRoomPage />}
-          />
-          <Route
-            path={CLIENT_ROUTES.study(':slug', ':lessonId')}
-            element={<StudyRoomPage />}
           />
           {/* Learner (USER) không dùng Mentor 1-1 / Exam → về sàn khóa học / Test trình độ */}
           <Route path="/mentors" element={<RoleRedirect deniedRoles={['USER']} to="/courses"><MentorDirectoryPage /></RoleRedirect>} />

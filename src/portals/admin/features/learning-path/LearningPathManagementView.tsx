@@ -599,7 +599,7 @@ const LearningPathFormModal: React.FC<{
   if (!open) return null;
 
   return (
-    <ModalShell onClose={onClose} maxWidth="max-w-3xl">
+    <ModalShell onClose={onClose} maxWidth="max-w-4xl">
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
           <div className="p-2.5 bg-blue-50 text-[#0052CC] rounded-xl">
@@ -618,7 +618,8 @@ const LearningPathFormModal: React.FC<{
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Chứng chỉ | Tên | Số buổi trên 1 hàng để form vừa 1 màn hình */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="Chứng chỉ" required error={touched ? certificateError : ''}>
             <select
               value={certificateId}
@@ -642,19 +643,18 @@ const LearningPathFormModal: React.FC<{
               className={inputCls(Boolean(touched && nameError))}
             />
           </Field>
+          <Field label="Số buổi kèm 1-1" error={touched ? totalSessionsError : ''}>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={totalSessions}
+              onChange={(e) => setTotalSessions(e.target.value)}
+              placeholder="VD 12 · trống = không kèm 1-1"
+              className={inputCls(Boolean(touched && totalSessionsError))}
+            />
+          </Field>
         </div>
-
-        <Field label="Số buổi kèm 1-1 (VD 12)" error={touched ? totalSessionsError : ''}>
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={totalSessions}
-            onChange={(e) => setTotalSessions(e.target.value)}
-            placeholder="Bỏ trống nếu lộ trình không có buổi kèm 1-1"
-            className={inputCls(Boolean(touched && totalSessionsError))}
-          />
-        </Field>
 
         <Field label="Mô tả" error={touched ? descriptionError : ''}>
           <textarea
@@ -692,7 +692,7 @@ const LearningPathFormModal: React.FC<{
               Chưa có chặng nào. Bấm “Thêm chặng” để gắn khóa học, đề thi hoặc đề luyện tập AI.
             </p>
           ) : (
-            <ul className="space-y-2.5">
+            <ul className="space-y-2.5 max-h-[32vh] overflow-y-auto pr-1">
               {items.map((item, idx) => {
                 const meta = TYPE_META[item.type];
                 const opts = refOptions(item.type);

@@ -635,10 +635,10 @@ export const CreatePracticeExamModal: React.FC<{
   }
 
   return (
-    <ModalShell onClose={onClose} maxWidth="max-w-3xl" isDismissDisabled={isBusy}>
+    <ModalShell onClose={onClose} maxWidth="max-w-5xl" isDismissDisabled={isBusy}>
       {header}
 
-      <div className="space-y-5 pt-4">
+      <div className="space-y-3 pt-3">
         {isEdit && isStructureLocked && (
           <p className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-800 flex gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -654,8 +654,9 @@ export const CreatePracticeExamModal: React.FC<{
           </p>
         )}
 
-        {/* ---------- 1. Thông tin đề ---------- */}
-        <Field label="Tiêu đề" required error={touched ? titleError : ''}>
+        {/* ---------- 1. Thông tin đề: 1 hàng 4 cột để vừa màn hình ---------- */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <Field className="sm:col-span-2" label="Tiêu đề" required error={touched ? titleError : ''}>
           <input
             type="text"
             value={title}
@@ -666,7 +667,6 @@ export const CreatePracticeExamModal: React.FC<{
           />
         </Field>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Chứng chỉ liên quan">
             <select
               value={certificateId}
@@ -710,7 +710,7 @@ export const CreatePracticeExamModal: React.FC<{
             >
               <Clock className="w-4 h-4 text-slate-400" />
               <span className="font-bold">{totalMinutes}</span>
-              <span className="text-xs text-slate-400">phút · tự cộng từ các phần thi</span>
+              <span className="text-xs text-slate-400 truncate">phút (tự cộng)</span>
             </div>
           </Field>
         </div>
@@ -719,7 +719,7 @@ export const CreatePracticeExamModal: React.FC<{
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            rows={2}
+            rows={1}
             placeholder="Không bắt buộc — hiển thị cho học viên trong kho đề"
             className={cn(inputCls(false), 'h-auto py-2 resize-y')}
             disabled={isBusy}
@@ -744,6 +744,8 @@ export const CreatePracticeExamModal: React.FC<{
           </div>
           {touched && rowsError && <p className="text-[11px] text-rose-500">{rowsError}</p>}
 
+          {/* Nhiều phần thi → chỉ danh sách này cuộn, tiêu đề + nút luôn hiện */}
+          <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-1">
           {rows.map((row, index) => (
             <SectionRowCard
               key={row.id}
@@ -762,6 +764,7 @@ export const CreatePracticeExamModal: React.FC<{
               onCancelReplace={() => cancelReplace(row.id)}
             />
           ))}
+          </div>
 
           {isEdit && original && (
             <p className="text-[11px] text-slate-500">

@@ -37,6 +37,9 @@ import type {
   HomeworkSubmission,
 } from '@/shared/types/homework.types';
 
+/** Dung lượng tối đa file PDF bài nộp — khớp `HomeworkSubmissionServiceImpl.MAX_PDF_BYTES`. */
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+
 export interface HomeworkSubmitModalProps {
   open: boolean;
   onClose: () => void;
@@ -106,6 +109,15 @@ export const HomeworkSubmitModal: React.FC<HomeworkSubmitModalProps> = ({
   const handleFileChange = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
+    // Bài nộp chỉ nhận PDF (backend cũng chặn ở bước xin chữ ký + nộp bài).
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Bài nộp chỉ nhận file PDF.');
+      return;
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setError('File PDF tối đa 20 MB.');
+      return;
+    }
     const ok = await upload({
       file,
       purpose: 'submission',
@@ -273,7 +285,7 @@ export const HomeworkSubmitModal: React.FC<HomeworkSubmitModalProps> = ({
                     type="file"
                     className="hidden"
                     onChange={(e) => handleFileChange(e.target.files?.[0])}
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.m4a,.aac,.ogg,.mp4,.mov,.webm,.mkv"
+                    accept=".pdf,application/pdf"
                   />
                   {uploaded ? (
                     <div className="flex items-center gap-3 p-3.5 rounded-xl border border-emerald-200 bg-emerald-50">
@@ -313,10 +325,10 @@ export const HomeworkSubmitModal: React.FC<HomeworkSubmitModalProps> = ({
                         <>
                           <Paperclip className="w-6 h-6 text-slate-400" />
                           <p className="text-xs font-bold text-slate-700">
-                            Chọn file để nộp
+                            Chọn file PDF để nộp
                           </p>
                           <p className="text-[11px] text-slate-400">
-                            PDF, Word, ảnh, audio, video — tối đa 100 MB
+                            Chỉ nhận PDF — tối đa 20 MB
                           </p>
                         </>
                       )}
