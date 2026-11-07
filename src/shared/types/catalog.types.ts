@@ -55,6 +55,12 @@ export interface CertificateDto {
   certificateId: string;
   certificateName: string;
   description: string | null;
+  minScore?: number | null;
+  maxScore?: number | null;
+  scoreStep?: number | null;
+  scoreUnit?: string | null;
+  scaleType?: ScoreCalculationType | null;
+  roundingRule?: string | null;
   partCount: number;
   parts: CertificatePartDto[] | null;
   createdAt: string | null;
@@ -435,11 +441,23 @@ export interface CertificatePartPayload {
 export interface CreateCertificatePayload {
   certificateName: string;
   description?: string;
+  minScore?: number;
+  maxScore?: number;
+  scoreStep?: number;
+  scoreUnit?: string;
+  scaleType?: ScoreCalculationType;
+  roundingRule?: string;
   parts?: CertificatePartPayload[];
 }
 
 export interface UpdateCertificatePayload {
   certificateName?: string;
   description?: string;
+  minScore?: number;
+  maxScore?: number;
+  scoreStep?: number;
+  scoreUnit?: string;
+  scaleType?: ScoreCalculationType;
+  roundingRule?: string;
   parts?: CertificatePartPayload[];
 }

@@ -74,7 +74,10 @@ export const getUser = async (id: string) => (await axiosClient.get<BeResponse<U
 export const updateUserStatus = (id: string, isActive: boolean) => axiosClient.put(`/api/v1/admin/users/${id}/status`, { isActive });
 export const assignRole = (id: string, roleName: string) => axiosClient.post(`/api/v1/admin/users/${id}/roles`, { roleName });
 export const getRoles = async () => (await axiosClient.get<BeResponse<RoleDto[]>>('/api/v1/admin/roles')).data.result ?? [];
-export const createMentor = async (payload: CreateMentorDto) => (await axiosClient.post<BeResponse<CreateMentorResponseDto>>('/api/v1/admin/mentors', payload)).data.result;
+export const createMentor = async (payload: CreateMentorDto) =>
+  (await axiosClient.post<BeResponse<CreateMentorResponseDto>>('/api/v1/admin/mentors', payload, {
+    timeout: ACTIVATION_EMAIL_TIMEOUT_MS,
+  })).data.result;
 export const updateMentor = async (id: string, payload: UpdateMentorDto) => (await axiosClient.put<BeResponse<MentorDto>>(`/api/v1/admin/mentors/${id}`, payload)).data.result;
 export const revokeMentor = (id: string) => axiosClient.delete(`/api/v1/admin/mentors/${id}`);
 

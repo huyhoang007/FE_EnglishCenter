@@ -34,8 +34,10 @@ export interface MentorStatsDto {
   newLast30Days: number;
   /** Các department đang dùng — option cho bộ lọc */
   departments: string[];
+  /** Các specialization đang dùng — option cho dropdown chọn chứng chỉ */
+  specializations: string[];
 }
-export interface CreateMentorResponseDto { mentor: MentorDto; tempPassword: string; note?: string; }
+export interface CreateMentorResponseDto { mentor: MentorDto; note?: string; }
 
 export interface MentorDto extends UserDto {
   specialization: string;

@@ -195,7 +195,7 @@ export const RegisterForm: React.FC = () => {
               <Sparkles className="w-5 h-5 text-amber-300" />
             </div>
             <span className="font-extrabold tracking-tight">
-              English<span className="text-amber-300">Hub</span>
+              English<span className="text-amber-300">Center</span>
             </span>
           </Link>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-semibold text-amber-200">
@@ -255,7 +255,7 @@ export const RegisterForm: React.FC = () => {
           </div>
 
           {/* Row 2: phone */}
-          <Field
+          {/* <Field
             id="phone"
             label="Số điện thoại"
             icon={Phone}
@@ -268,7 +268,7 @@ export const RegisterForm: React.FC = () => {
             placeholder="0912345678 (tùy chọn)"
             error={fieldErrors.phone}
             autoComplete="tel"
-          />
+          /> */}
 
           {/* Row 3: password + confirm */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

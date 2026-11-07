@@ -740,7 +740,28 @@ export function parseCertificateMeta(description: string | null | undefined): {
 export function getCertificateScoring(cert: {
   certificateName: string;
   description?: string | null;
+  minScore?: number | null;
+  maxScore?: number | null;
+  scoreStep?: number | null;
+  scoreUnit?: string | null;
+  scaleType?: ScoreCalculationType | null;
+  roundingRule?: string | null;
+  preset?: CertificatePresetId;
 }): CertificateScoringSystem {
+  // 1. Ưu tiên cấu hình thực tế được lưu trực tiếp trong các cột của CSDL (V21)
+  if (typeof cert.maxScore === 'number' && cert.maxScore > 0) {
+    return {
+      scaleType: cert.scaleType ?? 'AVERAGE',
+      minScore: typeof cert.minScore === 'number' ? cert.minScore : 0,
+      maxScore: cert.maxScore,
+      step: typeof cert.scoreStep === 'number' && cert.scoreStep > 0 ? cert.scoreStep : 0.5,
+      unit: cert.scoreUnit || 'Điểm',
+      roundingRule: (cert.roundingRule as 'IELTS' | 'VSTEP' | 'STANDARD') || undefined,
+      preset: cert.preset || 'CUSTOM',
+    };
+  }
+
+  // 2. Dự phòng: Đọc từ JSON nhúng trong description
   const meta = parseCertificateMeta(cert.description);
   if (meta.scoring) {
     return meta.scoring;

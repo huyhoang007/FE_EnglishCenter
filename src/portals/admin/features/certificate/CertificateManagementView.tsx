@@ -792,6 +792,12 @@ const CertificateFormModal: React.FC<{
         payload: {
           certificateName: name.trim(),
           description: serializedDesc,
+          minScore: scoring.minScore,
+          maxScore: scoring.maxScore,
+          scoreStep: scoring.step,
+          scoreUnit: scoring.unit,
+          scaleType: scoring.scaleType,
+          roundingRule: scoring.roundingRule,
           parts: mappedParts,
         },
       });
@@ -801,6 +807,12 @@ const CertificateFormModal: React.FC<{
     const payload: CreateCertificatePayload = {
       certificateName: name.trim(),
       description: serializedDesc,
+      minScore: scoring.minScore,
+      maxScore: scoring.maxScore,
+      scoreStep: scoring.step,
+      scoreUnit: scoring.unit,
+      scaleType: scoring.scaleType,
+      roundingRule: scoring.roundingRule,
       parts: mappedParts,
     };
 

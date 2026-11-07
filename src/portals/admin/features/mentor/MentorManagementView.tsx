@@ -14,7 +14,6 @@ import {
   Plus,
   Edit2,
   Trash2,
-  Copy,
   Check,
   AlertTriangle,
   Award,
@@ -29,7 +28,6 @@ import {
   UserCheck,
   UserX,
   Building,
-  CheckCircle2,
 } from 'lucide-react';
 import {
   getAdminMentors,
@@ -38,6 +36,7 @@ import {
   updateMentor,
   revokeMentor,
 } from '@/shared/api/domainApi';
+import { fetchCertificates } from '@/shared/api/certificateService';
 import type { CreateMentorDto, MentorDto, UpdateMentorDto } from '@/shared/api/apiTypes';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
@@ -74,7 +73,6 @@ export const MentorManagementView: React.FC = () => {
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   // Ô gõ chữ: chờ ngừng gõ 400ms mới gọi API
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
-  const [debouncedSpecialization, setDebouncedSpecialization] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -84,26 +82,16 @@ export const MentorManagementView: React.FC = () => {
     return () => clearTimeout(timer);
   }, [keyword]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSpecialization(specialization.trim());
-      setPage(0);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [specialization]);
-
   // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedMentor, setSelectedMentor] = useState<MentorDto | null>(null);
   const [editingMentor, setEditingMentor] = useState<MentorDto | null>(null);
   const [revokingMentor, setRevokingMentor] = useState<MentorDto | null>(null);
-  const [tempPasswordResult, setTempPasswordResult] = useState<{
+  const [createdMentorResult, setCreatedMentorResult] = useState<{
     email: string;
     fullName: string;
-    tempPassword: string;
     note?: string;
   } | null>(null);
-  const [copied, setCopied] = useState(false);
 
   // Form states for Create
   const [createForm, setCreateForm] = useState<CreateMentorDto>({
@@ -133,13 +121,13 @@ export const MentorManagementView: React.FC = () => {
     queryKey: [
       ...QUERY_KEYS.admin.mentors,
       'list',
-      { keyword: debouncedKeyword, department, statusFilter, specialization: debouncedSpecialization, page, pageSize },
+      { keyword: debouncedKeyword, department, statusFilter, specialization, page, pageSize },
     ],
     queryFn: () =>
       getAdminMentors({
         keyword: debouncedKeyword || undefined,
         department: department || undefined,
-        specialization: debouncedSpecialization || undefined,
+        specialization: specialization || undefined,
         isActive: statusFilter === '' ? undefined : statusFilter === 'Active',
         page,
         size: pageSize,
@@ -152,6 +140,12 @@ export const MentorManagementView: React.FC = () => {
     queryFn: getAdminMentorStats,
   });
 
+  // Danh mục chứng chỉ trực tiếp từ bảng certificates trong DB
+  const { data: certificatesData = [] } = useQuery({
+    queryKey: ['certificates', 'catalog'],
+    queryFn: fetchCertificates,
+  });
+
   const mentors: MentorDto[] = mentorsData?.data ?? [];
   const totalElements = mentorsData?.totalElements ?? 0;
   const totalPages = Math.max(1, mentorsData?.totalPages ?? 1);
@@ -162,7 +156,36 @@ export const MentorManagementView: React.FC = () => {
   const activeMentorsCount = stats?.active ?? 0;
   const inactiveMentorsCount = stats?.inactive ?? 0;
   const newMentorsCount = stats?.newLast30Days ?? 0;
-  const departmentOptions = stats?.departments ?? [];
+  // Fallback defaults nếu DB chưa có mentor hay chứng chỉ nào
+  const DEFAULT_DEPARTMENTS = [
+    'IELTS Intensive',
+    'TOEIC Master',
+    'VSTEP Academic',
+    'Speaking & Writing',
+  ];
+  const DEFAULT_SPECIALIZATIONS = [
+    'IELTS',
+    'TOEIC',
+    'VSTEP',
+    'TOEFL',
+  ];
+
+  const rawDepartmentOptions = stats?.departments ?? [];
+  const certNamesFromDb = certificatesData
+    .map((c) => c.certificateName?.trim())
+    .filter((name): name is string => Boolean(name));
+
+  const rawSpecializationOptions = certNamesFromDb.length > 0
+    ? certNamesFromDb
+    : (stats?.specializations ?? []);
+
+  // Kết hợp DB + defaults và loại bỏ trùng lặp
+  const departmentOptions = Array.from(
+    new Set([...rawDepartmentOptions, ...(rawDepartmentOptions.length === 0 ? DEFAULT_DEPARTMENTS : [])])
+  );
+  const specializationOptions = Array.from(
+    new Set([...rawSpecializationOptions, ...(rawSpecializationOptions.length === 0 ? DEFAULT_SPECIALIZATIONS : [])])
+  );
   const departmentsCount = departmentOptions.length;
 
   // Create Mentor Mutation
@@ -183,10 +206,9 @@ export const MentorManagementView: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.mentors });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.accounts });
       if (data) {
-        setTempPasswordResult({
+        setCreatedMentorResult({
           email: data.mentor.email,
           fullName: data.mentor.fullName,
-          tempPassword: data.tempPassword,
           note: data.note,
         });
       }
@@ -224,14 +246,6 @@ export const MentorManagementView: React.FC = () => {
       biography: m.biography || '',
       hourlyRate: m.hourlyRate,
     });
-  };
-
-  const handleCopyPassword = () => {
-    if (tempPasswordResult?.tempPassword) {
-      navigator.clipboard.writeText(tempPasswordResult.tempPassword);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    }
   };
 
   const handleResetFilters = () => {
@@ -294,16 +308,6 @@ export const MentorManagementView: React.FC = () => {
 
         <div className="flex items-center gap-2.5">
           <Button
-            variant="secondary"
-            size="md"
-            leftIcon={Upload}
-            onClick={() => alert('Chức năng nhập danh sách Mentor từ Excel đang được chuẩn bị.')}
-            className="font-bold border-slate-200"
-          >
-            Import Mentors
-          </Button>
-
-          <Button
             variant="primary"
             size="md"
             leftIcon={Plus}
@@ -361,14 +365,22 @@ export const MentorManagementView: React.FC = () => {
             <option value="Inactive">Inactive</option>
           </select>
 
-          {/* Specialization Filter — tìm gần đúng ở server */}
-          <input
-            type="text"
+          {/* Specialization Filter — chọn từ danh sách có sẵn */}
+          <select
             value={specialization}
-            onChange={(e) => setSpecialization(e.target.value)}
-            placeholder="Specialization (VD: Writing, 8.0)"
-            className="h-10 px-3 w-56 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-[#0052CC]"
-          />
+            onChange={(e) => {
+              setSpecialization(e.target.value);
+              setPage(0);
+            }}
+            className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
+          >
+            <option value="">All Specializations</option>
+            {specializationOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
 
           {/* More Filters & Reset */}
           <button
@@ -381,13 +393,6 @@ export const MentorManagementView: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* Gợi ý department đang dùng cho ô nhập ở form tạo / sửa mentor (vẫn gõ giá trị mới được) */}
-      <datalist id="mentor-department-options">
-        {departmentOptions.map((d) => (
-          <option key={d} value={d} />
-        ))}
-      </datalist>
 
       {/* ================= 4. TABLE SECTION (Matching 11.webp) ================= */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
@@ -609,16 +614,6 @@ export const MentorManagementView: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-amber-900">Bảo mật mật khẩu & Vai trò (RBAC):</p>
-                <p className="text-amber-700 mt-0.5">
-                  Mật khẩu đăng nhập ban đầu sẽ do Backend tự động sinh ngẫu nhiên và mã hoá bằng chuẩn <strong className="font-mono">BCrypt</strong>. Sau khi tạo thành công, hệ thống sẽ cấp mật khẩu tạm thời để bàn giao cho Mentor.
-                </p>
-              </div>
-            </div>
-
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -678,33 +673,52 @@ export const MentorManagementView: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Chuyên môn / Chứng chỉ <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
                     value={createForm.specialization}
                     onChange={(e) =>
-                      setCreateForm({ ...createForm, specialization: e.target.value })
+                      setCreateForm({
+                        ...createForm,
+                        specialization: e.target.value,
+                        // Reset department khi đổi chuyên môn để chọn lại bộ môn phù hợp
+                        department: '',
+                      })
                     }
-                    placeholder="VD: Writing & Speaking · 8.0"
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
-                  />
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-[#0052CC]"
+                  >
+                    <option value="">-- Chọn chứng chỉ / chuyên môn --</option>
+                    {specializationOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Bộ môn / Khoa <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
+                    disabled={!createForm.specialization}
                     value={createForm.department}
                     onChange={(e) =>
                       setCreateForm({ ...createForm, department: e.target.value })
                     }
-                    placeholder="VD: IELTS"
-                    list="mentor-department-options"
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
-                  />
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-[#0052CC] disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {createForm.specialization
+                        ? '-- Chọn bộ môn / khoa --'
+                        : '-- Vui lòng chọn chứng chỉ trước --'}
+                    </option>
+                    {departmentOptions.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -746,8 +760,10 @@ export const MentorManagementView: React.FC = () => {
                 <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>
-                    {(createMutation.error as any)?.response?.data?.message ||
-                      'Không thể tạo tài khoản Mentor. Vui lòng kiểm tra lại email có thể đã tồn tại.'}
+                    {(createMutation.error as any)?.code === 'ECONNABORTED'
+                      ? 'Yêu cầu tạo tài khoản chờ quá lâu. Hãy kiểm tra danh sách mentor trước khi thử lại.'
+                      : (createMutation.error as any)?.response?.data?.message ||
+                        'Không thể tạo tài khoản Mentor. Vui lòng kiểm tra lại thông tin.'}
                   </span>
                 </div>
               )}
@@ -839,31 +855,57 @@ export const MentorManagementView: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Chuyên môn / Chứng chỉ <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
                     value={editForm.specialization}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, specialization: e.target.value })
+                      setEditForm({
+                        ...editForm,
+                        specialization: e.target.value,
+                        department: '',
+                      })
                     }
-                    placeholder="VD: Writing & Speaking · 8.0"
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
-                  />
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-[#0052CC]"
+                  >
+                    <option value="">-- Chọn chứng chỉ / chuyên môn --</option>
+                    {/* Giữ lại option hiện tại nếu nó không nằm trong list options */}
+                    {editForm.specialization && !specializationOptions.includes(editForm.specialization) && (
+                      <option value={editForm.specialization}>{editForm.specialization}</option>
+                    )}
+                    {specializationOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Bộ môn / Khoa <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
+                    disabled={!editForm.specialization}
                     value={editForm.department}
                     onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                    placeholder="VD: IELTS"
-                    list="mentor-department-options"
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
-                  />
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-[#0052CC] disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {editForm.specialization
+                        ? '-- Chọn bộ môn / khoa --'
+                        : '-- Vui lòng chọn chứng chỉ trước --'}
+                    </option>
+                    {/* Giữ lại option hiện tại nếu nó không nằm trong list options */}
+                    {editForm.department && !departmentOptions.includes(editForm.department) && (
+                      <option value={editForm.department}>{editForm.department}</option>
+                    )}
+                    {departmentOptions.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -1029,8 +1071,8 @@ export const MentorManagementView: React.FC = () => {
         </div>
       )}
 
-      {/* ================= MODAL: SHOW TEMPORARY PASSWORD ================= */}
-      {tempPasswordResult && (
+      {/* ================= MODAL: SUCCESS CREATION (PASSWORD SENT VIA EMAIL ONLY) ================= */}
+      {createdMentorResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5 text-center">
             <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
@@ -1042,50 +1084,25 @@ export const MentorManagementView: React.FC = () => {
                 Tạo tài khoản Mentor thành công!
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Tài khoản <strong className="text-slate-800">{tempPasswordResult.fullName}</strong> ({tempPasswordResult.email}) đã được tạo với vai trò <span className="font-bold text-[#0052CC]">MENTOR</span>. Mật khẩu tạm đã được <strong>gửi tới email của mentor</strong>.
+                Tài khoản <strong className="text-slate-800">{createdMentorResult.fullName}</strong> ({createdMentorResult.email}) đã được tạo với vai trò <span className="font-bold text-[#0052CC]">MENTOR</span>.
               </p>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left space-y-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
-                Mật khẩu tạm thời (bản sao lưu — dùng khi email gửi lỗi)
-              </span>
-              <div className="flex items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-xl border border-slate-200 shadow-inner">
-                <span className="font-mono font-bold text-base text-slate-800 tracking-wider select-all">
-                  {tempPasswordResult.tempPassword}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyPassword}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-[#0052CC] hover:bg-blue-100 text-xs font-bold transition-colors"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      <span className="text-emerald-700">Đã sao chép</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Sao chép</span>
-                    </>
-                  )}
-                </button>
+            <div className="p-4 bg-blue-50 rounded-2xl border border-blue-200/70 text-left space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#0052CC] uppercase tracking-wider">
+                <Mail className="w-4 h-4" />
+                <span>Mật khẩu đã gửi qua Email</span>
               </div>
-            </div>
-
-            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-left text-xs text-amber-800 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <span>
-                Hệ thống đã tự động gửi mật khẩu này tới email của mentor. Nếu mentor không nhận được (kiểm tra spam/SMTP), sao chép mật khẩu bên trên và gửi thủ công. Mentor bắt buộc đổi mật khẩu ở lần đăng nhập đầu tiên.
-              </span>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Mật khẩu đăng nhập ban đầu đã được hệ thống gửi trực tiếp tới hòm thư <strong className="text-slate-800">{createdMentorResult.email}</strong>.
+              </p>
             </div>
 
             <Button
               variant="primary"
               size="md"
               fullWidth
-              onClick={() => setTempPasswordResult(null)}
+              onClick={() => setCreatedMentorResult(null)}
               className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
             >
               Hoàn tất
