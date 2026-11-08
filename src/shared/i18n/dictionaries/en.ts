@@ -273,9 +273,9 @@ export const en = {
   'content.form.contentOrder': 'Order',
   'content.form.durationMinutes': 'Duration (minutes)',
   'content.form.durationPlaceholder': 'e.g. 30',
-  'content.form.videoUrl': 'Video URL',
-  'content.form.videoUrlPlaceholder': 'https://… (mp4)',
-  'content.form.videoUrlHint': 'Supports a direct MP4 link or a YouTube URL.',
+  'content.form.videoUrl': 'Lesson video',
+  'content.form.videoUrlHint':
+    'Upload the video file to Cloudinary (MP4, MOV, WEBM, MKV — up to 100 MB).',
   'content.form.isPreview': 'Free preview lesson',
   'content.form.isPreviewHint':
     'Everyone can watch this lesson without enrolling.',
@@ -298,10 +298,14 @@ export const en = {
   // Homework — hình thức nộp (khớp cột homework_submissions của backend)
   'content.homework.submissionType': 'Submission type',
   'content.homework.submissionTypeHint':
-    'PDF upload: graded by a mentor. Multiple choice: done on the web and graded automatically.',
-  'content.homework.type.text': 'Written answer (legacy)',
+    'PDF upload: graded by a mentor. Multiple choice: done on the web and graded automatically. Audio: students record live or upload an audio file (Speaking exercises).',
+  'content.homework.type.text': 'Written answer',
   'content.homework.type.file': 'PDF upload',
+  'content.homework.type.audio': 'Audio recording / Audio file',
   'content.homework.type.multiple_choice': 'Multiple choice',
+  'content.homework.allowedAudioTypes': 'Allowed audio formats',
+  'content.homework.allowedAudioTypesHint':
+    'Audio file extensions students may submit (default mp3, wav, m4a). Comma separated.',
   'content.homework.passingScore': 'Passing score',
   'content.homework.passingScoreHint':
     'Minimum percentage (0-100) required to pass.',
@@ -349,7 +353,7 @@ export const en = {
   // Vocabulary — chọn bộ từ vựng CHUNG để gán vào khóa học (contentType = vocabulary)
   'content.vocab.bankTitle': 'Pick vocabulary sets from the bank',
   'content.vocab.bankHint':
-    'Search the global vocabulary bank and tick the sets to link into this course.',
+    'Search the global vocabulary bank and click "Add" to attach a set to this content. Added sets move to "Selected sets" and can only be removed.',
   'content.vocab.bankSearch': 'Search sets or words…',
   'content.vocab.bankEmpty': 'The vocabulary bank is empty.',
   'content.vocab.bankNoResult': 'No matching vocabulary set.',
@@ -359,6 +363,10 @@ export const en = {
   'content.vocab.bankRequired': 'Select at least one vocabulary set',
   'content.vocab.bankLoadFailed': 'Could not load the vocabulary bank.',
   'content.vocab.bankCount': '{count} sets',
+  'content.vocab.bankAdd': 'Add',
+  'content.vocab.bankRemove': 'Remove',
+  'content.vocab.bankAllSelected':
+    'All bank sets have been added. Click X in "Selected sets" to remove one.',
 
   // Homework — chọn đề thi/bài kiểm tra định nghĩa sẵn
   'content.homework.examTitle': 'Pick an exam or practice test',
@@ -370,7 +378,17 @@ export const en = {
     'This course has no exam or practice test yet. Create one in Exam Management first.',
   'content.homework.examNoResult': 'No matching exam.',
   'content.homework.examSelectHint':
-    'Tick the exam you want to attach. The learner takes it in the exam room.',
+    'Only published exams can be selected — learners can only take published exams.',
+  'content.homework.examNotPublishedHint':
+    'Not published yet — open Exam Management and click "Publish exam" first.',
+  'content.homework.examManageLink': 'Open Exam Management',
+  'content.homework.examOtherCourse': 'Not from this course',
+  'content.homework.examOtherCourseHint':
+    'Belongs to another course — students of this course cannot open the attempt.',
+  'content.homework.examPaidHint':
+    'Paid exam — students must purchase it before taking.',
+  'content.homework.examSequentialHint':
+    'Midterm/final exams have prerequisites — use a Quiz exam for homework.',
   'content.homework.examQuestions': '{count} questions',
   'content.homework.examDuration': '{count} min',
   'content.homework.examType': 'Type',
@@ -396,6 +414,9 @@ export const en = {
   'content.lesson.noVideo': 'No video attached',
   'content.homework.previewTitle': 'Homework summary',
   'content.homework.unlimitedAttempts': 'Unlimited',
+  'content.homework.allowedFileTypes': 'Allowed submission file types',
+  'content.homework.allowedFileTypesHint':
+    'Comma-separated (e.g. pdf, docx). Leave blank to accept PDF only.',
 
   // Course content list (on the course detail page)
   'content.list.emptyTitle': 'No content yet',
@@ -403,7 +424,11 @@ export const en = {
     'Add a lesson, a vocabulary set or a homework to this course.',
   'content.list.titleCol': 'Title',
   'content.list.typeCol': 'Type',
+  'content.list.detailCol': 'Details',
   'content.list.actionsCol': 'Actions',
+  'content.list.detailAction': 'Details',
+  'content.list.filterAll': 'All',
+  'content.list.filterEmpty': 'No content of this type.',
 
   // Actions
   'content.action.add': 'Add content',
@@ -421,12 +446,15 @@ export const en = {
   'content.validation.titleTooShort': 'Title must be at least 3 characters',
   'content.validation.titleTooLong': 'Maximum 255 characters',
   'content.validation.orderInvalid': 'Order must be a non-negative number',
-  'content.validation.videoUrlInvalid': 'Video URL must be a valid URL',
+  'content.validation.videoUrlInvalid': 'Video link must not contain spaces',
+  'content.validation.videoRequired': 'Please upload a lesson video',
   'content.validation.durationInvalid': 'Duration must be a positive number',
   'content.validation.maxScoreInvalid': 'Max score must be a positive number',
   'content.validation.dueDateInvalid': 'Due date cannot be in the past',
   'content.validation.maxAttemptsInvalid':
     'Max attempts must be a non-negative number',
+  'content.validation.allowedFileTypesInvalid':
+    'Invalid file type (letters and digits only, e.g. pdf, docx)',
   'content.validation.vocabularyEmpty': 'Add at least one word to the set',
   'content.validation.wordRequired': 'The English word is required',
   'content.validation.meaningRequired': 'The Vietnamese meaning is required',

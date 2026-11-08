@@ -5,7 +5,7 @@
  * Hỗ trợ các vai trò: ADMIN, MENTOR, STUDENT, USER.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Mail,
@@ -23,6 +23,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
+import { warmUpBackend } from '@/shared/api/domainApi';
 import type { UserRole } from '@/shared/types';
 import { cn } from '@/shared/utils';
 
@@ -47,6 +48,39 @@ export const LoginForm: React.FC = () => {
     password?: string;
   }>({});
   const [notice, setNotice] = useState<string | null>(null);
+  /** Backend Render đang khởi động (cold start) — hiện thông báo chờ. */
+  const [isWarming, setIsWarming] = useState(true);
+
+  /**
+   * Warm-up backend ngay khi mở trang đăng nhập.
+   *
+   * Render Free spin down sau 15 phút idle; lần request đầu tiên phải khởi
+   * động lại container (82s với GET, tới 180s với POST login). Gọi trước
+   * `GET /api/v1/courses` để container bắt đầu lên trong lúc user nhập
+   * thông tin → lúc bấm "Đăng nhập" thì backend đã warm (1-2s).
+   *
+   * ⚠️ Warm-up KHÔNG chặn người dùng: nút "Đăng nhập" vẫn bấm được ngay,
+   * và banner chỉ là thông báo. Nếu BE local chưa chạy thì warm-up fail
+   * sau timeout và banner tự ẩn — không gây treo form.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    // Ẩn banner sau 12s dù warm-up chưa xong (BE local chưa chạy / mạng chậm)
+    // để form không bị "trông như đang treo".
+    const hideTimer = window.setTimeout(() => {
+      if (!cancelled) setIsWarming(false);
+    }, 12_000);
+    const timer = window.setTimeout(() => {
+      void warmUpBackend().finally(() => {
+        if (!cancelled) setIsWarming(false);
+      });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      window.clearTimeout(hideTimer);
+    };
+  }, []);
 
   const validate = (): boolean => {
     const next: typeof fieldErrors = {};
@@ -74,8 +108,12 @@ export const LoginForm: React.FC = () => {
       setNotice(`Chào mừng ${user.fullName}!`);
       setTimeout(() => {
         const from = (location.state as { from?: string } | null)?.from;
-        const returnToCourse = ['USER', 'STUDENT'].includes(user.role) && typeof from === 'string' && /^\/courses\/[^/]+(?:\?.*)?$/.test(from);
-        navigate(returnToCourse ? from! : redirectAfterLogin(user.role), { replace: true });
+        // Quay lại đúng trang người dùng đang cố tới (khóa học / mentor / đặt lịch 1-1)
+        const canReturn =
+          ['USER', 'STUDENT'].includes(user.role) &&
+          typeof from === 'string' &&
+          /^\/(courses|mentors|schedule)(\/[^/]+)?(\?.*)?$/.test(from);
+        navigate(canReturn ? from! : redirectAfterLogin(user.role), { replace: true });
       }, 300);
     } catch {
       /* error message đã được lưu trong store và hiển thị trên UI */
@@ -202,6 +240,16 @@ export const LoginForm: React.FC = () => {
             <div className="mt-5 flex items-start gap-2 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {isWarming && (
+            <div className="mt-5 flex items-start gap-2 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+              <span>
+                Máy chủ đang khởi động lần đầu, có thể mất vài chục giây. Bạn
+                vẫn có thể nhập thông tin đăng nhập.
+              </span>
             </div>
           )}
 

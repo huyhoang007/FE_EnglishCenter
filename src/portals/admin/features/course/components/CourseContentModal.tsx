@@ -10,9 +10,9 @@
  * ⚡ FORM ĐỘNG THEO `contentType` — bám sát Entity/DTO của Backend:
  *
  *   LESSON → `CourseContent` + `content_data`:
- *            { isPreview, videoUrl?, durationMinutes? }
- *            Giữ nguyên: title, description, contentOrder, duration,
- *            videoUrl, checkbox "Bài học thử".
+ *            { isPreview, videoUrl?, videoPublicId?, videoFormat? }
+ *            Giữ nguyên: title, description, contentOrder, videoUrl,
+ *            checkbox "Bài học thử".
  *
  *   VOCABULARY → KHÔNG nhập tay, CHỌN bộ trong KHO TỪ VỮNG CHUNG:
  *            { setIds: string[] }
@@ -31,7 +31,7 @@
  *            UI: `ExamPicker` (danh sách đề thi định nghĩa sẵn + search).
  *
  * PAYLOAD (đúng shape backend đọc — `content_data` là JSONB tự do):
- *   lesson      → { isPreview, videoUrl?, durationMinutes? }
+ *   lesson      → { isPreview, videoUrl?, videoPublicId?, videoFormat? }
  *   vocabulary  → { setIds: string[] }
  *   homework    → { submissionType, instructions?, dueDate?, maxScore?,
  *                  passingScore?, attachmentUrl?,
@@ -98,9 +98,14 @@ interface CommonForm {
 
 /** Form bài học. */
 interface LessonForm extends CommonForm {
-  durationMinutes: string;
   videoUrl: string;
   isPreview: boolean;
+  /** Public ID của video trên Cloudinary (dùng để xoá/thay video). */
+  videoPublicId: string;
+  /** Đuôi file video (mp4, mov, webm...). */
+  videoFormat: string;
+  /** Tên file video gốc — chỉ để hiển thị. */
+  videoName: string;
 }
 
 /**
@@ -113,6 +118,8 @@ interface VocabularyForm extends CommonForm {
   setIds: string[];
   /** Tên bộ từ vựng (setId → title) — chỉ để hiển thị preview. */
   setTitles: Record<string, string>;
+  /** Nội dung "xem thử" — học viên chưa ghi danh vẫn xem được các bộ từ đã tick. */
+  isPreview: boolean;
 }
 
 /** Form bài tập — khớp `HomeworkSubmission` + `CourseContent` (homework). */
@@ -125,6 +132,8 @@ interface HomeworkForm extends CommonForm {
   /** Điểm đạt (%) — tương đương `Exam.passingScore`. */
   passingScore: string;
   maxAttempts: string;
+  /** Định dạng file được phép nộp (CSV, ví dụ "pdf,docx"). Rỗng = chỉ PDF. */
+  allowedFileTypes: string;
   /** URL công khai của tài liệu đính kèm (file `upload` trên Cloudinary). */
   attachmentUrl: string;
   /** Tên file tài liệu đính kèm (để hiển thị). */
@@ -148,15 +157,18 @@ const EMPTY_COMMON: CommonForm = { title: '', description: '', contentOrder: 1 }
 
 const EMPTY_LESSON: LessonForm = {
   ...EMPTY_COMMON,
-  durationMinutes: '',
   videoUrl: '',
   isPreview: false,
+  videoPublicId: '',
+  videoFormat: '',
+  videoName: '',
 };
 
 const EMPTY_VOCABULARY: VocabularyForm = {
   ...EMPTY_COMMON,
   setIds: [],
   setTitles: {},
+  isPreview: false,
 };
 
 const EMPTY_HOMEWORK: HomeworkForm = {
@@ -168,6 +180,7 @@ const EMPTY_HOMEWORK: HomeworkForm = {
   maxScore: '',
   passingScore: '',
   maxAttempts: '',
+  allowedFileTypes: '',
   attachmentUrl: '',
   attachmentName: '',
   attachmentPublicId: '',
@@ -175,6 +188,14 @@ const EMPTY_HOMEWORK: HomeworkForm = {
   certificatePartId: '',
   rubric: [],
 };
+
+/** Tách chuỗi "pdf, docx" → ['pdf', 'docx'] (bỏ dấu chấm đầu, hạ chữ thường). */
+function parseAllowedFileTypes(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((t) => t.trim().toLowerCase().replace(/^\./, ''))
+    .filter(Boolean);
+}
 
 /**
  * Tạo form rỗng MỚI theo `contentType` (factory thay vì dùng chung hằng số).
@@ -189,7 +210,7 @@ const createEmptyFormForType = (contentType: ContentType): AnyForm => {
     case 'homework':
       return { ...EMPTY_HOMEWORK, rubric: [] };
     case 'vocabulary':
-      return { ...EMPTY_VOCABULARY, setIds: [], setTitles: {} };
+      return { ...EMPTY_VOCABULARY, setIds: [], setTitles: {}, isPreview: false };
     case 'lesson':
     default:
       return { ...EMPTY_LESSON };
@@ -203,7 +224,14 @@ const createEmptyFormForType = (contentType: ContentType): AnyForm => {
  * fallback về `'text'` (gõ trả lời) cho an toàn.
  */
 const normalizeSubmissionType = (raw: unknown): HomeworkSubmissionType => {
-  if (raw === 'file' || raw === 'multiple_choice' || raw === 'text') return raw;
+  if (
+    raw === 'file' ||
+    raw === 'multiple_choice' ||
+    raw === 'text' ||
+    raw === 'audio'
+  ) {
+    return raw;
+  }
   return 'file';
 };
 
@@ -270,12 +298,11 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           title: editing.title ?? '',
           description: editing.description ?? '',
           contentOrder: editing.contentOrder ?? 1,
-          durationMinutes:
-            data.durationMinutes != null
-              ? String(data.durationMinutes)
-              : '',
           videoUrl: (data.videoUrl as string) ?? '',
           isPreview: Boolean(data.isPreview),
+          videoPublicId: (data.videoPublicId as string) ?? '',
+          videoFormat: (data.videoFormat as string) ?? '',
+          videoName: (data.videoName as string) ?? '',
         } satisfies LessonForm);
       } else if (type === 'vocabulary') {
         // Nội dung 'vocabulary' chỉ là CON TRỎ tới các bộ trong kho chung.
@@ -288,6 +315,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           contentOrder: editing.contentOrder ?? 1,
           setIds,
           setTitles: {},
+          isPreview: Boolean(data.isPreview),
         } satisfies VocabularyForm);
       } else {
         const rubric = Array.isArray(data.rubric)
@@ -305,6 +333,9 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
             data.passingScore != null ? String(data.passingScore) : '',
           maxAttempts:
             data.maxAttempts != null ? String(data.maxAttempts) : '',
+          allowedFileTypes: Array.isArray(data.allowedFileTypes)
+            ? (data.allowedFileTypes as string[]).join(', ')
+            : '',
           attachmentUrl: (data.attachmentUrl as string) ?? '',
           attachmentName: (data.attachmentName as string) ?? '',
           attachmentPublicId: (data.attachmentPublicId as string) ?? '',
@@ -370,12 +401,10 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
   const hwSubmissionType: HomeworkSubmissionType =
     homework.submissionType ?? 'file';
   const isMultipleChoice = hwSubmissionType === 'multiple_choice';
-  /** Bài tập cũ dạng gõ trả lời — vẫn hiển thị lựa chọn này để không mất dữ liệu. */
-  const isLegacyText =
-    isEditing &&
-    normalizeSubmissionType(
-      (editing?.contentData as Record<string, unknown> | undefined)?.submissionType,
-    ) === 'text';
+  /** Bài ghi âm / nộp file âm thanh (bài tập Speaking). */
+  const isAudio = hwSubmissionType === 'audio';
+  /** Bài nộp file (PDF / tài liệu) — dùng chung với bài ghi âm về mặt layout. */
+  const isFileBased = hwSubmissionType === 'file' || isAudio;
 
   /**
    * Mảng rubric LUÔN là mảng (không bao giờ `undefined`).
@@ -445,18 +474,17 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
       contentOrder: !Number.isFinite(order) || order < 0
         ? t('content.validation.orderInvalid')
         : '',
+      /**
+       * Video bài học: bắt buộc phải có file đã upload lên Cloudinary
+       * (form chỉ cho upload, không nhập link tay).
+       */
       videoUrl:
-        contentType === 'lesson' && (lesson.videoUrl ?? '').trim()
-          ? !/^https?:\/\/.+/i.test((lesson.videoUrl ?? '').trim())
-            ? t('content.validation.videoUrlInvalid')
-            : ''
-          : '',
-      duration:
-        contentType === 'lesson' && (lesson.durationMinutes ?? '').trim()
-          ? !Number.isFinite(Number(lesson.durationMinutes)) ||
-            Number(lesson.durationMinutes) < 0
-            ? t('content.validation.durationInvalid')
-            : ''
+        contentType === 'lesson'
+          ? !lesson.videoPublicId && !lesson.videoUrl
+            ? t('content.validation.videoRequired')
+            : /\s/.test((lesson.videoUrl ?? '').trim())
+              ? t('content.validation.videoUrlInvalid')
+              : ''
           : '',
       maxScore:
         contentType === 'homework' &&
@@ -485,6 +513,18 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           ? !Number.isFinite(Number(homework.maxAttempts)) ||
             Number(homework.maxAttempts) < 1
             ? t('content.validation.maxAttemptsInvalid')
+            : ''
+          : '',
+      /**
+       * Định dạng file nộp phải là đuôi file hợp lệ (chữ + số, vd "pdf", "docx").
+       */
+      allowedFileTypes:
+        contentType === 'homework' &&
+        (homework.allowedFileTypes ?? '').trim()
+          ? parseAllowedFileTypes(homework.allowedFileTypes ?? '').some(
+              (t) => !/^[a-z0-9]+$/.test(t),
+            )
+            ? t('content.validation.allowedFileTypesInvalid')
             : ''
           : '',
       /**
@@ -548,15 +588,18 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
         buildLessonContentData({
           isPreview: lesson.isPreview,
           videoUrl: lesson.videoUrl,
-          durationMinutes: lesson.durationMinutes
-            ? Number(lesson.durationMinutes)
-            : null,
+          videoPublicId: lesson.videoPublicId,
+          videoFormat: lesson.videoFormat,
+          videoName: lesson.videoName,
         }),
       );
     }
     if (contentType === 'vocabulary') {
       return JSON.stringify(
-        buildVocabularyContentData({ setIds: selectedSetIds }),
+        buildVocabularyContentData({
+          setIds: selectedSetIds,
+          isPreview: vocabulary.isPreview,
+        }),
       );
     }
     return JSON.stringify(
@@ -573,6 +616,13 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
         maxAttempts: homework.maxAttempts
           ? Number(homework.maxAttempts)
           : null,
+        // Định dạng file được phép nộp (Admin cấu hình).
+        //   - file  → rỗng = mặc định PDF (BE tự áp dụng).
+        //   - audio → rỗng = mặc định các định dạng audio (BE tự áp dụng).
+        allowedFileTypes: (homework.allowedFileTypes ?? '')
+          .split(',')
+          .map((t) => t.trim().toLowerCase().replace(/^\./, ''))
+          .filter(Boolean),
         attachmentUrl: isMultipleChoice ? '' : homework.attachmentUrl,
         attachmentName: isMultipleChoice ? '' : homework.attachmentName,
         attachmentPublicId: isMultipleChoice ? '' : homework.attachmentPublicId,
@@ -757,6 +807,9 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
     setForm((f) => ({ ...(f as HomeworkForm), ...patch }) as AnyForm);
   const setLesson = (patch: Partial<LessonForm>) =>
     setForm((f) => ({ ...(f as LessonForm), ...patch }) as AnyForm);
+  /** Cập nhật field riêng của nội dung từ vựng. */
+  const setVocabulary = (patch: Partial<VocabularyForm>) =>
+    setForm((f) => ({ ...(f as VocabularyForm), ...patch }) as AnyForm);
 
   /*
    * Bố cục: modal rộng, form chia hàng / cột để vừa 1 màn hình (không phải cuộn).
@@ -834,34 +887,51 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
             </Field>
 
             <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                <Field
-                  className="col-span-2"
-                  label={t('content.form.videoUrl')}
-                  error={touched ? errors.videoUrl : ''}
-                >
-                  <TextInput
-                    type="url"
-                    value={lesson.videoUrl ?? ''}
-                    onChange={(e) => setLesson({ videoUrl: e.target.value })}
-                    placeholder={t('content.form.videoUrlPlaceholder')}
-                    invalid={Boolean(touched && errors.videoUrl)}
-                  />
-                </Field>
-                <Field
-                  label={t('content.form.durationMinutes')}
-                  error={touched ? errors.duration : ''}
-                >
-                  <TextInput
-                    type="number"
-                    min={0}
-                    value={lesson.durationMinutes ?? ''}
-                    onChange={(e) => setLesson({ durationMinutes: e.target.value })}
-                    placeholder={t('content.form.durationPlaceholder')}
-                    invalid={Boolean(touched && errors.duration)}
-                  />
-                </Field>
-              </div>
+              {/* ---- Video bài học: CHỈ upload file lên Cloudinary ----
+               * Không còn ô nhập link — file được lưu ở thư mục
+               * `courses/{courseId}/lessons` trên Cloudinary và `videoUrl`
+               * được tự động điền từ `secure_url` của file vừa upload. */}
+              <Field
+                label={t('content.form.videoUrl')}
+                error={touched ? errors.videoUrl : ''}
+                hint={touched && errors.videoUrl ? '' : t('content.form.videoUrlHint')}
+              >
+                <AttachmentUpload
+                  value={lesson.videoPublicId ? lesson.videoUrl || undefined : undefined}
+                  fileName={lesson.videoName || undefined}
+                  label=""
+                  purpose="lesson_video"
+                  courseId={courseId}
+                  accept=".mp4,.mov,.webm,.mkv"
+                  hint="MP4, MOV, WEBM, MKV — tối đa 100 MB"
+                  emptyLabel="Tải video bài học lên Cloudinary"
+                  onChange={(attachment) =>
+                    setLesson({
+                      videoUrl: attachment.url,
+                      videoPublicId: attachment.publicId,
+                      videoFormat: attachment.format ?? '',
+                      videoName: attachment.originalName ?? '',
+                    })
+                  }
+                  onClear={() =>
+                    setLesson({
+                      videoUrl: '',
+                      videoPublicId: '',
+                      videoFormat: '',
+                      videoName: '',
+                    })
+                  }
+                />
+              </Field>
+
+              {/* Video cũ (nhập tay trước đây) chưa có trên Cloudinary → bắt admin tải lại. */}
+              {lesson.videoUrl && !lesson.videoPublicId && (
+                <p className="text-[11px] text-amber-600">
+                  Video hiện tại dùng link ngoài Cloudinary. Hãy tải lại file
+                  video lên để bài học phát ổn định.
+                </p>
+              )}
+
               <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
                 <Checkbox
                   checked={Boolean(lesson.isPreview)}
@@ -886,6 +956,15 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
             {touched && errors.vocabularySets && (
               <p className="text-[11px] text-rose-500">{errors.vocabularySets}</p>
             )}
+            {/* Nội dung từ vựng "xem thử" → học viên chưa ghi danh vẫn xem được. */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 pt-3">
+              <Checkbox
+                checked={Boolean(vocabulary.isPreview)}
+                onChange={(checked) => setVocabulary({ isPreview: checked })}
+                label={t('content.form.isPreview')}
+                description={t('content.form.isPreviewHint')}
+              />
+            </div>
           </div>
         )}
 
@@ -898,14 +977,24 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
                 <Field label={t('content.homework.submissionType')} required>
                   <Select
                     value={hwSubmissionType}
-                    onChange={(e) =>
-                      setHomework({ submissionType: e.target.value as HomeworkSubmissionType })
-                    }
+                    onChange={(e) => {
+                      const next = e.target.value as HomeworkSubmissionType;
+                      // Đổi hình thức nộp → đồng bộ `examId`:
+                      //   - sang trắc nghiệm → giữ đề đã chọn (nếu có);
+                      //   - sang loại khác   → XOÁ đề (đề chỉ dùng cho trắc nghiệm,
+                      //     giữ lại sẽ khiến Admin tưởng bài đã gắn đề).
+                      setHomework({
+                        submissionType: next,
+                        examId:
+                          next === 'multiple_choice'
+                            ? homework.examId ?? ''
+                            : '',
+                      });
+                    }}
                   >
-                    {isLegacyText && (
-                      <option value="text">{t('content.homework.type.text')}</option>
-                    )}
                     <option value="file">{t('content.homework.type.file')}</option>
+                    <option value="audio">{t('content.homework.type.audio')}</option>
+                    <option value="text">{t('content.homework.type.text')}</option>
                     <option value="multiple_choice">
                       {t('content.homework.type.multiple_choice')}
                     </option>
@@ -974,6 +1063,31 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
                   rows={isMultipleChoice ? 6 : 4}
                 />
               </Field>
+
+              {/* Định dạng file được phép nộp — chỉ bài nộp file / ghi âm mới cần. */}
+              {isFileBased && (
+                <Field
+                  label={
+                    isAudio
+                      ? t('content.homework.allowedAudioTypes')
+                      : t('content.homework.allowedFileTypes')
+                  }
+                  hint={
+                    isAudio
+                      ? t('content.homework.allowedAudioTypesHint')
+                      : t('content.homework.allowedFileTypesHint')
+                  }
+                >
+                  <TextInput
+                    value={homework.allowedFileTypes ?? ''}
+                    onChange={(e) =>
+                      setHomework({ allowedFileTypes: e.target.value })
+                    }
+                    placeholder={isAudio ? 'mp3, wav, m4a' : 'pdf'}
+                    invalid={Boolean(touched && errors.allowedFileTypes)}
+                  />
+                </Field>
+              )}
             </div>
 
             {/* ---- Cột phải: đề trắc nghiệm HOẶC tài liệu + tiêu chí chấm ---- */}

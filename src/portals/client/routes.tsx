@@ -243,9 +243,10 @@ const ClientRoutesComponent: React.FC = () => {
             path={CLIENT_ROUTES.homeworkAttempt()}
             element={<ProtectedRoute allowedRoles={['USER', 'STUDENT']}><HomeworkExamPage /></ProtectedRoute>}
           />
-          {/* Learner (USER) không dùng Mentor 1-1 / Exam → về sàn khóa học / Test trình độ */}
-          <Route path="/mentors" element={<RoleRedirect deniedRoles={['USER']} to="/courses"><MentorDirectoryPage /></RoleRedirect>} />
-          <Route path="/mentors/:id" element={<RoleRedirect deniedRoles={['USER']} to="/courses"><MentorDetailPage /></RoleRedirect>} />
+          {/* Danh bạc mentor + trang hồ sơ: BE cho phép xem công khai (GET /api/v1/mentors/**).
+              Mentor bị chặn vì dùng khu vực riêng. */}
+          <Route path="/mentors" element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><MentorDirectoryPage /></RoleRedirect>} />
+          <Route path="/mentors/:id" element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><MentorDetailPage /></RoleRedirect>} />
           <Route
             path="/profile"
             element={

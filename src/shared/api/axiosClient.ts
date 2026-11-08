@@ -26,9 +26,23 @@ export interface PageResponse<T> {
   data: T[];
 }
 
+/**
+ * Timeout mặc định cho MỌI request.
+ *
+ * Render Free plan: service bị spin down sau 15 phút không có traffic. Lần
+ * request đầu tiên phải khởi động lại container (cold start). Số đo thực tế:
+ *   - `GET /api/v1/courses` (lần đầu) → 82s
+ *   - `POST /api/v1/auth/login` (lần đầu) → 180s
+ *
+ * 60s cho phần lớn request; request GET bị timeout sẽ được interceptor thử
+ * lại 1 lần (xem `_coldStartRetries` bên dưới). Riêng các endpoint auth
+ * dùng timeout riêng 200s — xem `domainApi.ts`.
+ */
+const DEFAULT_TIMEOUT_MS = 60_000;
+
 export const axiosClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15_000,
+  timeout: DEFAULT_TIMEOUT_MS,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -97,10 +111,38 @@ axiosClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 axiosClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const config = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
+    const config = error.config as (InternalAxiosRequestConfig & {
+      _retry?: boolean;
+      _coldStartRetries?: number;
+    }) | undefined;
     const status = error.response?.status;
     const url = config?.url ?? '';
     const isAuthEndpoint = url.includes('/api/v1/auth/');
+
+    /* --- Cold start retry (Render Free) ----------------------------------
+     * Service bị spin down sau 15 phút idle. Lần request đầu tiên phải
+     * khởi động lại container mất ~60-90s, trong khi gateway có thể trả
+     * 502/503/504 hoặc request bị timeout. Thử lại 1 lần sau vài giây
+     * sẽ gần như luôn thành công vì container đã nóng.
+     * Chỉ retry method idempotent (GET/HEAD/OPTIONS) để tránh tạo dữ liệu trùng.
+     */
+    if (config && !config._retry && (config._coldStartRetries ?? 0) < 2) {
+      const method = (config.method ?? 'get').toLowerCase();
+      const isIdempotent = method === 'get' || method === 'head' || method === 'options';
+      const isNetworkIssue =
+        error.code === 'ECONNABORTED' ||
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ERR_NETWORK' ||
+        status === 502 ||
+        status === 503 ||
+        status === 504;
+      if (isIdempotent && isNetworkIssue) {
+        config._coldStartRetries = (config._coldStartRetries ?? 0) + 1;
+        await new Promise((resolve) => setTimeout(resolve, 3_000));
+        return axiosClient(config);
+      }
+    }
+
     if (status !== 401 || !config || config._retry || isAuthEndpoint) {
       return Promise.reject(error);
     }
@@ -147,7 +189,7 @@ function toErrorResponse<T>(err: unknown): ApiResponse<T> {
       success: false,
       message:
         error.code === 'ECONNABORTED'
-          ? 'Máy chủ phản hồi quá lâu, vui lòng thử lại'
+          ? 'Máy chủ đang khởi động lại (Render cold start) và phản hồi quá lâu. Vui lòng đợi rồi thử lại.'
           : 'Không kết nối được máy chủ. Kiểm tra Backend đã chạy chưa',
       data: null as T,
       errorCode: 'NETWORK_ERROR',

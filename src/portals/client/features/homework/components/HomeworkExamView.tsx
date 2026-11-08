@@ -12,8 +12,8 @@
  * (`examRoom.ts`) của module Exam — chỉ đọc, không sửa.
  */
 
-import React, { useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -40,6 +40,7 @@ export const HomeworkExamView: React.FC<{ attemptId?: string }> = ({
   const params = useParams<{ attemptId: string }>();
   const attemptId = attemptIdProp ?? params.attemptId ?? '';
   const navigate = useNavigate();
+  const location = useLocation();
   const query = useHomeworkAttempt(attemptId);
   const submitMutation = useSubmitHomeworkAttempt(attemptId);
 
@@ -49,6 +50,23 @@ export const HomeworkExamView: React.FC<{ attemptId?: string }> = ({
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const attempt = query.data;
+
+  /**
+   * Khóa học cần quay lại sau khi nộp.
+   *
+   * `CLIENT_ROUTES.course()` mặc định là `/courses/:id` — gọi không có tham số
+   * sẽ ra URL literal `/courses/:id` → "Không tìm thấy khóa học".
+   * → Lấy `courseId` từ `location.state` (do `HomeworkSubmitModal` truyền),
+   *   fallback về `attempt.exam.exam.courseId` của module Exam.
+   */
+  const courseId =
+    (location.state as { courseId?: string } | null)?.courseId ??
+    attempt?.exam?.exam?.courseId ??
+    '';
+
+  /** Điều hướng về đúng khóa học (có fallback về sàn khóa học). */
+  const goBackToCourse = () =>
+    navigate(courseId ? CLIENT_ROUTES.course(courseId) : CLIENT_ROUTES.courses);
 
   /** Toàn bộ câu hỏi theo thứ tự hiển thị. */
   const questions: ExamQuestion[] = useMemo(() => {
@@ -82,6 +100,60 @@ export const HomeworkExamView: React.FC<{ attemptId?: string }> = ({
     isAnswered(q, currentAnswers[q.questionId]),
   ).length;
 
+  /**
+   * Đồng hồ đếm ngược.
+   *
+   * `remainingSeconds` từ server là số giây còn lại tại thời điểm gọi API.
+   * → Đặt deadline tuyệt đối = now + remainingSeconds, rồi đếm lùi mỗi giây.
+   * Nhờ vậy đồng hồ vẫn đúng kể cả khi tab bị ẩn (deadline tuyệt đối, không
+   * dừng khi ẩn tab) — giống `useExamRoom` của module Exam.
+   */
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const deadlineRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!attempt) return;
+    if (attempt.status !== 'in_progress') {
+      setSecondsLeft(0);
+      return;
+    }
+    deadlineRef.current = Date.now() + attempt.remainingSeconds * 1000;
+    setSecondsLeft(attempt.remainingSeconds);
+  }, [attempt]);
+
+  useEffect(() => {
+    if (!attempt || attempt.status !== 'in_progress') return;
+    const tick = () => {
+      const left = Math.max(
+        0,
+        Math.round((deadlineRef.current - Date.now()) / 1000),
+      );
+      setSecondsLeft(left);
+    };
+    const id = window.setInterval(tick, 1000);
+    tick();
+    return () => window.clearInterval(id);
+  }, [attempt]);
+
+  /** Đồng hồ đã hết → chuyển sang màn kết quả (server cũng tự nộp). */
+  useEffect(() => {
+    if (!attempt || attempt.status !== 'in_progress') return;
+    if (secondsLeft > 0) return;
+    if (deadlineRef.current === 0) return;
+    void submitMutation.mutateAsync(
+      questions.map((q) => {
+        const draft = currentAnswers[q.questionId];
+        return {
+          questionId: q.questionId,
+          selectedOptionId: draft?.selectedOptionId ?? null,
+          answerText: draft?.answerText ?? null,
+        };
+      }),
+    ).catch(() => {
+      /* lỗi hiển thị qua toast trong hook */
+    });
+  }, [secondsLeft, attempt, questions, currentAnswers, submitMutation]);
+
   const handleChange = (questionId: string, value: DraftAnswer) => {
     setActiveQuestionId(questionId);
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
@@ -99,7 +171,7 @@ export const HomeworkExamView: React.FC<{ attemptId?: string }> = ({
     try {
       await submitMutation.mutateAsync(payload);
       setConfirmOpen(false);
-      navigate(CLIENT_ROUTES.course());
+      goBackToCourse();
     } catch {
       /* lỗi hiển thị qua toast trong hook */
     }
@@ -121,7 +193,7 @@ export const HomeworkExamView: React.FC<{ attemptId?: string }> = ({
           variant="ghost"
           size="sm"
           leftIcon={ArrowLeft}
-          onClick={() => navigate(CLIENT_ROUTES.course())}
+          onClick={goBackToCourse}
         >
           Quay lại khóa học
         </Button>
@@ -144,7 +216,7 @@ export const HomeworkExamView: React.FC<{ attemptId?: string }> = ({
             Bạn đã nộp bài này. Quay lại khóa học để xem điểm và nhận xét.
           </p>
           <Button
-            onClick={() => navigate(CLIENT_ROUTES.course())}
+            onClick={goBackToCourse}
             leftIcon={ArrowLeft}
           >
             Quay lại khóa học
@@ -173,10 +245,11 @@ export const HomeworkExamView: React.FC<{ attemptId?: string }> = ({
           <Badge variant="neutral" size="sm">
             {answeredCount}/{questions.length} câu
           </Badge>
-          <Badge variant="neutral" size="sm">
-            {attempt.remainingSeconds > 0
-              ? `${Math.floor(attempt.remainingSeconds / 60)} phút`
-              : 'Hết giờ'}
+          <Badge
+            variant={secondsLeft <= 60 ? 'danger' : 'neutral'}
+            size="sm"
+          >
+            {secondsLeft > 0 ? formatCountdown(secondsLeft) : 'Hết giờ'}
           </Badge>
         </div>
       </div>
@@ -271,3 +344,10 @@ export const HomeworkExamView: React.FC<{ attemptId?: string }> = ({
 };
 
 export default HomeworkExamView;
+
+/** Định dạng giây còn lại → mm:ss (đồng hồ đếm ngược). */
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}

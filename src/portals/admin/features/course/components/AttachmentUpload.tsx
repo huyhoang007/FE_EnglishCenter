@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { useCloudinaryUpload } from '@/shared/hooks/useCloudinaryUpload';
+import type { UploadPurpose } from '@/shared/types/homework.types';
 
 export interface AttachmentUploadProps {
   /** URL công khai hiện tại (để hiển thị tài liệu đang gắn). */
@@ -38,7 +39,18 @@ export interface AttachmentUploadProps {
   /** Được gọi khi xoá tài liệu đang gắn. */
   onClear?: () => void;
   disabled?: boolean;
+  /** Nhãn nhỏ phía trên khối upload — truyền '' nếu nhãn đã hiển thị ở Field. */
   label?: string;
+  /** Mục đích upload — BE quyết định resource_type + folder. */
+  purpose?: UploadPurpose;
+  /** Khóa học liên quan — bắt buộc với purpose = 'lesson_video'. */
+  courseId?: string;
+  /** Danh sách đuôi file được accept trong hộp chọn file. */
+  accept?: string;
+  /** Gợi ý hiển thị dưới nút chọn file. */
+  hint?: string;
+  /** Nhãn trên nút bấm (mặc định "Chọn tài liệu đính kèm"). */
+  emptyLabel?: string;
 }
 
 export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
@@ -48,18 +60,24 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
   onClear,
   disabled,
   label = 'Tài liệu đính kèm',
+  purpose = 'attachment',
+  courseId,
+  accept = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.m4a,.aac,.ogg,.mp4,.mov,.webm,.mkv',
+  hint = 'PDF, Word, Excel, PowerPoint, txt, ảnh, audio, video',
+  emptyLabel = 'Chọn tài liệu đính kèm',
 }) => {
   const { upload, isUploading, progress } = useCloudinaryUpload();
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
-
   const handleChange = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
       const ok = await upload({
         file,
-        // `attachment` → delivery type `upload` (public), khác `submission` (private).
-        purpose: 'attachment',
+        // `attachment` / `lesson_video` → delivery type `upload` (public),
+        // khác `submission` (private).
+        purpose,
+        courseId,
         onUploaded: (result) => {
           if (!result.public_id) {
             setError('Không lấy được đường dẫn file.');
@@ -80,14 +98,16 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-bold text-slate-700">{label}</p>
+      {label && (
+        <p className="text-xs font-bold text-slate-700">{label}</p>
+      )}
 
       <input
         ref={inputRef}
         type="file"
         className="hidden"
         onChange={(e) => handleChange(e.target.files?.[0])}
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.m4a,.aac,.ogg,.mp4,.mov,.webm,.mkv"
+        accept={accept}
       />
 
       {value ? (
@@ -103,7 +123,7 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
               rel="noreferrer"
               className="text-[11px] text-emerald-700 hover:underline"
             >
-              Xem tài liệu
+              Xem file
             </a>
           </div>
           {onClear && (
@@ -135,12 +155,8 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
           ) : (
             <>
               <Paperclip className="w-5 h-5 text-slate-400" />
-              <p className="text-xs font-bold text-slate-700">
-                Chọn tài liệu đính kèm
-              </p>
-              <p className="text-[11px] text-slate-400">
-                PDF, Word, Excel, PowerPoint, txt, ảnh, audio, video
-              </p>
+              <p className="text-xs font-bold text-slate-700">{emptyLabel}</p>
+              <p className="text-[11px] text-slate-400">{hint}</p>
             </>
           )}
         </button>

@@ -20,6 +20,8 @@ export const ROUTE_ROOT = {
 
 export const CLIENT_ROUTES = {
   home: '/',
+  /** Sàn khóa học — dùng làm fallback khi không rõ khóa học hiện tại. */
+  courses: '/courses',
   course: (id: string = ':id') => `/courses/${id}`,
   exam: (id: string = ':id') => `/exams/${id}`,
   /* ---------- Dev 3: Exam ---------- */

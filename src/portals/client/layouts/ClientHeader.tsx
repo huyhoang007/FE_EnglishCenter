@@ -96,10 +96,10 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['STUDENT', 'ADMIN'],
   },
   {
-    // Học viên đặt lịch kèm 1-1 với mentor (Dev 5) — Learner không thấy
+    // Học viên đặt lịch kèm 1-1 với mentor (Dev 5) — BE cho phép cả USER (Learner) và STUDENT
     label: 'Mentor 1-1',
     to: CLIENT_ROUTES.schedule,
-    roles: ['STUDENT'],
+    roles: ['USER', 'STUDENT'],
   },
   {
     label: 'Admin Portal',

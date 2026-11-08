@@ -38,8 +38,12 @@ import type {
 export interface LessonPayloadInput {
   isPreview: boolean;
   videoUrl?: string;
-  /** Thời lượng (phút). */
-  durationMinutes?: number | null;
+  /** Public ID của video trên Cloudinary (video upload từ form admin). */
+  videoPublicId?: string;
+  /** Đuôi file video (mp4, mov, webm...). */
+  videoFormat?: string;
+  /** Tên file video gốc — chỉ để hiển thị. */
+  videoName?: string;
 }
 
 /**
@@ -47,18 +51,20 @@ export interface LessonPayloadInput {
  * và `JsonUtil.readString(contentData, "videoUrl")` ở backend.
  */
 export function buildLessonContentData(
-  input: LessonPayloadInput,
+    input: LessonPayloadInput,
 ): LessonPayloadData {
   const data: LessonPayloadData = { isPreview: Boolean(input.isPreview) };
 
   const videoUrl = (input.videoUrl ?? '').trim();
   if (videoUrl) data.videoUrl = videoUrl;
 
-  // Chỉ ghi duration khi là số hợp lệ > 0, tránh ghi "abc" hoặc 0.
-  const duration = Number(input.durationMinutes);
-  if (Number.isFinite(duration) && duration > 0) {
-    data.durationMinutes = Math.round(duration);
-  }
+  // Metadata video upload từ Cloudinary — dùng để xoá/thay video sau này.
+  const videoPublicId = (input.videoPublicId ?? '').trim();
+  if (videoPublicId) data.videoPublicId = videoPublicId;
+  const videoFormat = (input.videoFormat ?? '').trim();
+  if (videoFormat) data.videoFormat = videoFormat;
+  const videoName = (input.videoName ?? '').trim();
+  if (videoName) data.videoName = videoName;
 
   return data;
 }
@@ -108,6 +114,13 @@ export interface HomeworkPayloadInput {
    * trực tiếp từ `contentData.maxAttempts` (xem `CourseDetailPage`).
    */
   maxAttempts?: number | null;
+  /**
+   * Đuôi file được phép nộp (mặc định `pdf`).
+   *
+   * Admin có thể cấu hình nhiều định dạng; client đọc từ
+   * `contentData.allowedFileTypes` để validate + hiển thị đúng accept.
+   */
+  allowedFileTypes?: string[] | null;
   /** `examId` của đề trắc nghiệm liên kết. */
   examId?: string | null;
   rubric?: RubricInput[];
@@ -156,6 +169,14 @@ export function buildHomeworkContentData(
     data.maxAttempts = Math.round(maxAttempts);
   }
 
+  // Định dạng file được phép nộp (Admin cấu hình). Bỏ trống → mặc định PDF.
+  const allowedFileTypes = (input.allowedFileTypes ?? [])
+    .map((t) => (t ?? '').trim().toLowerCase().replace(/^\./, ''))
+    .filter(Boolean);
+  if (allowedFileTypes.length > 0) {
+    data.allowedFileTypes = allowedFileTypes;
+  }
+
   const examId = (input.examId ?? '').trim();
   if (examId) data.examId = examId;
 
@@ -193,12 +214,17 @@ export function buildHomeworkContentData(
 export interface VocabularyPayloadInput {
   /** Id các bộ trong kho từ vựng chung. */
   setIds: string[];
+  /**
+   * Nội dung từ vựng "xem thử" — học viên CHƯA ghi danh khóa học vẫn xem được
+   * các bộ từ được tick trong nội dung này (dùng cho nút "Học thử miễn phí").
+   */
+  isPreview?: boolean;
 }
 
 /** Xây `contentData` cho nội dung 'vocabulary'. */
 export function buildVocabularyContentData(
   input: VocabularyPayloadInput,
-): { setIds: string[] } {
+): { setIds: string[]; isPreview: boolean } {
   const setIds = Array.from(
     new Set(
       (input.setIds ?? [])
@@ -206,7 +232,7 @@ export function buildVocabularyContentData(
         .filter((id) => id.length > 0),
     ),
   );
-  return { setIds };
+  return { setIds, isPreview: Boolean(input.isPreview) };
 }
 
 /**

@@ -82,6 +82,8 @@ export interface CourseVocabularySet {
   wordCount: number;
   /** true = học viên chưa ghi danh → nội dung bị khoá. */
   locked: boolean;
+  /** true = bộ này được admin đánh dấu "xem thử" → mở khoá cho người chưa ghi danh. */
+  isPreview: boolean;
 }
 
 /* =========================================================
@@ -142,6 +144,7 @@ export function mapCourseVocabularySet(
     words,
     wordCount: dto.wordCount ?? words.length,
     locked: Boolean(dto.locked),
+    isPreview: Boolean(dto.isPreview),
   };
 }
 

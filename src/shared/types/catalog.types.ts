@@ -108,12 +108,13 @@ export type ContentType = 'lesson' | 'vocabulary' | 'homework';
 export interface LessonContentData {
   isPreview?: boolean;
   videoUrl?: string;
-  durationMinutes?: number;
   [key: string]: unknown;
 }
 
 /** Payload JSONB của flashcard từ vựng. */
 export interface VocabularyContentData {
+  /** Nội dung "xem thử" — học viên chưa ghi danh vẫn xem được bộ từ này. */
+  isPreview?: boolean;
   word?: string;
   /** Phiên âm IPA (alias của `phonetic` — cả hai được ghi để tương thích). */
   ipa?: string;
@@ -175,7 +176,11 @@ export interface VocabularySetContentData {
  * `multiple_choice` là bài trắc nghiệm chấm tự động, gắn với một `Exam`
  * (ngân hàng câu hỏi + `ExamGrader` của backend).
  */
-export type HomeworkSubmissionType = 'text' | 'file' | 'multiple_choice';
+export type HomeworkSubmissionType =
+  | 'text'
+  | 'file'
+  | 'multiple_choice'
+  | 'audio';
 
 /** Payload JSONB của bài tập về nhà (kèm rubric chấm điểm). */
 export interface HomeworkContentData {
@@ -196,16 +201,27 @@ export interface HomeworkContentData {
   attachmentPublicId?: string;
   /** Số lần làm bài tối đa (thiếu = không giới hạn). */
   maxAttempts?: number;
+  /**
+   * Danh sách đuôi file được phép nộp (do Admin cấu hình).
+   *
+   * Thiếu → mặc định `['pdf']` (backend cũng chỉ nhận PDF cho bài nộp).
+   */
+  allowedFileTypes?: string[];
   /** `examId` của đề trắc nghiệm liên kết (khi `submissionType = multiple_choice`). */
   examId?: string;
   [key: string]: unknown;
 }
 
-/** Payload JSONB của bài học — hợp nhất `isPreview` + `videoUrl` + `durationMinutes`. */
+/** Payload JSONB của bài học — hợp nhất `isPreview` + `videoUrl` + metadata video. */
 export interface LessonPayloadData {
   isPreview: boolean;
   videoUrl?: string;
-  durationMinutes?: number;
+  /** Public ID của video trên Cloudinary (video upload từ form admin). */
+  videoPublicId?: string;
+  /** Đuôi file video (mp4, mov, webm...). */
+  videoFormat?: string;
+  /** Tên file video gốc — chỉ để hiển thị. */
+  videoName?: string;
   [key: string]: unknown;
 }
 
@@ -318,6 +334,8 @@ export interface CourseVocabularySetDto {
   wordCount: number | null;
   /** true = học viên chưa ghi danh → danh sách từ bị khoá (rỗng). */
   locked: boolean;
+  /** true = bộ này được admin đánh dấu "xem thử" → mở khoá cho người chưa ghi danh. */
+  isPreview?: boolean;
 }
 
 /** Payload tạo / cập nhật một bộ trong kho chung. */

@@ -270,9 +270,9 @@ export const vi: Record<TranslationKey, string> = {
   'content.form.contentOrder': 'Thứ tự',
   'content.form.durationMinutes': 'Thời lượng (phút)',
   'content.form.durationPlaceholder': 'VD: 30',
-  'content.form.videoUrl': 'Link video',
-  'content.form.videoUrlPlaceholder': 'https://… (mp4)',
-  'content.form.videoUrlHint': 'Hỗ trợ link MP4 trực tiếp hoặc link Youtube.',
+  'content.form.videoUrl': 'Video bài học',
+  'content.form.videoUrlHint':
+    'Tải file video lên Cloudinary (MP4, MOV, WEBM, MKV — tối đa 100 MB).',
   'content.form.isPreview': 'Bài học thử',
   'content.form.isPreviewHint':
     'Mọi người đều có thể xem bài học này mà không cần đăng ký.',
@@ -293,11 +293,15 @@ export const vi: Record<TranslationKey, string> = {
 
   // Bài tập — hình thức nộp (khớp cột homework_submissions của backend)
   'content.homework.submissionType': 'Hình thức nộp',
-  'content.homework.submissionTypeHint':
-    'Nộp file PDF: mentor chấm tay. Trắc nghiệm: học viên làm trực tiếp trên web, chấm tự động theo đề.',
-  'content.homework.type.text': 'Tự luận (gõ trả lời, dữ liệu cũ)',
+  'content.homework.type.text': 'Nhập văn bản trực tiếp',
   'content.homework.type.file': 'Nộp file PDF',
+  'content.homework.type.audio': 'Ghi âm / File âm thanh',
   'content.homework.type.multiple_choice': 'Trắc nghiệm',
+  'content.homework.allowedAudioTypes': 'Định dạng âm thanh được phép',
+  'content.homework.allowedAudioTypesHint':
+    'Các đuôi file âm thanh học viên được nộp (mặc định mp3, wav, m4a). Ngăn cách bằng dấu phẩy.',
+  'content.homework.submissionTypeHint':
+    'Nộp file PDF: mentor chấm tay. Trắc nghiệm: học viên làm trực tiếp trên web, chấm tự động theo đề. Ghi âm: học viên thu âm trực tiếp hoặc nộp file âm thanh (bài tập Speaking).',
   'content.homework.passingScore': 'Điểm đạt',
   'content.homework.passingScoreHint':
     'Phần trăm điểm tối thiểu (0-100) để được đạt.',
@@ -343,7 +347,7 @@ export const vi: Record<TranslationKey, string> = {
   // Từ vựng — chọn bộ từ vựng CHUNG để gán vào khóa học (contentType = vocabulary)
   'content.vocab.bankTitle': 'Chọn bộ từ vựng từ kho chung',
   'content.vocab.bankHint':
-    'Tìm trong kho từ vựng chung và tick chọn các bộ muốn liên kết vào khóa học này.',
+    'Tìm trong kho từ vựng chung và bấm "Thêm" để gắn bộ vào nội dung này. Bộ đã thêm sẽ nằm ở mục "Bộ đang chọn" và chỉ xoá được.',
   'content.vocab.bankSearch': 'Tìm theo bộ hoặc từ…',
   'content.vocab.bankEmpty': 'Kho từ vựng chung đang trống.',
   'content.vocab.bankNoResult': 'Không tìm thấy bộ từ vựng phù hợp.',
@@ -353,6 +357,10 @@ export const vi: Record<TranslationKey, string> = {
   'content.vocab.bankRequired': 'Cần chọn ít nhất một bộ từ vựng',
   'content.vocab.bankLoadFailed': 'Không tải được kho từ vựng.',
   'content.vocab.bankCount': '{count} bộ',
+  'content.vocab.bankAdd': 'Thêm',
+  'content.vocab.bankRemove': 'Bỏ chọn',
+  'content.vocab.bankAllSelected':
+    'Đã thêm tất cả bộ trong kho. Bấm X ở "Bộ đang chọn" để bỏ bộ nào đó.',
 
   // Bài tập — chọn đề thi/bài kiểm tra định nghĩa sẵn
   'content.homework.examTitle': 'Chọn đề thi / bài kiểm tra',
@@ -364,7 +372,17 @@ export const vi: Record<TranslationKey, string> = {
     'Khóa học này chưa có đề thi hay bài kiểm tra nào. Hãy tạo ở phần Quản lý đề thi trước.',
   'content.homework.examNoResult': 'Không tìm thấy đề thi phù hợp.',
   'content.homework.examSelectHint':
-    'Tick đề thi bạn muốn gắn. Học viên làm bài trong phòng thi.',
+    'Chỉ chọn đề đã công bố — học viên chỉ làm được đề đang "Đã công bố".',
+  'content.homework.examNotPublishedHint':
+    'Đề chưa công bố — hãy mở Quản lý đề thi và bấm "Công khai đề" trước khi gắn.',
+  'content.homework.examManageLink': 'Mở Quản lý đề thi',
+  'content.homework.examOtherCourse': 'Không thuộc khóa học này',
+  'content.homework.examOtherCourseHint':
+    'Đề của khóa học khác — học viên khóa này không mở được lượt thi.',
+  'content.homework.examPaidHint':
+    'Đề trả phí — học viên phải mua đề mới làm được.',
+  'content.homework.examSequentialHint':
+    'Đề giữa kỳ/cuối kỳ có điều kiện tiên quyết — hãy dùng đề Quiz cho bài tập.',
   'content.homework.examQuestions': '{count} câu hỏi',
   'content.homework.examDuration': '{count} phút',
   'content.homework.examType': 'Loại',
@@ -390,6 +408,9 @@ export const vi: Record<TranslationKey, string> = {
   'content.lesson.noVideo': 'Chưa gắn video',
   'content.homework.previewTitle': 'Tóm tắt bài tập',
   'content.homework.unlimitedAttempts': 'Không giới hạn',
+  'content.homework.allowedFileTypes': 'Định dạng file được phép nộp',
+  'content.homework.allowedFileTypesHint':
+    'Ngăn cách bằng dấu phẩy (vd: pdf, docx). Để trống = chỉ nhận PDF.',
 
   // Danh sách nội dung trong trang chi tiết khóa học
   'content.list.emptyTitle': 'Chưa có nội dung nào',
@@ -397,7 +418,11 @@ export const vi: Record<TranslationKey, string> = {
     'Thêm bài học, bộ từ vựng hoặc bài tập cho khóa học này.',
   'content.list.titleCol': 'Tiêu đề',
   'content.list.typeCol': 'Loại',
+  'content.list.detailCol': 'Chi tiết',
   'content.list.actionsCol': 'Thao tác',
+  'content.list.detailAction': 'Chi tiết',
+  'content.list.filterAll': 'Tất cả',
+  'content.list.filterEmpty': 'Không có nội dung nào thuộc loại này.',
 
   // Hành động
   'content.action.add': 'Thêm nội dung',
@@ -415,12 +440,15 @@ export const vi: Record<TranslationKey, string> = {
   'content.validation.titleTooShort': 'Tiêu đề phải có ít nhất 3 ký tự',
   'content.validation.titleTooLong': 'Tối đa 255 ký tự',
   'content.validation.orderInvalid': 'Thứ tự phải là số không âm',
-  'content.validation.videoUrlInvalid': 'Link video phải là URL hợp lệ',
+  'content.validation.videoUrlInvalid': 'Link video không được chứa khoảng trắng',
+  'content.validation.videoRequired': 'Vui lòng tải video bài học lên',
   'content.validation.durationInvalid': 'Thời lượng phải là số dương',
   'content.validation.maxScoreInvalid': 'Điểm tối đa phải là số dương',
   'content.validation.dueDateInvalid': 'Hạn nộp không được ở quá khứ',
   'content.validation.maxAttemptsInvalid':
     'Số lần làm tối đa phải là số không âm',
+  'content.validation.allowedFileTypesInvalid':
+    'Định dạng file không hợp lệ (chỉ chữ và số, ví dụ: pdf, docx)',
   'content.validation.vocabularyEmpty': 'Cần thêm ít nhất một từ vào bộ từ vựng',
   'content.validation.wordRequired': 'Từ tiếng Anh là bắt buộc',
   'content.validation.meaningRequired': 'Nghĩa tiếng Việt là bắt buộc',

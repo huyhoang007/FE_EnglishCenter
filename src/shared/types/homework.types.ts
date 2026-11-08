@@ -11,7 +11,7 @@
  *   GET  /api/v1/mentor/homework-submissions/{id}/history → GradeHistory[]
  */
 
-import type { HomeworkSubmissionType } from './catalog.types';
+import type { HomeworkSubmissionType, RubricCriterion } from './catalog.types';
 
 /**
  * Trạng thái bài nộp của học viên:
@@ -28,7 +28,9 @@ export type UploadPurpose =
   | 'submission_audio'
   | 'multiple_choice'
   /** File nghe của đề thi / đề luyện tập (chỉ admin, public) */
-  | 'exam_audio';
+  | 'exam_audio'
+  /** Video bài học (public, thư mục courses/{courseId}/lessons) */
+  | 'lesson_video';
 
 /** Chữ ký upload Cloudinary (API secret KHÔNG có trong response này). */
 export interface UploadSignature {
@@ -74,6 +76,8 @@ export interface HomeworkGradeHistory {
   passed?: boolean | null;
   feedback?: string | null;
   gradedAt?: string | null;
+  /** Ai chấm lần này: 'ai' | 'mentor' | null (chưa chấm). */
+  gradedByType?: 'ai' | 'mentor' | null;
 }
 
 /** Một bài nộp bài tập. */
@@ -119,6 +123,39 @@ export interface HomeworkSubmission {
 
   /** Lịch sử chấm — chỉ mentor/admin thấy. */
   gradeHistory?: HomeworkGradeHistory[] | null;
+
+  /** Ai chấm: 'ai' | 'mentor' | null (chưa chấm). */
+  gradedByType?: 'ai' | 'mentor' | null;
+  /** Mentor được giao chấm bài này (null = học viên không mua mentor → AI chấm). */
+  assignedGraderId?: string | null;
+
+  /** Rubric chấm điểm của bài tập — mentor chấm 1-1 theo từng tiêu chí. */
+  rubric?: RubricCriterion[] | null;
+  /** Điểm tối đa của bài tập (null = không giới hạn). */
+  maxScore?: number | null;
+  /** Điểm đạt tối thiểu (%). */
+  passingScore?: number | null;
+  /** Gợi ý chấm từ AI (sau khi mentor bấm nút xem gợi ý). */
+  aiSuggestion?: HomeworkAiSuggestion | null;
+  /** true = bài trắc nghiệm (hệ thống tự chấm, mentor chỉ xem thống kê). */
+  autoGraded?: boolean | null;
+}
+
+/** Điểm + nhận xét 1-1 của một tiêu chí rubric do mentor chấm. */
+export interface RubricScore {
+  criterion: string;
+  score?: number | null;
+  comment?: string | null;
+}
+
+/** Gợi ý chấm từ AI cho mentor (KHÔNG ghi điểm vào hệ thống). */
+export interface HomeworkAiSuggestion {
+  suggestedScore?: number | null;
+  scaleLabel?: string | null;
+  feedback?: string | null;
+  weaknesses?: string[] | null;
+  suggestions?: string[] | null;
+  cefrLevel?: string | null;
 }
 
 /** Body nộp bài. */
@@ -142,6 +179,8 @@ export interface SubmitHomeworkPayload {
 export interface UploadSignaturePayload {
   purpose: UploadPurpose;
   homeworkContentId?: string;
+  /** Bắt buộc với purpose = 'lesson_video' — quyết định thư mục trên Cloudinary. */
+  courseId?: string;
   fileFormat?: string;
   fileBytes?: number;
   fileName?: string;
@@ -151,6 +190,47 @@ export interface UploadSignaturePayload {
 export interface GradeHomeworkPayload {
   score: number;
   feedback?: string;
+  /** Điểm + nhận xét 1-1 theo từng tiêu chí rubric (nếu bài tập có rubric). */
+  rubricScores?: RubricScore[];
+}
+
+/** Bảng thống kê kết quả làm bài trắc nghiệm (Nhóm A) — mentor chỉ xem, không chấm. */
+export interface HomeworkExamStats {
+  homeworkContentId: string;
+  homeworkTitle?: string | null;
+  totalSubmissions: number;
+  averageScore?: number | null;
+  maxScore?: number | null;
+  averagePercentage?: number | null;
+  passedCount: number;
+  failedCount: number;
+  studentResults?: HomeworkExamStudentResult[] | null;
+  questionStats?: HomeworkExamQuestionStat[] | null;
+}
+
+/** Kết quả 1 học viên trong bảng thống kê. */
+export interface HomeworkExamStudentResult {
+  studentId?: string | null;
+  studentName?: string | null;
+  studentEmail?: string | null;
+  score?: number | null;
+  maxScore?: number | null;
+  percentage?: number | null;
+  passed?: boolean | null;
+  submittedDate?: string | null;
+}
+
+/** Thống kê 1 câu hỏi (dùng để tìm điểm yếu chung). */
+export interface HomeworkExamQuestionStat {
+  questionId: string;
+  displayNumber?: number | null;
+  questionText?: string | null;
+  questionType?: string | null;
+  points?: number | null;
+  correctCount: number;
+  incorrectCount: number;
+  unansweredCount: number;
+  correctRate?: number | null;
 }
 
 /** Giới hạn file theo resource_type (byte) — khớp với BE. */

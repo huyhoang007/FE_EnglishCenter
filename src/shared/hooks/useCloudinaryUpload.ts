@@ -28,6 +28,8 @@ export interface CloudinaryUploadArgs {
   file: File;
   purpose: UploadPurpose;
   homeworkContentId?: string;
+  /** Khóa học liên quan — bắt buộc với purpose = 'lesson_video'. */
+  courseId?: string;
   /** Gọi khi upload thành công. */
   onUploaded?: (result: CloudinaryUploadResult) => void;
   /** Hiển thị thông báo lỗi (mặc định dùng toast của app). */
@@ -69,7 +71,7 @@ export async function uploadToCloudinary(
   args: CloudinaryUploadArgs,
   onProgress?: (percent: number) => void,
 ): Promise<boolean> {
-  const { file, purpose, homeworkContentId } = args;
+  const { file, purpose, homeworkContentId, courseId } = args;
   const notifyError =
     args.notifyError ??
     ((message: string) => {
@@ -94,6 +96,7 @@ export async function uploadToCloudinary(
   const signatureRes = await createUploadSignatureApi({
     purpose,
     homeworkContentId,
+    courseId,
     fileFormat: file.name.split('.').pop()?.toLowerCase(),
     fileBytes: file.size,
     fileName: file.name,

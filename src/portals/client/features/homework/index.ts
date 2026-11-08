@@ -3,7 +3,9 @@
  */
 
 export { HomeworkSubmitModal } from './components/HomeworkSubmitModal';
+export { HomeworkExamPreviewModal } from './components/HomeworkExamPreviewModal';
 export { HomeworkExamView } from './components/HomeworkExamView';
+export { AudioRecorder } from './components/AudioRecorder';
 export {
   useHomeworkSubmission,
   useMyHomeworkSubmissions,

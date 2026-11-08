@@ -88,6 +88,9 @@ export const QUERY_KEYS = {
     /** Lượt thi của bài tắc nghiệm. */
     attempt: (attemptId: string) =>
       ['homework', 'attempt', attemptId] as const,
+    /** Bảng thống kê kết quả làm bài trắc nghiệm (Nhóm A). */
+    examStats: (homeworkContentId: string) =>
+      ['homework', 'exam-stats', homeworkContentId] as const,
   },
   account: {
     profile: ['account', 'profile'] as const,

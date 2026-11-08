@@ -11,6 +11,8 @@
  *   - isPreview = true → mở được video (ai cũng xem được)
  *   - isLocked  = true → server KHÔNG trả videoUrl, bấm vào hiện
  *     modal yêu cầu đăng ký
+ *   - BÀI TẬP: luôn khoá với người chưa mua khóa học — học thử KHÔNG nộp
+ *     được bài, bấm vào sẽ mở modal yêu cầu mua khóa học.
  *
  * Layout mới: Header capsule + hero tối giản + lưới 8/4, bo góc 16px,
  * Be Vietnam Pro, màu nhấn #0052CC.
@@ -28,11 +30,8 @@ import {
   ArrowLeft,
   Award,
   BookOpen,
-  CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Clock,
-  FileText,
   GraduationCap,
   Headphones,
   Home,
@@ -49,6 +48,7 @@ import {
   X,
   ClipboardList,
   Phone,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
@@ -58,7 +58,7 @@ import {
   Skeleton,
 } from '@/shared/components/Feedback';
 import { cn } from '@/shared/utils';
-import { formatVND } from '@/shared/utils/format';
+import { formatDateOnly, formatVND } from '@/shared/utils/format';
 import { cefrLabel } from '@/shared/constants/cefrLevels';
 import {
   fetchCourseById,
@@ -73,14 +73,17 @@ import {
   type VocabularyWord,
 } from '@/shared/api/vocabularyService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
-import { HomeworkSubmitModal } from '@/portals/client/features/homework';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import {
+  HomeworkExamPreviewModal,
+  HomeworkSubmitModal,
+} from '@/portals/client/features/homework';
 import { useMyHomeworkSubmissions } from '@/portals/client/features/homework/hooks/useHomework';
 import type {
   CourseContentDto,
   CourseDto,
   HomeworkContentData,
   LessonContentData,
-  RubricCriterion,
 } from '@/shared/types/catalog.types';
 import type { HomeworkSubmission } from '@/shared/types/homework.types';
 
@@ -107,6 +110,14 @@ const CourseDetailContent: React.FC = () => {
     null,
   );
   const [activeVideo, setActiveVideo] = useState<CourseContentDto | null>(null);
+  /**
+   * Chế độ "Học thử miễn phí".
+   * <p>
+   * Khi bật, trang hiển thị banner và mở khoá phần xem thử của bài học + từ
+   * vựng (những nội dung admin đánh dấu `isPreview`). Bài tập LUÔN khoá với
+   * người chưa mua khóa học — không mở form nộp bài, không nộp được.
+   */
+  const [trialMode, setTrialMode] = useState(false);
 
   /**
    * Backend nhận `@PathVariable UUID courseId` nên URL phải là UUID.
@@ -184,6 +195,20 @@ const CourseDetailContent: React.FC = () => {
   const hasEnrollment = Boolean(enrollment.data?.enrolled);
   const purchaseDisabled = isAuthenticated && (enrollment.isPending || enrollment.isError || (!hasEnrollment && (!['USER', 'STUDENT'].includes(role) || course?.status !== 'active' || !course.price || course.price <= 0)));
   const lessons = filterByType(contents, 'lesson');
+
+  /**
+   * Nội dung xem thử (admin đánh dấu `isPreview`) — dùng cho chế độ học thử.
+   * <p>
+   * Bài học: server đã trả `videoUrl` cho `isPreview = true` nên xem được ngay.
+   * Từ vựng: server mở khoá bộ từ thuộc nội dung 'vocabulary' có `isPreview`.
+   * Bài tập: LUÔN khoá với người chưa mua khóa học (không tính vào xem thử).
+   */
+  const previewCount = useMemo(
+    () =>
+      lessons.filter((l) => l.isPreview).length +
+      vocabularies.filter((v) => v.isPreview).length,
+    [lessons, vocabularies],
+  );
 
   /* ---------- Loading / Error ---------- */
   if (resolving || (courseLoading && !courseError)) {
@@ -366,6 +391,31 @@ const CourseDetailContent: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* ========== LEFT — Nội dung học ========== */}
             <main className="lg:col-span-8 min-w-0 space-y-5">
+              {/* ========== BANNER HỌC THỬ ========== */}
+              {trialMode && !hasEnrollment && (
+                <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                  <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-extrabold text-amber-900">
+                      Đang xem chế độ học thử miễn phí
+                    </p>
+                    <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                      Bạn đang xem {previewCount} nội dung mẫu của khóa học (bài
+                      học thử và từ vựng). Bài tập chỉ mở khi đăng ký khóa học —
+                      bạn chưa thể nộp bài trong chế độ học thử.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={buyCourse}
+                    className="shrink-0 bg-[#0052CC] hover:bg-[#0040A8]"
+                  >
+                    {isAuthenticated ? 'Đăng ký ngay' : 'Đăng nhập'}
+                  </Button>
+                </div>
+              )}
+
               {/* Video player — chỉ mở khi bài học cho phép */}
               {activeVideo?.videoUrl && (
                 <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
@@ -469,7 +519,11 @@ const CourseDetailContent: React.FC = () => {
                         description="Các bài tập sẽ được giao theo từng tuần học."
                       />
                     ) : (
-                      <HomeworkList items={homework} />
+                      <HomeworkList
+                        items={homework}
+                        hasEnrollment={hasEnrollment}
+                        onLocked={(item) => setLockedLesson(item)}
+                      />
                     ))}
                 </div>
               </div>
@@ -520,17 +574,15 @@ const CourseDetailContent: React.FC = () => {
                     size="md"
                     fullWidth
                     onClick={() => {
-                      if (activeVideo) {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      } else {
+                      // Bật chế độ học thử: mở khoá phần xem thử của bài học +
+                      // từ vựng, đồng thời phát bài học thử đầu tiên nếu có.
+                      // Bài tập vẫn khoá (không nộp được khi chưa mua khóa học).
+                      setTrialMode(true);
+                      if (!activeVideo) {
                         const preview = lessons.find((l) => l.isPreview);
-                        if (preview) {
-                          setActiveVideo(preview);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        } else {
-                          setLockedLesson(lessons[0] ?? null);
-                        }
+                        if (preview) setActiveVideo(preview);
                       }
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                   >
                     Học thử miễn phí
@@ -559,7 +611,7 @@ const CourseDetailContent: React.FC = () => {
                   Cambridge và sửa lỗi trực tiếp.
                 </p>
                 <Link
-                  to="/mentors"
+                  to={CLIENT_ROUTES.schedule}
                   className={cn(
                     'mt-5 inline-flex items-center justify-center gap-2 w-full',
                     'h-11 rounded-xl bg-white text-[#0F172A] font-bold text-sm',
@@ -614,13 +666,17 @@ const CourseDetailContent: React.FC = () => {
             <Lock className="w-6 h-6 text-slate-400" />
           </div>
           <h3 className="text-lg font-extrabold text-slate-900 text-center">
-            Bài học đang bị khoá
+            {lockedLesson.contentType === 'homework'
+              ? 'Bài tập đang bị khoá'
+              : 'Bài học đang bị khoá'}
           </h3>
           <p className="text-sm text-slate-500 mt-2 text-center leading-relaxed">
             <span className="font-semibold text-slate-700">
               {lockedLesson.title}
             </span>{' '}
-            chỉ mở cho học viên đã ghi danh khóa học.
+            {lockedLesson.contentType === 'homework'
+              ? 'chỉ mở cho học viên đã mua khóa học. Bạn chưa thể nộp bài khi đang học thử miễn phí.'
+              : 'chỉ mở cho học viên đã ghi danh khóa học.'}
           </p>
           <div className="mt-6 flex flex-col gap-2.5">
             <Button
@@ -633,16 +689,6 @@ const CourseDetailContent: React.FC = () => {
               }}
             >
               {isAuthenticated ? (hasEnrollment ? 'Vào học ngay' : 'Đăng ký khóa học') : 'Đăng nhập để tiếp tục'}
-            </Button>
-            <Button
-              variant="outline"
-              fullWidth
-              onClick={() => {
-                setLockedLesson(null);
-                navigate('/register');
-              }}
-            >
-              Tạo tài khoản miễn phí
             </Button>
           </div>
         </Modal>
@@ -754,7 +800,6 @@ const LessonGroup: React.FC<{
     .sort((a, b) => a.contentOrder - b.contentOrder);
 
   const count = children.length || 1;
-  const seq = (node.contentOrder ?? 0) + 1;
 
   return (
     <div
@@ -769,9 +814,6 @@ const LessonGroup: React.FC<{
         className="w-full flex items-center gap-3 px-4 py-3.5 bg-slate-50/40 hover:bg-slate-100/80 transition-colors text-left"
         aria-expanded={open}
       >
-        <span className="w-8 h-8 rounded-lg bg-[#E0F2FE] text-[#0052CC] text-xs font-extrabold flex items-center justify-center shrink-0">
-          {seq.toString().padStart(2, '0')}
-        </span>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-sm text-slate-900">{node.title}</p>
           <p className="text-[11px] text-slate-500 mt-0.5">
@@ -779,12 +821,6 @@ const LessonGroup: React.FC<{
             {node.description ? ` · ${node.description}` : ''}
           </p>
         </div>
-        <ChevronDown
-          className={cn(
-            'w-4 h-4 text-slate-400 shrink-0 transition-transform',
-            open && 'rotate-180 text-slate-700',
-          )}
-        />
       </button>
 
       {open && children.length > 0 && (
@@ -936,6 +972,11 @@ const VocabularyGrid: React.FC<{ items: CourseVocabularySet[] }> = ({
                 ? 'Đăng ký khóa học để xem từ vựng'
                 : `${set.words.length} từ`}
             </p>
+            {set.isPreview && !set.locked && (
+              <span className="inline-flex items-center h-5 px-2 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 mt-1.5">
+                HỌC THỬ
+              </span>
+            )}
           </div>
 
           {set.locked ? (
@@ -1028,10 +1069,18 @@ const VocabularyGrid: React.FC<{ items: CourseVocabularySet[] }> = ({
 };
 
 /* =========================================================
- * HomeworkList — đề bài + rubric chấm điểm + nút nộp bài
+ * HomeworkList — danh sách bài tập (dòng gọn) + mở modal chi tiết
  * ========================================================= */
-const HomeworkList: React.FC<{ items: CourseContentDto[] }> = ({ items }) => {
+const HomeworkList: React.FC<{
+  items: CourseContentDto[];
+  /** Học viên đã ghi danh khóa học hay chưa. */
+  hasEnrollment: boolean;
+  /** Mở modal yêu cầu mua khóa học (khi bài tập bị khoá). */
+  onLocked: (item: CourseContentDto) => void;
+}> = ({ items, hasEnrollment, onLocked }) => {
   const [activeHomework, setActiveHomework] = useState<CourseContentDto | null>(null);
+  /** Bài trắc nghiệm đang mở modal XEM ĐỀ (trước khi bấm "Bắt đầu làm bài"). */
+  const [previewExam, setPreviewExam] = useState<CourseContentDto | null>(null);
 
   // Bài nộp của học viên → hiển thị trạng thái (chờ chấm / đã đạt / chưa đạt).
   const { data: mySubmissions } = useMyHomeworkSubmissions();
@@ -1044,124 +1093,165 @@ const HomeworkList: React.FC<{ items: CourseContentDto[] }> = ({ items }) => {
   }, [mySubmissions]);
 
   return (
-  <div className="space-y-4">
+  <div className="space-y-3">
     {items.map((item, i) => {
       const d = item.contentData as HomeworkContentData | null;
-      const rubric = (d?.rubric ?? []) as RubricCriterion[];
       const mySubmission = statusByHomework.get(item.contentId);
+      const overdue = isPastDue(d?.dueDate);
+      // Bài tập CHƯA mua khóa học → khoá hoàn toàn: không mở form nộp bài.
+      const locked = !hasEnrollment || item.isLocked;
+
+      const openItem = () => {
+        if (locked) {
+          onLocked(item);
+          return;
+        }
+        setActiveHomework(item);
+      };
+
       return (
         <div
           key={item.contentId}
-          className="rounded-xl border border-slate-200 overflow-hidden"
+          role="button"
+          tabIndex={0}
+          onClick={openItem}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openItem();
+            }
+          }}
+          className={cn(
+            'w-full text-left rounded-xl border bg-white transition-all px-4 py-3.5 group cursor-pointer',
+            locked
+              ? 'border-slate-200 bg-slate-50/70 hover:border-amber-300'
+              : 'border-slate-200 hover:border-[#0052CC]/40 hover:shadow-sm',
+          )}
         >
-          <div className="px-4 py-3.5 bg-slate-50/60 border-b border-slate-100">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-md bg-[#E0F2FE] text-[#0052CC] text-[10px] font-extrabold flex items-center justify-center shrink-0">
-                    {i + 1}
+          <div className="flex items-start gap-3">
+            <span
+              className={cn(
+                'w-7 h-7 rounded-lg text-[10px] font-extrabold flex items-center justify-center shrink-0 mt-0.5',
+                locked ? 'bg-slate-200 text-slate-500' : 'bg-[#E0F2FE] text-[#0052CC]',
+              )}
+            >
+              {locked ? <Lock className="w-3.5 h-3.5" /> : i + 1}
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm text-slate-900 truncate group-hover:text-[#0052CC] transition-colors">
+                {item.title}
+              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                {locked ? (
+                  <span className="inline-flex items-center gap-1 h-5 px-2 rounded-md bg-slate-200 text-slate-600 text-[10px] font-bold border border-slate-300">
+                    <Lock className="w-3 h-3" />
+                    KHOÁ
                   </span>
-                  {item.title}
-                </p>
+                ) : (
+                  item.isPreview && (
+                    <span className="inline-flex items-center h-5 px-2 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
+                      HỌC THỬ
+                    </span>
+                  )
+                )}
                 {d?.dueDate && (
-                  <p className="text-[11px] text-slate-500 mt-1 ml-8">
-                    Hạn nộp: {d.dueDate}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {d?.maxScore != null && (
-                  <Badge variant="primary" size="sm">
-                    {d.maxScore} điểm
-                  </Badge>
-                )}
-                {mySubmission && (
-                  <Badge
-                    variant={
-                      !mySubmission.graded
-                        ? 'warning'
-                        : mySubmission.passed
-                          ? 'success'
-                          : 'danger'
-                    }
-                    size="sm"
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 text-[11px] font-semibold',
+                      overdue ? 'text-rose-600' : 'text-slate-500',
+                    )}
                   >
-                    {!mySubmission.graded
-                      ? 'Chờ chấm'
-                      : mySubmission.passed
-                        ? `Đã đạt${mySubmission.score != null ? ` · ${mySubmission.score}` : ''}`
-                        : `Chưa đạt${mySubmission.score != null ? ` · ${mySubmission.score}` : ''}`}
-                  </Badge>
+                    <Clock className="w-3 h-3" />
+                    Hạn nộp: {formatDateOnly(d.dueDate)}
+                    {overdue && ' (đã quá hạn)'}
+                  </span>
                 )}
-                <Button
-                  size="sm"
-                  leftIcon={ClipboardList}
-                  onClick={() => setActiveHomework(item)}
-                >
-                  {mySubmission ? 'Xem bài' : 'Nộp bài'}
-                </Button>
+                {d?.maxScore != null && (
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Điểm tối đa: {d.maxScore}
+                  </span>
+                )}
+                {d?.submissionType && (
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {d.submissionType === 'file'
+                      ? `Nộp file ${
+                          Array.isArray(d.allowedFileTypes) &&
+                          d.allowedFileTypes.length > 0
+                            ? d.allowedFileTypes
+                                .map((t) => String(t).toUpperCase())
+                                .join(', ')
+                            : 'PDF'
+                        }`
+                      : d.submissionType === 'multiple_choice'
+                        ? 'Trắc nghiệm'
+                        : d.submissionType === 'audio'
+                          ? 'Ghi âm'
+                          : 'Nhập văn bản'}
+                  </span>
+                )}
               </div>
             </div>
-          </div>
 
-          <div className="p-4 space-y-4">
-            {(d?.instructions || item.description) && (
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Đề bài
-                </p>
-                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                  {d?.instructions ?? item.description}
-                </p>
-              </div>
-            )}
-
-            {rubric.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                  Rubric chấm điểm
-                </p>
-                <ul className="space-y-2">
-                  {rubric.map((r, ri) => (
-                    <li
-                      key={ri}
-                      className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-50 border border-slate-100"
-                    >
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-slate-800">
-                          {r.criterion}
-                        </p>
-                        {r.description && (
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            {r.description}
-                          </p>
-                        )}
-                      </div>
-                      {r.maxScore != null && (
-                        <span className="text-[10px] font-bold text-[#0052CC] bg-blue-50 rounded px-1.5 py-0.5 shrink-0">
-                          {r.maxScore}đ
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {d?.attachmentUrl && (
-              <a
-                href={d.attachmentUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0052CC] hover:underline"
+            <div className="flex items-center gap-2 shrink-0">
+              {locked ? (
+                <Badge variant="neutral" size="sm">
+                  Chưa mua khóa học
+                </Badge>
+              ) : mySubmission ? (
+                <Badge
+                  variant={
+                    !mySubmission.graded
+                      ? 'warning'
+                      : mySubmission.passed
+                        ? 'success'
+                        : 'danger'
+                  }
+                  size="sm"
+                >
+                  {!mySubmission.graded
+                    ? 'Chờ chấm'
+                    : mySubmission.passed
+                      ? `Đã đạt${mySubmission.score != null ? ` · ${mySubmission.score}` : ''}`
+                      : `Chưa đạt${mySubmission.score != null ? ` · ${mySubmission.score}` : ''}`}
+                </Badge>
+              ) : (
+                <Badge variant="neutral" size="sm">
+                  Chưa nộp
+                </Badge>
+              )}
+              {/* Bài trắc nghiệm → có nút "Xem đề" để xem trước câu hỏi. */}
+              {!locked && d?.submissionType === 'multiple_choice' && item.examId && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  leftIcon={FileText}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreviewExam(item);
+                  }}
+                >
+                  Xem đề
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant={locked ? 'outline' : mySubmission ? 'outline' : 'primary'}
+                leftIcon={locked ? Lock : ClipboardList}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openItem();
+                }}
               >
-                <FileText className="w-3.5 h-3.5" />
-                {d.attachmentName
-                  ? `Tải ${d.attachmentName}`
-                  : 'Tải tài liệu đính kèm'}
-              </a>
-            )}
+                {locked
+                  ? 'Mở khoá'
+                  : mySubmission
+                    ? 'Xem bài'
+                    : d?.submissionType === 'multiple_choice'
+                      ? 'Làm bài'
+                      : 'Nộp bài'}
+              </Button>
+            </div>
           </div>
         </div>
       );
@@ -1172,11 +1262,29 @@ const HomeworkList: React.FC<{ items: CourseContentDto[] }> = ({ items }) => {
         open={Boolean(activeHomework)}
         onClose={() => setActiveHomework(null)}
         homework={activeHomework}
+        readOnly={activeHomework.isLocked}
+      />
+    )}
+
+    {previewExam && (
+      <HomeworkExamPreviewModal
+        open={Boolean(previewExam)}
+        onClose={() => setPreviewExam(null)}
+        examId={previewExam.examId}
+        examTitle={previewExam.examTitle}
       />
     )}
   </div>
   );
 };
+
+/** Hạn nộp đã qua (ngày `yyyy-MM-dd` hết hạn cuối ngày). */
+function isPastDue(dueDate?: string | null): boolean {
+  if (!dueDate) return false;
+  const end = new Date(`${dueDate}T00:00:00`);
+  end.setDate(end.getDate() + 1);
+  return end.getTime() <= Date.now();
+}
 
 /* =========================================================
  * Modal + Skeleton helpers

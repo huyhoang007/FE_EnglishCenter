@@ -20,6 +20,8 @@ import type {
 } from '@/shared/types';
 import type {
   GradeHomeworkPayload,
+  HomeworkAiSuggestion,
+  HomeworkExamStats,
   HomeworkGradeHistory,
   HomeworkSubmission,
   SubmitHomeworkPayload,
@@ -80,6 +82,30 @@ export const getHomeworkGradeHistoryApi = (
 ): Promise<ApiResponse<HomeworkGradeHistory[]>> =>
   apiGet<HomeworkGradeHistory[]>(
     `/api/v1/mentor/homework-submissions/${submissionId}/history`,
+  );
+
+/**
+ * Gợi ý chấm từ AI cho mentor.
+ * <p>
+ * AI KHÔNG ghi điểm vào hệ thống — chỉ tham khảo để mentor chấm nhanh hơn.
+ */
+export const getHomeworkAiSuggestionApi = (
+  submissionId: string,
+): Promise<ApiResponse<HomeworkAiSuggestion>> =>
+  apiGet<HomeworkAiSuggestion>(
+    `/api/v1/mentor/homework-submissions/${submissionId}/ai-suggestion`,
+  );
+
+/**
+ * Bảng thống kê kết quả làm bài của bài tập TRẮC NGHIỆM (Nhóm A).
+ * <p>
+ * Hệ thống tự chấm — mentor chỉ xem để nắm điểm yếu chung của học viên.
+ */
+export const getHomeworkExamStatsApi = (
+  homeworkContentId: string,
+): Promise<ApiResponse<HomeworkExamStats>> =>
+  apiGet<HomeworkExamStats>(
+    `/api/v1/mentor/homework/${homeworkContentId}/stats`,
   );
 
 /** Xin chữ ký upload từ BE (API secret không bao giờ ra FE). */

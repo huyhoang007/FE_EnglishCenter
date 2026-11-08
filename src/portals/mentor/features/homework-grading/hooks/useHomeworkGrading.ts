@@ -10,6 +10,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/shared/components/Toast';
 import {
+  getHomeworkAiSuggestionApi,
+  getHomeworkExamStatsApi,
   getHomeworkGradeHistoryApi,
   getHomeworkSubmissionForGradingApi,
   getMentorHomeworkQueueApi,
@@ -69,6 +71,43 @@ export function useHomeworkGradeHistory(submissionId?: string | null) {
       return res.data;
     },
     enabled: Boolean(submissionId),
+  });
+}
+
+/**
+ * Gợi ý chấm từ AI (nút "Xem gợi ý chấm từ AI").
+ * <p>
+ * AI KHÔNG ghi điểm vào hệ thống — chỉ tham khảo để mentor chấm nhanh hơn.
+ * Gọi thủ công (on-demand), không tự động fetch.
+ */
+export function useHomeworkAiSuggestion(_submissionId?: string | null) {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await getHomeworkAiSuggestionApi(id);
+      if (!res.success) {
+        throw new Error(res.message || 'Không lấy được gợi ý từ AI');
+      }
+      return res.data;
+    },
+  });
+}
+
+/**
+ * Bảng thống kê kết quả làm bài TRẮC NGHIỆM (Nhóm A).
+ * <p>
+ * Hệ thống tự chấm → mentor chỉ xem để nắm điểm yếu chung của học viên.
+ */
+export function useHomeworkExamStats(homeworkContentId?: string | null) {
+  return useQuery({
+    queryKey: QUERY_KEYS.homework.examStats(homeworkContentId ?? ''),
+    queryFn: async () => {
+      const res = await getHomeworkExamStatsApi(homeworkContentId!);
+      if (!res.success) {
+        throw new Error(res.message || 'Không tải được thống kê');
+      }
+      return res.data;
+    },
+    enabled: Boolean(homeworkContentId),
   });
 }
 

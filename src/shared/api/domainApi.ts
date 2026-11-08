@@ -5,11 +5,49 @@ import { toUser } from './apiTypes';
 
 function ok<T>(data: T, message = 'Success'): ApiResponse<T> { return { success: true, message, data }; }
 
-// Gmail SMTP delivery can exceed the shared 15-second API timeout.
-const ACTIVATION_EMAIL_TIMEOUT_MS = 60_000;
+// Gmail SMTP delivery can exceed the shared API timeout.
+const ACTIVATION_EMAIL_TIMEOUT_MS = 200_000;
+
+/**
+ * Render Free plan: service bị "spin down" sau 15 phút không có traffic.
+ * Lần request đầu tiên phải khởi động lại container (cold start).
+ *
+ * Số đo thực tế trên `englishcenter-api.onrender.com`:
+ *   - `GET /api/v1/courses` (lần đầu, sau 15' idle) → 82.0s
+ *   - `POST /api/v1/auth/login` (lần đầu, sau 15' idle) → 180.5s
+ *   - các request sau (container đã warm) → 1-2s
+ *
+ * → Timeout phải lớn hơn 180s, đặt 200s cho an toàn.
+ */
+const COLD_START_TIMEOUT_MS = 200_000;
+
+/**
+ * "Warm-up" backend Render.
+ *
+ * Render Free spin down sau 15 phút idle → request đầu tiên phải khởi động
+ * lại container (đo thực tế: 82s với GET, tới 180s với POST login).
+ *
+ * Gọi hàm này NGAY khi mở trang đăng nhập để container bắt đầu khởi động
+ * trong lúc người dùng còn đang nhập email/mật khẩu → lúc bấm "Đăng nhập"
+ * thì backend đã warm và trả về trong 1-2s.
+ *
+ * Endpoint dùng: `GET /api/v1/courses` (public, GET → an toàn, không tạo data).
+ *
+ * ⚠️ Luôn trả về `void` và nuốt lỗi — warm-up là best-effort, không được
+ * chặn luồng đăng nhập (ví dụ khi dev chạy FE mà không chạy BE).
+ */
+export async function warmUpBackend(): Promise<void> {
+  try {
+    await axiosClient.get('/api/v1/courses', { timeout: COLD_START_TIMEOUT_MS });
+  } catch {
+    // Bỏ qua: lỗi ở đây không ảnh hưởng luồng đăng nhập.
+  }
+}
 
 export async function loginRequest(email: string, password: string) {
-  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/login', { email, password });
+  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/login', { email, password }, {
+    timeout: COLD_START_TIMEOUT_MS,
+  });
   if (!data.result) throw new Error(data.message || 'Đăng nhập thất bại');
   return ok({ ...data.result, user: toUser(data.result.user) }, data.message);
 }
@@ -17,7 +55,7 @@ export async function loginRequest(email: string, password: string) {
 /** Đăng ký: tạo tài khoản CHƯA kích hoạt với mật khẩu người dùng nhập + gửi email chứa link xác minh. */
 export async function registerRequest(payload: { email: string; password: string; fullName: string; phone?: string }) {
   const { data } = await axiosClient.post<BeResponse<UserDto>>('/api/v1/auth/register', payload, {
-    timeout: ACTIVATION_EMAIL_TIMEOUT_MS,
+    timeout: COLD_START_TIMEOUT_MS,
   });
   if (!data.result) throw new Error(data.message || 'Đăng ký thất bại');
   return ok(toUser(data.result), data.message);
@@ -26,14 +64,16 @@ export async function registerRequest(payload: { email: string; password: string
 /** Kiểm tra token kích hoạt từ link email (trang /activate). */
 export async function verifyActivationTokenRequest(token: string) {
   const { data } = await axiosClient.post<BeResponse<{ email: string; fullName: string }>>(
-    '/api/v1/auth/verify-activation-token', { token });
+    '/api/v1/auth/verify-activation-token', { token }, { timeout: COLD_START_TIMEOUT_MS });
   if (!data.result) throw new Error(data.message || 'Link kích hoạt không hợp lệ');
   return ok(data.result, data.message);
 }
 
 /** Hoàn tất kích hoạt: xác minh token từ link email → kích hoạt + trả phiên JWT (auto-login). */
 export async function activateAccountRequest(token: string) {
-  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/activate', { token });
+  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/activate', { token }, {
+    timeout: COLD_START_TIMEOUT_MS,
+  });
   if (!data.result) throw new Error(data.message || 'Kích hoạt tài khoản thất bại');
   return ok({ ...data.result, user: toUser(data.result.user) }, data.message);
 }
@@ -47,7 +87,9 @@ export async function resendActivationRequest(email: string) {
 }
 
 export async function refreshRequest(refreshToken: string) {
-  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/refresh', { refreshToken });
+  const { data } = await axiosClient.post<BeResponse<AuthDto>>('/api/v1/auth/refresh', { refreshToken }, {
+    timeout: COLD_START_TIMEOUT_MS,
+  });
   if (!data.result) throw new Error(data.message || 'Refresh thất bại');
   return ok(data.result, data.message);
 }

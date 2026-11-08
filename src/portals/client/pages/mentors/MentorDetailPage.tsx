@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { getMentor } from '@/shared/api/domainApi';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
 
 export const MentorDetailPage: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
@@ -155,7 +156,7 @@ export const MentorDetailPage: React.FC = () => {
               buổi cho bạn, bạn thanh toán 1 lần cả gói.
             </p>
           </div>
-          <Link to="/schedule" className="shrink-0">
+          <Link to={CLIENT_ROUTES.schedule} className="shrink-0">
             <Button variant="primary" size="sm">
               Nhờ tư vấn 1-1
             </Button>

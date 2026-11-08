@@ -27,6 +27,19 @@ export const formatDate = (iso: string): string => {
   });
 };
 
+/**
+ * Định dạng ngày kiểu Việt Nam dd/MM/yyyy — an toàn cho chuỗi date-only.
+ *
+ * `new Date('2026-11-14')` được JS parse theo UTC nên ở múi giờ UTC-7 sẽ ra
+ * `13/11/2026` (lệch 1 ngày). Hàm này tách trực tiếp yyyy-MM-dd nên không
+ * bị lệch.
+ */
+export const formatDateOnly = (dateOnly: string): string => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly.trim());
+  if (!m) return dateOnly;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+};
+
 /** Đếm số từ trong chuỗi (bỏ qua khoảng trắng thừa) */
 export const countWords = (text: string): number =>
   text.trim().split(/\s+/).filter(Boolean).length;
