@@ -38,6 +38,8 @@ import {
 } from '@/shared/api/domainApi';
 import { fetchCertificates } from '@/shared/api/certificateService';
 import type { CreateMentorDto, MentorDto, UpdateMentorDto } from '@/shared/api/apiTypes';
+import type { CertificateDto } from '@/shared/types/catalog.types';
+import { parseCertificateScale } from '@/shared/utils/certificateScale';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -59,6 +61,28 @@ const pageItems = (current: number, total: number): (number | 'gap')[] => {
     items.push(p);
   });
   return items;
+};
+
+/** Sinh danh sách điểm hợp lệ dựa trên thang điểm của chứng chỉ */
+const getScoreOptionsForCert = (cert?: CertificateDto | null) => {
+  if (!cert) return [];
+  const scale = parseCertificateScale(cert);
+  const min = scale?.min ?? (cert.minScore != null ? Number(cert.minScore) : 0);
+  const max = scale?.max ?? (cert.maxScore != null ? Number(cert.maxScore) : 10);
+  const step = scale?.step ?? (cert.scoreStep != null && Number(cert.scoreStep) > 0 ? Number(cert.scoreStep) : 0.5);
+  const unit = cert.scoreUnit || 'Điểm';
+
+  const options: { value: number; label: string }[] = [];
+  const count = Math.min(500, Math.round((max - min) / step) + 1);
+  for (let i = 0; i < count; i++) {
+    const val = Math.round((min + i * step) * 100) / 100;
+    if (val > max + 0.0001) break;
+    options.push({
+      value: val,
+      label: `${val} ${unit}`.trim(),
+    });
+  }
+  return options;
 };
 
 export const MentorManagementView: React.FC = () => {
@@ -98,6 +122,8 @@ export const MentorManagementView: React.FC = () => {
     email: '',
     fullName: '',
     phone: '',
+    certificateId: '',
+    certificateScore: undefined,
     specialization: '',
     department: '',
     avatarUrl: '',
@@ -109,6 +135,8 @@ export const MentorManagementView: React.FC = () => {
   const [editForm, setEditForm] = useState<UpdateMentorDto>({
     fullName: '',
     phone: '',
+    certificateId: '',
+    certificateScore: undefined,
     specialization: '',
     department: '',
     avatarUrl: '',
@@ -188,6 +216,16 @@ export const MentorManagementView: React.FC = () => {
   );
   const departmentsCount = departmentOptions.length;
 
+  const selectedCreateCert = certificatesData.find(
+    (c) => c.certificateId === createForm.certificateId || (createForm.specialization && c.certificateName === createForm.specialization)
+  );
+  const createScoreOptions = getScoreOptionsForCert(selectedCreateCert);
+
+  const selectedEditCert = certificatesData.find(
+    (c) => c.certificateId === editForm.certificateId || (editForm.specialization && c.certificateName === editForm.specialization)
+  );
+  const editScoreOptions = getScoreOptionsForCert(selectedEditCert);
+
   // Create Mentor Mutation
   const createMutation = useMutation({
     mutationFn: (dto: CreateMentorDto) => createMentor(dto),
@@ -197,6 +235,8 @@ export const MentorManagementView: React.FC = () => {
         email: '',
         fullName: '',
         phone: '',
+        certificateId: '',
+        certificateScore: undefined,
         specialization: '',
         department: '',
         avatarUrl: '',
@@ -237,11 +277,16 @@ export const MentorManagementView: React.FC = () => {
 
   const handleOpenEdit = (m: MentorDto) => {
     setEditingMentor(m);
+    const matchedCert = certificatesData.find(
+      (c) => c.certificateId === m.certificateId || (m.specialization && c.certificateName?.toLowerCase() === m.specialization?.toLowerCase())
+    );
     setEditForm({
       fullName: m.fullName,
       phone: m.phone || '',
+      certificateId: m.certificateId || matchedCert?.certificateId || '',
+      certificateScore: m.certificateScore != null ? Number(m.certificateScore) : undefined,
       specialization: m.specialization,
-      department: m.department,
+      department: m.department || (matchedCert ? `Bộ môn ${matchedCert.certificateName}` : ''),
       avatarUrl: m.avatarUrl || '',
       biography: m.biography || '',
       hourlyRate: m.hourlyRate,
@@ -289,10 +334,10 @@ export const MentorManagementView: React.FC = () => {
           colorScheme="purple"
         />
         <StatCard
-          title="Departments"
-          value={departmentsCount}
-          subtext="Khoa chuyên môn"
-          icon={Building}
+          title="Certificates"
+          value={certificatesData.length}
+          subtext="Chứng chỉ đào tạo"
+          icon={Award}
           colorScheme="cyan"
         />
       </div>
@@ -365,7 +410,7 @@ export const MentorManagementView: React.FC = () => {
             <option value="Inactive">Inactive</option>
           </select>
 
-          {/* Specialization Filter — chọn từ danh sách có sẵn */}
+          {/* Certificate Filter */}
           <select
             value={specialization}
             onChange={(e) => {
@@ -374,7 +419,7 @@ export const MentorManagementView: React.FC = () => {
             }}
             className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
           >
-            <option value="">All Specializations</option>
+            <option value="">All Certificates</option>
             {specializationOptions.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -422,8 +467,7 @@ export const MentorManagementView: React.FC = () => {
                   <th className="py-3.5 px-2 w-12 font-bold">#</th>
                   <th className="py-3.5 px-3 font-bold">Mentor</th>
                   <th className="py-3.5 px-3 font-bold">Mentor ID</th>
-                  <th className="py-3.5 px-3 font-bold">Department</th>
-                  <th className="py-3.5 px-3 font-bold">Specialization</th>
+                  <th className="py-3.5 px-3 font-bold">Chứng chỉ & Điểm số</th>
                   <th className="py-3.5 px-3 font-bold">Email</th>
                   <th className="py-3.5 px-3 font-bold">Phone</th>
                   <th className="py-3.5 px-3 font-bold">Status</th>
@@ -454,13 +498,17 @@ export const MentorManagementView: React.FC = () => {
                     <td className="py-3 px-3 text-slate-500 font-mono text-[11px]" title={m.userId}>
                       {m.userId.slice(0, 8).toUpperCase()}
                     </td>
-                    <td className="py-3 px-3 text-slate-700 font-medium">
-                      {m.department || '—'}
-                    </td>
                     <td className="py-3 px-3">
-                      <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-[#0052CC] font-bold text-[10px] border border-blue-100 truncate max-w-[140px]">
-                        {m.specialization}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-[#0052CC] font-bold text-[10px] border border-blue-100 truncate max-w-[140px]">
+                          {m.certificateName || m.specialization || '—'}
+                        </span>
+                        {m.certificateScore != null && (
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-extrabold text-[10px] border border-emerald-200">
+                            {m.certificateScore} {m.scoreUnit || ''}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-3 text-slate-500 font-mono text-[11px] truncate max-w-[160px]">
                       {m.email}
@@ -671,25 +719,28 @@ export const MentorManagementView: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Chuyên môn / Chứng chỉ <span className="text-rose-500">*</span>
+                    Chứng chỉ chuyên môn <span className="text-rose-500">*</span>
                   </label>
                   <select
                     required
-                    value={createForm.specialization}
-                    onChange={(e) =>
+                    value={createForm.certificateId || ''}
+                    onChange={(e) => {
+                      const certId = e.target.value;
+                      const cert = certificatesData.find((c) => c.certificateId === certId);
                       setCreateForm({
                         ...createForm,
-                        specialization: e.target.value,
-                        // Reset department khi đổi chuyên môn để chọn lại bộ môn phù hợp
-                        department: '',
-                      })
-                    }
+                        certificateId: certId,
+                        specialization: cert?.certificateName || '',
+                        department: cert ? `Bộ môn ${cert.certificateName}` : '',
+                        certificateScore: undefined,
+                      });
+                    }}
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-[#0052CC]"
                   >
-                    <option value="">-- Chọn chứng chỉ / chuyên môn --</option>
-                    {specializationOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    <option value="">-- Chọn chứng chỉ --</option>
+                    {certificatesData.map((c) => (
+                      <option key={c.certificateId} value={c.certificateId}>
+                        {c.certificateName}
                       </option>
                     ))}
                   </select>
@@ -697,28 +748,37 @@ export const MentorManagementView: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Bộ môn / Khoa <span className="text-rose-500">*</span>
+                    Điểm số chứng chỉ <span className="text-rose-500">*</span>
                   </label>
                   <select
                     required
-                    disabled={!createForm.specialization}
-                    value={createForm.department}
+                    disabled={!selectedCreateCert}
+                    value={createForm.certificateScore != null ? String(createForm.certificateScore) : ''}
                     onChange={(e) =>
-                      setCreateForm({ ...createForm, department: e.target.value })
+                      setCreateForm({
+                        ...createForm,
+                        certificateScore: e.target.value !== '' ? Number(e.target.value) : undefined,
+                      })
                     }
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-[#0052CC] disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     <option value="">
-                      {createForm.specialization
-                        ? '-- Chọn bộ môn / khoa --'
+                      {selectedCreateCert
+                        ? `-- Chọn điểm ${selectedCreateCert.certificateName} --`
                         : '-- Vui lòng chọn chứng chỉ trước --'}
                     </option>
-                    {departmentOptions.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
+                    {createScoreOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
+                  {selectedCreateCert && (
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Thang điểm: {selectedCreateCert.minScore ?? 0} – {selectedCreateCert.maxScore ?? 10}{' '}
+                      ({selectedCreateCert.scoreUnit || 'Điểm'}), bước {selectedCreateCert.scoreStep ?? 0.5}
+                    </p>
+                  )}
                 </div>
 
                 <div className="sm:col-span-2">
@@ -853,28 +913,28 @@ export const MentorManagementView: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Chuyên môn / Chứng chỉ <span className="text-rose-500">*</span>
+                    Chứng chỉ chuyên môn <span className="text-rose-500">*</span>
                   </label>
                   <select
                     required
-                    value={editForm.specialization}
-                    onChange={(e) =>
+                    value={editForm.certificateId || ''}
+                    onChange={(e) => {
+                      const certId = e.target.value;
+                      const cert = certificatesData.find((c) => c.certificateId === certId);
                       setEditForm({
                         ...editForm,
-                        specialization: e.target.value,
-                        department: '',
-                      })
-                    }
+                        certificateId: certId,
+                        specialization: cert?.certificateName || editForm.specialization,
+                        department: cert ? `Bộ môn ${cert.certificateName}` : editForm.department,
+                        certificateScore: undefined,
+                      });
+                    }}
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-[#0052CC]"
                   >
-                    <option value="">-- Chọn chứng chỉ / chuyên môn --</option>
-                    {/* Giữ lại option hiện tại nếu nó không nằm trong list options */}
-                    {editForm.specialization && !specializationOptions.includes(editForm.specialization) && (
-                      <option value={editForm.specialization}>{editForm.specialization}</option>
-                    )}
-                    {specializationOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    <option value="">-- Chọn chứng chỉ --</option>
+                    {certificatesData.map((c) => (
+                      <option key={c.certificateId} value={c.certificateId}>
+                        {c.certificateName}
                       </option>
                     ))}
                   </select>
@@ -882,30 +942,37 @@ export const MentorManagementView: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Bộ môn / Khoa <span className="text-rose-500">*</span>
+                    Điểm số chứng chỉ <span className="text-rose-500">*</span>
                   </label>
                   <select
                     required
-                    disabled={!editForm.specialization}
-                    value={editForm.department}
-                    onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                    disabled={!selectedEditCert}
+                    value={editForm.certificateScore != null ? String(editForm.certificateScore) : ''}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        certificateScore: e.target.value !== '' ? Number(e.target.value) : undefined,
+                      })
+                    }
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-[#0052CC] disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     <option value="">
-                      {editForm.specialization
-                        ? '-- Chọn bộ môn / khoa --'
+                      {selectedEditCert
+                        ? `-- Chọn điểm ${selectedEditCert.certificateName} --`
                         : '-- Vui lòng chọn chứng chỉ trước --'}
                     </option>
-                    {/* Giữ lại option hiện tại nếu nó không nằm trong list options */}
-                    {editForm.department && !departmentOptions.includes(editForm.department) && (
-                      <option value={editForm.department}>{editForm.department}</option>
-                    )}
-                    {departmentOptions.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
+                    {editScoreOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
+                  {selectedEditCert && (
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Thang điểm: {selectedEditCert.minScore ?? 0} – {selectedEditCert.maxScore ?? 10}{' '}
+                      ({selectedEditCert.scoreUnit || 'Điểm'}), bước {selectedEditCert.scoreStep ?? 0.5}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -991,12 +1058,18 @@ export const MentorManagementView: React.FC = () => {
 
             <dl className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <dt className="text-slate-400 font-semibold uppercase">Bộ môn</dt>
-                <dd className="font-bold text-slate-800 mt-1">{selectedMentor.department}</dd>
+                <dt className="text-slate-400 font-semibold uppercase">Chứng chỉ</dt>
+                <dd className="font-bold text-[#0052CC] mt-1">
+                  {selectedMentor.certificateName || selectedMentor.specialization || '—'}
+                </dd>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <dt className="text-slate-400 font-semibold uppercase">Chuyên môn</dt>
-                <dd className="font-bold text-[#0052CC] mt-1">{selectedMentor.specialization}</dd>
+                <dt className="text-slate-400 font-semibold uppercase">Điểm số</dt>
+                <dd className="font-bold text-emerald-700 mt-1">
+                  {selectedMentor.certificateScore != null
+                    ? `${selectedMentor.certificateScore} ${selectedMentor.scoreUnit || ''}`
+                    : 'Chưa cập nhật'}
+                </dd>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <dt className="text-slate-400 font-semibold uppercase">Thù lao mỗi giờ</dt>

@@ -40,8 +40,12 @@ export interface MentorStatsDto {
 export interface CreateMentorResponseDto { mentor: MentorDto; note?: string; }
 
 export interface MentorDto extends UserDto {
+  certificateId?: string;
+  certificateName?: string;
+  certificateScore?: number;
+  scoreUnit?: string;
   specialization: string;
-  department: string;
+  department?: string;
   avatarUrl?: string;
   biography?: string;
   hourlyRate: number;
@@ -59,8 +63,16 @@ export interface ProfileUpdateDto {
 }
 export interface ChangePasswordDto { currentPassword: string; newPassword: string; }
 export interface CreateMentorDto {
-  email: string; fullName: string; phone?: string; specialization: string;
-  department: string; avatarUrl?: string; biography?: string; hourlyRate: number;
+  email: string;
+  fullName: string;
+  phone?: string;
+  certificateId?: string;
+  certificateScore?: number;
+  specialization?: string;
+  department?: string;
+  avatarUrl?: string;
+  biography?: string;
+  hourlyRate: number;
 }
 export type UpdateMentorDto = Omit<CreateMentorDto, 'email'>;
 

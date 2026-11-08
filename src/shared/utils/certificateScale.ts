@@ -16,13 +16,40 @@ const toNumber = (value: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** `null` khi chứng chỉ chưa cấu hình thang điểm. */
+/**
+ * `null` khi chứng chỉ chưa cấu hình thang điểm.
+ * Hỗ trợ nhận cả certificate object (có minScore, maxScore, scoreStep từ DB)
+ * hoặc description string (dự phòng legacy JSON).
+ */
 export const parseCertificateScale = (
-  description: string | null | undefined,
+  certOrDescription:
+    | {
+        description?: string | null;
+        minScore?: number | null;
+        maxScore?: number | null;
+        scoreStep?: number | null;
+      }
+    | string
+    | null
+    | undefined,
 ): CertificateScale | null => {
-  if (!description || !description.trim().startsWith('{')) return null;
+  if (!certOrDescription) return null;
+
+  if (typeof certOrDescription === 'object') {
+    const max = toNumber(certOrDescription.maxScore);
+    if (max != null && max > 0) {
+      const min = toNumber(certOrDescription.minScore) ?? 0;
+      const rawStep = toNumber(certOrDescription.scoreStep);
+      const step = rawStep != null && rawStep > 0 ? rawStep : 1;
+      return min < max ? { min, max, step } : null;
+    }
+    return parseCertificateScale(certOrDescription.description);
+  }
+
+  const desc = certOrDescription;
+  if (!desc || !desc.trim().startsWith('{')) return null;
   try {
-    const scoring = JSON.parse(description)?.scoring;
+    const scoring = JSON.parse(desc)?.scoring;
     if (!scoring || typeof scoring !== 'object') return null;
     const max = toNumber(scoring.maxScore);
     if (max == null || max <= 0) return null;

@@ -850,7 +850,7 @@ const CourseFormModal: React.FC<{
   const selectedCertificate = certificates.find(
     (c) => c.certificateId === form.certificateId,
   );
-  const scale = parseCertificateScale(selectedCertificate?.description);
+  const scale = parseCertificateScale(selectedCertificate);
   const hasScore = Boolean(form.entryScore.trim() || form.targetScore.trim());
   const priceValue = Number(form.price);
 
