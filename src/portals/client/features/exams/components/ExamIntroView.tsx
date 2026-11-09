@@ -8,14 +8,14 @@
 
 import React from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Clock, FileQuestion, Play, RotateCcw, Target, Trophy } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Clock, FileQuestion, Hourglass, Play, RotateCcw, Target, Trophy } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
-import { formatPass } from '@/shared/constants/examScales';
+import { formatPass, formatScore } from '@/shared/constants/examScales';
 import { EXAM_TYPE_LABEL } from '@/shared/types';
 import { useExamDetail, useStartAttempt } from '../hooks/useExams';
 import { useCertificateScale } from '../hooks/useCertificateScale';
@@ -33,16 +33,9 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
   const start = useStartAttempt();
   const scale = useCertificateScale(data?.exam.certificateId, data?.exam.certificateName);
 
-  // Learner (USER) không có Ngân hàng đề → quay về trang Kiểm tra năng lực; đề placement cũng quay về đó
-  const backToPlacement = isLearner || data?.exam.examType === 'placement_test';
   const backButton = (
-    <Button
-      variant="ghost"
-      size="sm"
-      leftIcon={ArrowLeft}
-      onClick={() => navigate(backToPlacement ? CLIENT_ROUTES.examPlacement : CLIENT_ROUTES.exams)}
-    >
-      {backToPlacement ? 'Kiểm tra năng lực' : 'Ngân hàng đề'}
+    <Button variant="ghost" size="sm" leftIcon={ArrowLeft} onClick={() => navigate(CLIENT_ROUTES.exams)}>
+      Ngân hàng đề
     </Button>
   );
 
@@ -65,9 +58,9 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
 
   const { exam } = data;
 
-  // Learner (USER) chỉ được làm bài kiểm tra đầu vào; đề khác → về trang Kiểm tra năng lực
-  if (isLearner && exam.examType !== 'placement_test') {
-    return <Navigate to={CLIENT_ROUTES.examPlacement} replace />;
+  // Learner (USER) chưa mua khóa nên không có đề thi (kiểm tra đầu vào đã bỏ) → về Luyện tập AI
+  if (isLearner) {
+    return <Navigate to={CLIENT_ROUTES.practice} replace />;
   }
 
   const canStart = isAuthenticated && data.accessible !== false;
@@ -100,7 +93,13 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
       </Card>
 
       <Card>
-        <h2 className="font-extrabold text-slate-900 mb-3">Cấu trúc đề · {data.maxScore} điểm</h2>
+        {/* Đề theo chứng chỉ: hiện thang của chứng chỉ (VD IELTS 0 – 9.0), không hiện tổng điểm thô của các câu */}
+        <h2 className="font-extrabold text-slate-900 mb-3">
+          Cấu trúc đề ·{' '}
+          {scale.kind === 'raw'
+            ? `${data.maxScore} điểm`
+            : `Thang ${scale.label} ${formatScore(scale.min, scale.step)} – ${formatScore(scale.max, scale.step)}`}
+        </h2>
         <ol className="space-y-2">
           {data.sections.map((s) => (
             <li key={s.sectionId} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
@@ -110,7 +109,7 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
                 {s.instructions && <p className="text-xs text-slate-500">{s.instructions}</p>}
               </div>
               <span className="text-xs text-slate-500 shrink-0">
-                {s.questionCount} câu · {s.maxScore ?? 0} điểm
+                {scale.kind === 'raw' ? `${s.questionCount} câu · ${s.maxScore ?? 0} điểm` : `${s.questionCount} câu`}
               </span>
             </li>
           ))}
@@ -129,8 +128,16 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
           </p>
           {!isAuthenticated && <p className="text-status-warning font-semibold">Bạn cần đăng nhập để làm bài.</p>}
           {isAuthenticated && data.accessible === false && (
-            <p className="text-status-danger font-semibold flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4" /> {data.accessMessage}
+            // 5033: bài trước đang chờ mentor chấm - chỉ cần chờ, không phải lỗi của học viên
+            <p
+              className={
+                data.accessCode === 5033
+                  ? 'text-blue-700 font-semibold flex items-center gap-1.5'
+                  : 'text-status-danger font-semibold flex items-center gap-1.5'
+              }
+            >
+              {data.accessCode === 5033 ? <Hourglass className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              {data.accessMessage}
             </p>
           )}
           {start.error && <p className="text-status-danger font-semibold">{start.error.message}</p>}

@@ -3,12 +3,15 @@
  */
 
 import React from 'react';
-import { Clock, FileQuestion, Layers, Lock } from 'lucide-react';
+import { Clock, FileQuestion, Hourglass, Layers, Lock } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Card } from '@/shared/components/Card';
 import { useCertificateScale } from '../hooks/useCertificateScale';
 import { EXAM_TYPE_LABEL, type ExamSummary } from '@/shared/types';
-import { formatVND } from '@/shared/utils';
+import { cn } from '@/shared/utils/cn';
+
+/** BE: bài trước đang chờ mentor chấm - học viên không cần làm gì thêm. */
+const PENDING_GRADING = 5033;
 
 interface ExamCardProps {
   exam: ExamSummary;
@@ -16,12 +19,14 @@ interface ExamCardProps {
 }
 
 export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
-  const isPaid = exam.examScope === 'trial' && exam.isFree === false;
   const scale = useCertificateScale(exam.certificateId, exam.certificateName);
+  const locked = exam.accessible === false && !!exam.lockReason;
+  const pending = exam.lockCode === PENDING_GRADING;
+  const LockIcon = pending ? Hourglass : Lock;
   return (
     <Card
       hoverable
-      className="cursor-pointer flex flex-col gap-4"
+      className={cn('cursor-pointer flex flex-col gap-4', locked && 'bg-slate-50/70')}
       onClick={() => onSelect(exam.examId)}
       role="button"
       aria-label={`Xem đề ${exam.examTitle}`}
@@ -42,6 +47,18 @@ export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
         {exam.description && <p className="text-sm text-slate-500 mt-1 line-clamp-2">{exam.description}</p>}
       </div>
 
+      {locked && (
+        <p
+          className={cn(
+            'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs font-semibold',
+            pending ? 'border-blue-200 bg-blue-50 text-blue-800' : 'border-amber-200 bg-amber-50 text-amber-800',
+          )}
+        >
+          <LockIcon className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{exam.lockReason}</span>
+        </p>
+      )}
+
       <div className="mt-auto grid grid-cols-3 gap-2 text-xs text-slate-600">
         <span className="inline-flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -59,7 +76,7 @@ export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
 
       <div className="flex items-center justify-between border-t border-slate-100 pt-3">
         <span className="text-sm font-extrabold text-primary">
-          {isPaid ? formatVND(exam.price ?? 0) : 'Miễn phí'}
+          {exam.courseTitle ?? 'Đề của khóa học'}
         </span>
         {exam.examCode && <span className="text-[11px] font-mono text-slate-400">{exam.examCode}</span>}
       </div>

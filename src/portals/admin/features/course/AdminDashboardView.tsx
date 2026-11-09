@@ -19,7 +19,6 @@ import {
   Sparkles,
   Calendar,
   Clock,
-  Settings,
 } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
@@ -632,7 +631,7 @@ export const AdminDashboardView: React.FC = () => {
           <Sparkles className="w-4 h-4 text-[#0052CC]" /> Quick Actions
         </h3>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <button
             type="button"
             onClick={() => navigate('/admin/students')}
@@ -691,18 +690,6 @@ export const AdminDashboardView: React.FC = () => {
             </div>
             <span className="text-xs font-bold">Manage Exams</span>
             <span className="text-[10px] text-slate-400">Question bank</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/admin/settings')}
-            className="flex flex-col items-center justify-center p-3.5 rounded-xl border border-slate-200/70 hover:border-slate-800 hover:bg-slate-100 text-slate-700 hover:text-slate-900 transition-all group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-slate-100 group-hover:bg-slate-900 text-slate-700 group-hover:text-white flex items-center justify-center transition-colors mb-2">
-              <Settings className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-bold">Settings</span>
-            <span className="text-[10px] text-slate-400">Academy config</span>
           </button>
         </div>
       </div>

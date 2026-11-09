@@ -10,7 +10,6 @@
  *   /exams             → ExamListPage (ngân hàng đề — Dev 3)
  *   /exams/:id         → ExamDetailPage (giới thiệu đề — Dev 3)
  *   /exams/history     → ExamHistoryPage (lịch sử thi — Dev 3)
- *   /exams/placement   → ExamPlacementPage (kiểm tra năng lực — Dev 3)
  *   /exams/attempts/:attemptId        → ExamRoomPage (phòng thi — Dev 3)
  *   /exams/attempts/:attemptId/result → ExamResultPage (kết quả — Dev 3)
  *   /schedule          → SchedulePage
@@ -44,7 +43,6 @@ import ExamListPage from '@/portals/client/pages/exams/ExamListPage';
 import ExamDetailPage from '@/portals/client/pages/exams/ExamDetailPage';
 import ExamResultPage from '@/portals/client/pages/exams/ExamResultPage';
 import ExamHistoryPage from '@/portals/client/pages/exams/ExamHistoryPage';
-import ExamPlacementPage from '@/portals/client/pages/exams/ExamPlacementPage';
 import HomeworkExamPage from '@/portals/client/pages/homework/HomeworkExamPage';
 import MyCoursesPage from '@/portals/client/pages/student/MyCoursesPage';
 import CoursePlayerPage from '@/portals/client/pages/student/CoursePlayerPage';
@@ -217,12 +215,9 @@ const ClientRoutesComponent: React.FC = () => {
             path={CLIENT_ROUTES.exams}
             element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><RoleRedirect deniedRoles={['USER']} to={CLIENT_ROUTES.practice}><ExamListPage /></RoleRedirect></RoleRedirect>}
           />
-          <Route
-            path={CLIENT_ROUTES.examPlacement}
-            element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><ExamPlacementPage /></RoleRedirect>}
-          />
-          {/* USER vào được /exams/:id để làm bài kiểm tra đầu vào; đề không phải placement_test thì
-              ExamIntroView tự đưa USER về /exams/placement (RoleRedirect theo route không biết loại đề) */}
+          {/* Kiểm tra đầu vào đã bỏ: link cũ /exams/placement về Ngân hàng đề (khai báo trước /exams/:id);
+              USER mở /exams/:id thì ExamIntroView đưa về Luyện tập AI */}
+          <Route path="/exams/placement" element={<Navigate to={CLIENT_ROUTES.exams} replace />} />
           <Route
             path={CLIENT_ROUTES.exam()}
             element={<RoleRedirect deniedRoles={['MENTOR']} to={CLIENT_ROUTES.teachingSchedule}><ExamDetailPage /></RoleRedirect>}

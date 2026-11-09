@@ -41,6 +41,12 @@ export interface ExamSummary {
   availableUntil?: string;
   publishedDate?: string;
   requiresEnrollment?: boolean;
+  /** Học viên đăng nhập có làm được đề không (thi nối tiếp Quiz → Giữa kỳ → Cuối kỳ). */
+  accessible?: boolean;
+  /** Mã lỗi khi bị khóa: 5030 bài tập, 5031 Quiz, 5032 Giữa kỳ, 5033 đang chờ chấm, 5021 chưa mua khóa... */
+  lockCode?: number;
+  /** Lý do bị khóa, có số liệu (VD "… (đã đạt 1/3)"). */
+  lockReason?: string;
   /** Chỉ có khi người xem là admin. */
   totalAttempts?: number;
   averageScore?: number;
@@ -100,6 +106,10 @@ export interface ExamDetail {
   /** Có được làm đề không (không có khi chưa đăng nhập). */
   accessible?: boolean;
   accessMessage?: string;
+  /** Mã lỗi khi accessible = false (5033 = đang chờ mentor chấm bài trước). */
+  accessCode?: number;
+  /** Chỉ admin: bộ đề của khóa chưa đủ nên luật thi nối tiếp bị bỏ qua. */
+  warnings?: string[];
   questionsIncluded: boolean;
   maxScore: number;
   sections: ExamSection[];
@@ -290,22 +300,6 @@ export interface AnswerItemRequest {
   selectedOptionId?: string | null;
   answerText?: string | null;
   timeSpentSeconds?: number;
-}
-
-/** Kết quả bài kiểm tra năng lực (placement_test) gần nhất theo chứng chỉ — GET /me/proficiency.
- *  Backend trả % từng phần; FE quy đổi theo thang của chứng chỉ (scaleResult). */
-export interface Proficiency {
-  certificateId: string;
-  certificateName: string;
-  examId: string;
-  examTitle: string;
-  attemptId: string;
-  takenAt?: string;
-  /** assessed: đã đủ điểm; pending_grading: còn phần Writing / Speaking chờ mentor chấm */
-  status: 'assessed' | 'pending_grading';
-  /** Tỷ lệ % cả bài */
-  percentage?: number;
-  sections: SectionScore[];
 }
 
 export const EXAM_TYPE_LABEL: Record<ExamType, string> = {

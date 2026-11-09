@@ -10,7 +10,6 @@
  *   GET  /api/v1/me/exam-attempts?page=&examScope=                       → PageResponse<AttemptSummary>
  *   POST /api/v1/attempts/{attemptId}/ai-grade                           → AttemptResult (đề luyện tập: AI chấm Writing/Speaking)
  *   GET  /api/v1/me/exam-attempts/{attemptId}/result                     → AttemptResult
- *   GET  /api/v1/me/proficiency?certificateId=                           → Proficiency[] (năng lực theo bài kiểm tra đầu vào)
  */
 
 import { apiGet, apiPost, apiPut } from '@/shared/api/axiosClient';
@@ -25,7 +24,6 @@ import type {
   ExamSummary,
   ExamType,
   PageResponse,
-  Proficiency,
 } from '@/shared/types';
 
 export interface ExamListFilter {
@@ -101,5 +99,3 @@ export const aiGradeAttemptApi = (attemptId: string): Promise<ApiResponse<Attemp
 export const getAttemptResultApi = (attemptId: string): Promise<ApiResponse<AttemptResult>> =>
   apiGet<AttemptResult>(`/api/v1/me/exam-attempts/${attemptId}/result`);
 
-export const getMyProficiencyApi = (certificateId?: string): Promise<ApiResponse<Proficiency[]>> =>
-  apiGet<Proficiency[]>('/api/v1/me/proficiency', { params: { certificateId: certificateId || undefined } });

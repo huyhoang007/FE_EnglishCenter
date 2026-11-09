@@ -170,6 +170,8 @@ export const addQuestionApi = (examId: string, payload: CreateQuestionRequest): 
 
 /** Sửa nội dung hiển thị của câu — được cả khi đã có học viên trả lời (BE chặn đổi đáp án, điểm, dạng câu) */
 export interface UpdateQuestionContentRequest {
+  /** Chỉ đổi được khi đề chưa có lượt thi (BE chặn 5006) */
+  points?: number;
   questionText?: string;
   explanation?: string;
   audioUrl?: string;
