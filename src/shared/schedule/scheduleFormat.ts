@@ -175,3 +175,35 @@ export const REPEAT_RULE_LABEL: Record<StudyRepeatRule, string> = {
   daily: 'Hằng ngày',
   weekly: 'Hằng tuần',
 };
+
+/* ---------------- Link phòng học online (khớp BE @MeetingUrl) ---------------- */
+
+/** Domain nền tảng họp online được phép — host trùng khớp hoặc là subdomain (VD us05web.zoom.us) */
+export const MEETING_URL_ALLOWED_DOMAINS = [
+  'meet.google.com',
+  'zoom.us',
+  'zoom.com',
+  'teams.microsoft.com',
+  'teams.live.com',
+  'discord.com',
+  'discord.gg',
+] as const;
+
+/**
+ * Kiểm tra link phòng học; để trống thì hợp lệ (mentor cập nhật sau).
+ * So khớp theo hostname để chặn link giả kiểu meet.google.com.evil.com hoặc facebook.com/?q=zoom.us.
+ */
+export const validateMeetingUrl = (value: string): string | null => {
+  const raw = value.trim();
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return 'Link không hợp lệ, cần dạng https://...';
+  }
+  if (url.protocol !== 'https:') return 'Link phải bắt đầu bằng https://';
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  const ok = MEETING_URL_ALLOWED_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
+  return ok ? null : 'Chỉ nhận link Google Meet, Zoom, Microsoft Teams hoặc Discord';
+};

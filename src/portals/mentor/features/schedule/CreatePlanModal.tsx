@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, Plus, Repeat, Search, Trash2, X } from 'lucide-react';
+import { CalendarPlus, Plus, Repeat, Search, Trash2, Video, X } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { useToast } from '@/shared/components/Toast';
 import { getErrorMessage } from '@/shared/api/axiosClient';
@@ -22,6 +22,7 @@ import {
   toUtcIso,
   useCreateMentoringPlan,
   useStudentSearch,
+  validateMeetingUrl,
   validateSessionTime,
 } from '@/shared/schedule';
 import type { StudentOverview } from '@/shared/types';
@@ -32,6 +33,8 @@ const LABEL_CLASS = 'text-xs text-slate-500 font-semibold uppercase tracking-wid
 /** Số buổi mặc định khi lộ trình không quy định */
 const DEFAULT_SESSIONS = 1;
 const MAX_SESSIONS = 60;
+/** Trang chủ Google Meet — mentor tạo phòng rồi dán link vào ô bên cạnh */
+const GOOGLE_MEET_HOME = 'https://meet.google.com/home';
 
 interface SessionRow {
   date: string;
@@ -83,6 +86,8 @@ export const CreatePlanModal: React.FC<{
   const paths = pathsQuery.data ?? [];
   const selectedPath = paths.find((p) => p.learningPathId === learningPathId) ?? null;
   const requiredSessions = selectedPath?.totalSessions ?? null;
+  // Chứng chỉ mục tiêu chưa có lộ trình nào → ẩn hẳn ô chọn lộ trình (gói tư vấn riêng)
+  const hasPaths = paths.length > 0;
 
   const searchQuery = useStudentSearch(keyword.trim(), 0);
 
@@ -108,7 +113,8 @@ export const CreatePlanModal: React.FC<{
       : '';
   const studentError = !student ? 'Chọn học viên' : '';
   const titleError = !title.trim() ? 'Nhập tên gói' : '';
-  const hasError = Boolean(studentError || titleError || countError) || rowErrors.some(Boolean);
+  const meetingUrlError = validateMeetingUrl(meetingUrl);
+  const hasError = Boolean(studentError || titleError || countError || meetingUrlError) || rowErrors.some(Boolean);
 
   const updateRow = (index: number, patch: Partial<SessionRow>) =>
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -204,19 +210,21 @@ export const CreatePlanModal: React.FC<{
           </div>
 
           {/* ---------- Lộ trình + tên gói ---------- */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="space-y-1">
-              <span className={LABEL_CLASS}>Lộ trình</span>
-              <select value={learningPathId} onChange={(e) => setLearningPathId(e.target.value)} className={INPUT_CLASS}>
-                <option value="">— Tư vấn riêng, không theo lộ trình —</option>
-                {paths.map((p) => (
-                  <option key={p.learningPathId} value={p.learningPathId}>
-                    {p.name}
-                    {p.totalSessions ? ` · ${p.totalSessions} buổi` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className={cn('grid grid-cols-1 gap-3', hasPaths && 'sm:grid-cols-2')}>
+            {hasPaths && (
+              <label className="space-y-1">
+                <span className={LABEL_CLASS}>Lộ trình</span>
+                <select value={learningPathId} onChange={(e) => setLearningPathId(e.target.value)} className={INPUT_CLASS}>
+                  <option value="">— Tư vấn riêng, không theo lộ trình —</option>
+                  {paths.map((p) => (
+                    <option key={p.learningPathId} value={p.learningPathId}>
+                      {p.name}
+                      {p.totalSessions ? ` · ${p.totalSessions} buổi` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="space-y-1">
               <span className={LABEL_CLASS}>Tên gói *</span>
               <input
@@ -230,17 +238,38 @@ export const CreatePlanModal: React.FC<{
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="space-y-1">
-              <span className={LABEL_CLASS}>Link phòng học</span>
-              <input
-                type="url"
-                maxLength={500}
-                value={meetingUrl}
-                onChange={(e) => setMeetingUrl(e.target.value)}
-                placeholder="https://meet.google.com/..."
-                className={INPUT_CLASS}
-              />
-            </label>
+            <div className="space-y-1">
+              <label htmlFor="plan-meeting-url" className={LABEL_CLASS}>
+                Link phòng học
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="plan-meeting-url"
+                  type="url"
+                  maxLength={500}
+                  value={meetingUrl}
+                  onChange={(e) => setMeetingUrl(e.target.value)}
+                  placeholder="https://meet.google.com/..."
+                  aria-invalid={Boolean(meetingUrlError)}
+                  className={cn(INPUT_CLASS, meetingUrl.trim() && meetingUrlError && 'border-rose-400')}
+                />
+                <a
+                  href={GOOGLE_MEET_HOME}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Mở Google Meet để tạo phòng, rồi dán link vào đây"
+                  className="shrink-0 h-10 px-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-[#0052CC]"
+                >
+                  <Video className="w-4 h-4 text-[#0052CC]" />
+                  Tạo Meet
+                </a>
+              </div>
+              {meetingUrl.trim() && meetingUrlError ? (
+                <p className="text-[11px] text-rose-600 font-semibold">{meetingUrlError}</p>
+              ) : (
+                <p className="text-[11px] text-slate-500">Google Meet, Zoom, Microsoft Teams hoặc Discord</p>
+              )}
+            </div>
             <label className="space-y-1">
               <span className={LABEL_CLASS}>Ghi chú cho học viên</span>
               <input

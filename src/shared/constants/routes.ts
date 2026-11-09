@@ -35,12 +35,16 @@ export const CLIENT_ROUTES = {
   homeworkAttempt: (attemptId: string = ':attemptId') =>
     `/homework/attempts/${attemptId}`,
   schedule: '/schedule',
+  /** Mentor: trang tổng quan sau khi đăng nhập (lịch sắp tới, tư vấn, bài chờ chấm) — trong layout client */
+  mentorDashboard: '/mentor-dashboard',
   /** Mentor quản lý gói kèm 1-1 + lịch dạy (Dev 5) — trong layout client */
   teachingSchedule: '/teaching-schedule',
   /** Mentor xem học viên, điểm test level, nhận yêu cầu tư vấn (Dev 5) — trong layout client */
   mentorStudents: '/mentor-students',
   /** Mentor chấm Writing/Speaking bài thi (flow Dev 3) — trong layout client */
   examGrading: '/exam-grading',
+  /** Mentor chấm bài tập (homework) của học viên (flow Dev 2.5) — trong layout client */
+  homeworkGrading: '/homework-grading',
   /** Lịch học cá nhân của người học USER / STUDENT (Dev 5 — TASK-D5-01) */
   studySchedule: '/study-schedule',
   learningPath: '/learning-path',

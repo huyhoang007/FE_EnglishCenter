@@ -42,7 +42,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  /* ---------- MENTOR: lịch dạy 1-1, chấm Writing/Speaking, xem lộ trình ---------- */
+  /* ---------- MENTOR: tổng quan, lịch dạy 1-1, chấm Writing/Speaking, xem lộ trình ---------- */
+  {
+    // Trang mentor thấy đầu tiên sau khi đăng nhập
+    label: 'Dashboard',
+    to: CLIENT_ROUTES.mentorDashboard,
+    roles: ['MENTOR'],
+  },
   {
     // Dev 5: mentor mở / quản lý khung giờ dạy ngay trong layout client
     label: 'Teaching Schedule',
@@ -59,6 +65,12 @@ const NAV_ITEMS: NavItem[] = [
     // Flow Dev 3: mentor chấm Writing / Speaking của bài kiểm tra năng lực
     label: 'Exam Grading',
     to: CLIENT_ROUTES.examGrading,
+    roles: ['MENTOR'],
+  },
+  {
+    // Flow Dev 2.5: mentor chấm bài tập (homework) học viên nộp trong khóa học
+    label: 'Homework Grading',
+    to: CLIENT_ROUTES.homeworkGrading,
     roles: ['MENTOR'],
   },
   /* ---------- Learner (USER, chưa mua khóa) + khách: chỉ khóa học + test trình độ miễn phí ---------- */
@@ -162,7 +174,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
   const avatarInitial = displayName.charAt(0).toUpperCase();
   const visibleNav = NAV_ITEMS.filter((item) => item.roles.includes(role));
   const showAuthenticatedCluster = isAuthenticated && role !== 'GUEST';
-  /** Mentor: không có ô tìm khóa học, My Learning; logo về lịch dạy */
+  /** Mentor: không có ô tìm khóa học, My Learning; logo về Dashboard */
   const isMentor = role === 'MENTOR';
   const isLearner = role === 'USER' || role === 'STUDENT';
 
@@ -181,7 +193,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
     >
       {/* ============== LOGO ============== */}
       <Link
-        to={isMentor ? CLIENT_ROUTES.teachingSchedule : '/'}
+        to={isMentor ? CLIENT_ROUTES.mentorDashboard : '/'}
         className="flex items-center gap-2.5 shrink-0"
         title="PrepMaster — Home"
       >

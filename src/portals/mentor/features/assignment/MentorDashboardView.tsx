@@ -1,89 +1,273 @@
 /**
- * MentorDashboardView — Mentor landing page
+ * MentorDashboardView — Trang tổng quan của mentor (Dev 5)
  * -----------------------------------------------------------
- * Thẻ KPI + danh sách bài nộp cần chấm điểm từ học viên.
- * Hoàn toàn dùng dữ liệu thực từ hệ thống.
+ * Trang mentor thấy ngay sau khi đăng nhập (URL client: /mentor-dashboard; portal cũ: /mentor).
+ * Chỉ gọi các API mentor đã có quyền, dữ liệu thật từ BE:
+ *   GET /api/v1/mentor/bookings?type=upcoming          → buổi dạy sắp tới
+ *   GET /api/v1/mentor/consultation-requests?mine=     → yêu cầu tư vấn mới / tôi phụ trách
+ *   GET /api/v1/mentor/mentoring-plans                 → gói kèm 1-1 chờ học viên thanh toán
+ *   GET (hàng đợi chấm bài thi Writing / Speaking)     → bài thi chờ chấm
  */
 
 import React from 'react';
-import { Card } from '@/shared/components/Card';
-import { Badge } from '@/shared/components/Badge';
-import { Button } from '@/shared/components/Button';
-import { ArrowRight, FileText, Mic, Users, Star, Inbox } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { getUsers } from '@/shared/api/domainApi';
-import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import {
+  ArrowRight,
+  CalendarClock,
+  ClipboardCheck,
+  Headset,
+  Inbox,
+  Phone,
+  UserCheck,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
+import { StatCard } from '@/portals/admin/components/StatCard';
+import { Badge } from '@/shared/components/Badge';
+import { Card } from '@/shared/components/Card';
+import { ErrorState, Skeleton } from '@/shared/components/Feedback';
+import { useAuthStore } from '@/shared/auth/useAuthStore';
+import { getErrorMessage } from '@/shared/api/axiosClient';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import {
+  BOOKING_STATUS_LABEL,
+  BOOKING_STATUS_VARIANT,
+  formatDayLabel,
+  formatTime,
+  useMentorConsultations,
+  useMentorPlans,
+  useMentorSchedule,
+} from '@/shared/schedule';
+import { usePendingAttempts } from '@/portals/mentor/features/exam-grading';
+
+/** Số dòng tối đa mỗi khối danh sách */
+const PREVIEW_SIZE = 5;
+
+const formatVnd = (value: number) => `${Math.round(value).toLocaleString('vi-VN')} ₫`;
+
+const greeting = (): string => {
+  const hour = new Date().getHours();
+  if (hour < 11) return 'Chào buổi sáng';
+  if (hour < 14) return 'Chào buổi trưa';
+  if (hour < 18) return 'Chào buổi chiều';
+  return 'Chào buổi tối';
+};
 
 const MentorDashboardView: React.FC = () => {
-  // Query active students count
-  const studentsQuery = useQuery({
-    queryKey: [...QUERY_KEYS.admin.accounts, 'MENTOR_DASHBOARD_STUDENTS'],
-    queryFn: () => getUsers({ roleName: 'STUDENT', page: 0, size: 1 }),
-  });
+  const user = useAuthStore((s) => s.user);
+  const userName = useAuthStore((s) => s.userName);
 
-  const activeStudentsCount = studentsQuery.data?.totalElements ?? 0;
+  const upcomingQuery = useMentorSchedule('upcoming', 0);
+  const newConsultQuery = useMentorConsultations(false, 0);
+  const myConsultQuery = useMentorConsultations(true, 0);
+  const plansQuery = useMentorPlans(0);
+  const gradingQuery = usePendingAttempts(0);
 
-  const kpis = [
-    { label: 'Pending reviews', value: 0, icon: FileText, accent: 'amber' },
-    { label: 'Active students', value: activeStudentsCount, icon: Users, accent: 'blue' },
-    { label: 'Speaking submissions', value: 0, icon: Mic, accent: 'violet' },
-    { label: 'Avg. rating', value: '5.0', icon: Star, accent: 'emerald' },
-  ];
+  const upcoming = (upcomingQuery.data?.data ?? []).slice(0, PREVIEW_SIZE);
+  const newConsults = (newConsultQuery.data?.data ?? []).slice(0, PREVIEW_SIZE);
+  const pendingPlans = (plansQuery.data?.data ?? []).filter((p) => p.status === 'pending_payment').slice(0, PREVIEW_SIZE);
+  const gradingAttempts = (gradingQuery.data?.data ?? []).slice(0, PREVIEW_SIZE);
+
+  const count = (n: number | undefined, loading: boolean) => (loading ? '…' : (n ?? 0).toLocaleString('vi-VN'));
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">
-            Mentor workspace
-          </p>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
-            Good morning, here is your queue
-          </h1>
-        </div>
-        <Link to="/mentor/grading">
-          <Button variant="primary" size="md" rightIcon={ArrowRight}>
-            Open grading queue
-          </Button>
-        </Link>
+      {/* ============ Lời chào ============ */}
+      <header>
+        <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Mentor workspace</p>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+          {greeting()}, {user?.fullName || userName || 'Mentor'}
+        </h1>
+        <p className="text-sm text-slate-600 mt-1">Tổng quan lịch dạy, yêu cầu tư vấn và bài cần chấm của bạn.</p>
       </header>
 
-      {/* KPI grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map(({ label, value, icon: Icon, accent }) => (
-          <Card key={label} className="!p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
-                {label}
-              </p>
-              <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center bg-${accent}-50 text-${accent}-600`}
-              >
-                <Icon className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-3xl font-extrabold text-slate-900 mt-3">
-              {value}
-            </p>
-          </Card>
-        ))}
+      {/* ============ KPI ============ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+        <StatCard
+          title="Buổi dạy sắp tới"
+          value={count(upcomingQuery.data?.totalElements, upcomingQuery.isLoading)}
+          subtext="Đã xác nhận / chờ thanh toán"
+          icon={CalendarClock}
+          colorScheme="blue"
+        />
+        <StatCard
+          title="Yêu cầu tư vấn mới"
+          value={count(newConsultQuery.data?.totalElements, newConsultQuery.isLoading)}
+          subtext="Chưa mentor nào nhận"
+          icon={Headset}
+          colorScheme="amber"
+        />
+        <StatCard
+          title="Tư vấn tôi phụ trách"
+          value={count(myConsultQuery.data?.totalElements, myConsultQuery.isLoading)}
+          subtext="Học viên đã nhận tư vấn"
+          icon={UserCheck}
+          colorScheme="emerald"
+        />
+        <StatCard
+          title="Bài thi chờ chấm"
+          value={count(gradingQuery.data?.totalElements, gradingQuery.isLoading)}
+          subtext="Writing / Speaking"
+          icon={ClipboardCheck}
+          colorScheme="purple"
+        />
       </div>
 
-      {/* Recent submissions */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-slate-900">Recent submissions</h2>
-          <span className="text-xs text-slate-400 font-medium">Hàng đợi chấm điểm</span>
-        </div>
-        <div className="py-12 text-center text-slate-400 text-xs space-y-2">
-          <Inbox className="w-8 h-8 text-slate-300 mx-auto" />
-          <p className="font-semibold text-slate-600">Hiện tại chưa có bài nộp nào đang chờ duyệt</p>
-          <p className="text-slate-400">Các bài thi Speaking & Writing của học viên sẽ xuất hiện tại đây khi được gửi.</p>
-        </div>
-      </Card>
+      {/* ============ Danh sách ============ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Buổi dạy sắp tới */}
+        <Section
+          title="Buổi dạy sắp tới"
+          icon={CalendarClock}
+          linkTo={CLIENT_ROUTES.teachingSchedule}
+          linkLabel="Xem lịch dạy"
+          isLoading={upcomingQuery.isLoading}
+          error={upcomingQuery.isError ? getErrorMessage(upcomingQuery.error) : null}
+          onRetry={() => upcomingQuery.refetch()}
+          emptyText="Chưa có buổi dạy nào sắp tới."
+          isEmpty={upcoming.length === 0}
+        >
+          {upcoming.map((b) => (
+            <li key={b.bookingId} className="py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900">
+                  {formatDayLabel(b.startTime)} · {formatTime(b.startTime)} – {formatTime(b.endTime)}
+                </p>
+                <p className="text-xs text-slate-500 truncate">Học viên {b.studentName}</p>
+              </div>
+              <Badge variant={BOOKING_STATUS_VARIANT[b.status]} size="sm">
+                {BOOKING_STATUS_LABEL[b.status]}
+              </Badge>
+            </li>
+          ))}
+        </Section>
+
+        {/* Yêu cầu tư vấn mới */}
+        <Section
+          title="Yêu cầu tư vấn mới"
+          icon={Headset}
+          linkTo={CLIENT_ROUTES.mentorStudents}
+          linkLabel="Nhận tư vấn"
+          isLoading={newConsultQuery.isLoading}
+          error={newConsultQuery.isError ? getErrorMessage(newConsultQuery.error) : null}
+          onRetry={() => newConsultQuery.refetch()}
+          emptyText="Không có yêu cầu tư vấn mới."
+          isEmpty={newConsults.length === 0}
+        >
+          {newConsults.map((c) => (
+            <li key={c.requestId} className="py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900 truncate">{c.studentName}</p>
+                <p className="text-xs text-slate-500 truncate">
+                  {c.targetCertificateName
+                    ? `Mục tiêu ${c.targetCertificateName}${c.targetScore != null ? ` ${c.targetScore}` : ''}`
+                    : 'Chưa đặt mục tiêu'}
+                  {c.currentLevel ? ` · Trình độ ${c.currentLevel}` : ''}
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0052CC] shrink-0">
+                <Phone className="w-3.5 h-3.5" /> {c.phone}
+              </span>
+            </li>
+          ))}
+        </Section>
+
+        {/* Bài thi chờ chấm */}
+        <Section
+          title="Bài thi chờ chấm"
+          icon={ClipboardCheck}
+          linkTo={CLIENT_ROUTES.examGrading}
+          linkLabel="Vào chấm bài"
+          isLoading={gradingQuery.isLoading}
+          error={gradingQuery.isError ? getErrorMessage(gradingQuery.error) : null}
+          onRetry={() => gradingQuery.refetch()}
+          emptyText="Không còn bài thi nào chờ chấm."
+          isEmpty={gradingAttempts.length === 0}
+        >
+          {gradingAttempts.map((a) => (
+            <li key={a.attemptId} className="py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900 truncate">{a.studentName ?? a.studentEmail ?? 'Học viên'}</p>
+                <p className="text-xs text-slate-500 truncate">{a.examTitle}</p>
+              </div>
+              {a.endTime && (
+                <span className="text-xs text-slate-400 shrink-0">Nộp {formatDayLabel(a.endTime)}</span>
+              )}
+            </li>
+          ))}
+        </Section>
+
+        {/* Gói kèm 1-1 chờ thanh toán */}
+        <Section
+          title="Gói kèm 1-1 chờ thanh toán"
+          icon={Wallet}
+          linkTo={CLIENT_ROUTES.teachingSchedule}
+          linkLabel="Quản lý gói"
+          isLoading={plansQuery.isLoading}
+          error={plansQuery.isError ? getErrorMessage(plansQuery.error) : null}
+          onRetry={() => plansQuery.refetch()}
+          emptyText="Không có gói nào đang chờ học viên thanh toán."
+          isEmpty={pendingPlans.length === 0}
+        >
+          {pendingPlans.map((p) => (
+            <li key={p.planId} className="py-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900 truncate">{p.title}</p>
+                <p className="text-xs text-slate-500 truncate">
+                  {p.studentName} · {p.totalSessions} buổi
+                </p>
+              </div>
+              <span className="text-sm font-bold text-slate-800 shrink-0">{formatVnd(p.totalPrice)}</span>
+            </li>
+          ))}
+        </Section>
+      </div>
     </div>
   );
 };
+
+/* ---------- Khung 1 khối danh sách ---------- */
+const Section: React.FC<{
+  title: string;
+  icon: LucideIcon;
+  linkTo: string;
+  linkLabel: string;
+  isLoading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  isEmpty: boolean;
+  emptyText: string;
+  children: React.ReactNode;
+}> = ({ title, icon: Icon, linkTo, linkLabel, isLoading, error, onRetry, isEmpty, emptyText, children }) => (
+  <Card className="flex flex-col">
+    <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100">
+      <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
+        <Icon className="w-4 h-4 text-[#0052CC]" /> {title}
+      </h2>
+      <Link
+        to={linkTo}
+        className="inline-flex items-center gap-1 text-xs font-bold text-[#0052CC] hover:underline shrink-0"
+      >
+        {linkLabel} <ArrowRight className="w-3.5 h-3.5" />
+      </Link>
+    </div>
+    {isLoading ? (
+      <div className="space-y-2 pt-3">
+        <Skeleton className="h-10" />
+        <Skeleton className="h-10" />
+        <Skeleton className="h-10" />
+      </div>
+    ) : error ? (
+      <ErrorState className="mt-3" message={error} onRetry={onRetry} />
+    ) : isEmpty ? (
+      <div className="py-10 text-center text-slate-400 text-xs space-y-2">
+        <Inbox className="w-7 h-7 text-slate-300 mx-auto" />
+        <p className="font-semibold text-slate-500">{emptyText}</p>
+      </div>
+    ) : (
+      <ul className="divide-y divide-slate-100">{children}</ul>
+    )}
+  </Card>
+);
 
 export default MentorDashboardView;

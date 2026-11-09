@@ -15,9 +15,11 @@
  *   /schedule          → SchedulePage
  *   /learning-path     → LearningPathPage (lộ trình học — Dev 5)
  *   /practice          → PracticePage (luyện đề Writing/Speaking, AI chấm — Dev 5)
+ *   /mentor-dashboard  → MentorDashboardPage (tổng quan của mentor sau khi đăng nhập — Dev 5)
  *   /teaching-schedule → TeachingSchedulePage (mentor tạo gói kèm 1-1 + lịch dạy — Dev 5)
  *   /mentor-students   → MentorStudentsPage (mentor tìm học viên, xem test level, nhận tư vấn — Dev 5)
  *   /exam-grading      → ExamGradingPage (mentor chấm Writing/Speaking — flow Dev 3)
+ *   /homework-grading  → HomeworkGradingPage (mentor chấm bài tập homework — flow Dev 2.5)
  *   /study-schedule    → StudySchedulePage (lịch học cá nhân USER/STUDENT — Dev 5)
  *
  * Mentor chỉ dùng: Lịch dạy, Chấm bài, Learning Paths. Các trang của người học
@@ -49,9 +51,11 @@ import CoursePlayerPage from '@/portals/client/pages/student/CoursePlayerPage';
 import SchedulePage from '@/portals/client/pages/student/SchedulePage';
 import LearningPathPage from '@/portals/client/pages/student/LearningPathPage';
 import PracticePage from '@/portals/client/pages/student/PracticePage';
+import MentorDashboardPage from '@/portals/client/pages/mentors/MentorDashboardPage';
 import TeachingSchedulePage from '@/portals/client/pages/mentors/TeachingSchedulePage';
 import MentorStudentsPage from '@/portals/client/pages/mentors/MentorStudentsPage';
 import ExamGradingPage from '@/portals/client/pages/mentors/ExamGradingPage';
+import HomeworkGradingPage from '@/portals/client/pages/mentors/HomeworkGradingPage';
 import StudySchedulePage from '@/portals/client/pages/student/StudySchedulePage';
 import MentorDirectoryPage from '@/portals/client/pages/mentors/MentorDirectoryPage';
 import MentorDetailPage from '@/portals/client/pages/mentors/MentorDetailPage';
@@ -273,6 +277,14 @@ const ClientRoutesComponent: React.FC = () => {
             }
           />
           <Route
+            path={CLIENT_ROUTES.mentorDashboard}
+            element={
+              <ProtectedRoute allowedRoles={['MENTOR']}>
+                <MentorDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={CLIENT_ROUTES.teachingSchedule}
             element={
               <ProtectedRoute allowedRoles={['MENTOR']}>
@@ -285,6 +297,15 @@ const ClientRoutesComponent: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={['MENTOR']}>
                 <MentorStudentsPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* Mentor chấm bài tập homework (flow Dev 2.5) */}
+          <Route
+            path={CLIENT_ROUTES.homeworkGrading}
+            element={
+              <ProtectedRoute allowedRoles={['MENTOR']}>
+                <HomeworkGradingPage />
               </ProtectedRoute>
             }
           />
