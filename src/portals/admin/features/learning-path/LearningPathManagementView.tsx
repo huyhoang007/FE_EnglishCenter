@@ -22,6 +22,7 @@ import {
   BookOpen,
   ClipboardList,
   Eye,
+  FileText,
   Layers3,
   Pencil,
   Plus,
@@ -68,8 +69,12 @@ const TYPE_META: Record<
   COURSE: { label: 'Khóa học', icon: BookOpen, variant: 'primary' },
   EXAM: { label: 'Đề thi', icon: ClipboardList, variant: 'warning' },
   PRACTICE_EXAM: { label: 'Luyện đề AI', icon: Sparkles, variant: 'ai' },
+  // V27: bài tập riêng của mentor — chỉ mentor gắn bài của mình vào lộ trình của mình
+  HOMEWORK: { label: 'Bài tập mentor', icon: FileText, variant: 'warning' },
 };
 const ITEM_TYPES = Object.keys(TYPE_META) as LearningPathItemType[];
+/** Loại chặng được chọn theo người tạo: admin không có bài tập mentor */
+const itemTypesOf = (mode: LearningPathManageMode) => ITEM_TYPES.filter((t) => t !== 'HOMEWORK' || mode === 'mentor');
 const STAGE_SUGGESTIONS = ['Nền tảng', 'Bứt phá', 'Luyện đề', 'Tăng tốc', 'Về đích'];
 
 /** Giá trị đặc biệt của dropdown giai đoạn: chuyển sang ô tự nhập */
@@ -473,7 +478,7 @@ const LearningPathFormModal: React.FC<{
 }> = ({ mode, open, editing, certificates, onClose, onSaved }) => {
   const toast = useToast();
   const saveMutation = useSaveLearningPath(mode);
-  const options = useLearningPathItemOptions(open);
+  const options = useLearningPathItemOptions(open, mode);
 
   const [certificateId, setCertificateId] = useState('');
   const [name, setName] = useState('');
@@ -522,6 +527,12 @@ const LearningPathFormModal: React.FC<{
       return options.courses.map((c) => ({
         id: c.courseId,
         label: `${c.title}${c.certificateName ? ` · ${c.certificateName}` : ''}${c.status !== 'active' ? ` (${c.status})` : ''}`,
+      }));
+    }
+    if (type === 'HOMEWORK') {
+      return options.homeworks.map((h) => ({
+        id: h.contentId,
+        label: `${h.title}${h.dueDays ? ` · hạn ${h.dueDays} ngày` : ''}`,
       }));
     }
     if (type === 'EXAM') {
@@ -720,7 +731,7 @@ const LearningPathFormModal: React.FC<{
                         className={cn(inputCls(false), 'max-w-[160px]')}
                         aria-label="Loại chặng"
                       >
-                        {ITEM_TYPES.map((t) => (
+                        {itemTypesOf(mode).map((t) => (
                           <option key={t} value={t}>
                             {TYPE_META[t].label}
                           </option>
@@ -794,6 +805,12 @@ const LearningPathFormModal: React.FC<{
                       )}
                     </div>
 
+                    {item.type === 'HOMEWORK' && !error && (
+                      <p className="text-[10px] text-slate-400 pl-8">
+                        Chỉ học viên đã mua gói kèm 1-1 mới làm được; hoàn thành khi mentor chấm đạt. Soạn / import ở mục
+                        Homework → Bài tập của tôi.
+                      </p>
+                    )}
                     {item.type === 'PRACTICE_EXAM' && !error && (
                       <p className="text-[10px] text-slate-400 pl-8">
                         Hoàn thành khi AI chấm đạt band mục tiêu; bỏ trống band = chỉ cần có 1 bài đã chấm.

@@ -7,6 +7,7 @@ import { unwrapOrThrow } from '@/shared/api/axiosClient';
 import { fetchCourses } from '@/shared/api/courseService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import type { LearningPathPayload } from '@/shared/types';
+import { getMentorHomeworksApi } from '@/shared/api/mentorHomeworkService';
 import {
   createLearningPathApi,
   deleteLearningPathApi,
@@ -56,7 +57,7 @@ export function useDeleteLearningPath(mode: LearningPathManageMode = 'admin') {
 }
 
 /** Lựa chọn cho dropdown chặng — chỉ tải khi form đang mở */
-export function useLearningPathItemOptions(enabled: boolean) {
+export function useLearningPathItemOptions(enabled: boolean, mode: LearningPathManageMode = 'admin') {
   const courses = useQuery({
     queryKey: QUERY_KEYS.admin.courseOptions,
     queryFn: async () => (await fetchCourses({ page: 0, size: 200 })).data,
@@ -75,10 +76,18 @@ export function useLearningPathItemOptions(enabled: boolean) {
     enabled,
     staleTime: 60_000,
   });
+  // V27: chặng HOMEWORK — bài tập riêng của mentor đang đăng nhập
+  const homeworks = useQuery({
+    queryKey: QUERY_KEYS.homework.mentorLibrary(),
+    queryFn: async () => unwrapOrThrow(await getMentorHomeworksApi()),
+    enabled: enabled && mode === 'mentor',
+    staleTime: 60_000,
+  });
   return {
     courses: courses.data ?? [],
     exams: exams.data ?? [],
     practices: practices.data ?? [],
-    isLoading: courses.isLoading || exams.isLoading || practices.isLoading,
+    homeworks: homeworks.data ?? [],
+    isLoading: courses.isLoading || exams.isLoading || practices.isLoading || homeworks.isLoading,
   };
 }

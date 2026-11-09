@@ -19,11 +19,14 @@
  *   POST   /api/v1/me/mentoring-plans/{id}/checkout → SessionPaymentOrder (đơn SePay cả gói)
  *   PUT    /api/v1/me/mentoring-plans/{id}/reject   → MentoringPlan
  * Tư vấn lộ trình:
- *   POST   /api/v1/me/consultation-requests          → Consultation (để lại SĐT)
+ *   POST   /api/v1/me/consultation-requests          → Consultation (để lại SĐT + lịch rảnh)
  *   GET    /api/v1/me/consultation-requests/latest   → Consultation | null
  *   GET    /api/v1/mentor/consultation-requests?mine= → PageResponse<Consultation>
  *   PUT    /api/v1/mentor/consultation-requests/{id}/claim  → Consultation
  *   PUT    /api/v1/mentor/consultation-requests/{id}/status → Consultation
+ *   PUT    /api/v1/mentor/bookings/{id}/reschedule   → Booking (mentor dời lịch)
+ *   POST   /api/v1/me/bookings/{id}/reschedule-request        → Booking (học viên xin dời)
+ *   PUT    /api/v1/mentor/bookings/{id}/reschedule-request/reject → Booking (mentor từ chối)
  *   GET    /api/v1/mentor/students?keyword=          → PageResponse<StudentOverview>
  *   GET    /api/v1/mentor/students/{id}              → StudentOverview
  *   GET    /api/v1/mentor/students/{id}/level-tests  → PageResponse<AttemptSummary>
@@ -40,6 +43,7 @@ import type {
   ApiResponse,
   AttemptResult,
   AttemptSummary,
+  AvailableSlot,
   Booking,
   BookingStatus,
   Consultation,
@@ -47,6 +51,8 @@ import type {
   CreateMentoringPlanPayload,
   MentoringPlan,
   PageResponse,
+  RescheduleBookingPayload,
+  RescheduleRequestPayload,
   ScheduleListType,
   SessionPaymentOrder,
   StudentOverview,
@@ -77,6 +83,18 @@ export const updateBookingStatusApi = (
 ): Promise<ApiResponse<Booking>> =>
   apiPut<Booking>(`/api/v1/mentor/bookings/${bookingId}/status`, { status });
 
+/** Mentor dời 1 buổi (trước giờ học ≥ 2 giờ), BE giữ nguyên thời lượng và báo học viên */
+export const rescheduleBookingApi = (bookingId: string, payload: RescheduleBookingPayload): Promise<ApiResponse<Booking>> =>
+  apiPut<Booking>(`/api/v1/mentor/bookings/${bookingId}/reschedule`, payload);
+
+/** Học viên xin dời 1 buổi (V28) — mentor nhận thông báo, quyết định dời hay từ chối */
+export const requestRescheduleApi = (bookingId: string, payload: RescheduleRequestPayload): Promise<ApiResponse<Booking>> =>
+  apiPost<Booking>(`/api/v1/me/bookings/${bookingId}/reschedule-request`, payload);
+
+/** Mentor từ chối yêu cầu dời lịch (buổi giữ nguyên giờ) */
+export const rejectRescheduleRequestApi = (bookingId: string, reason?: string): Promise<ApiResponse<Booking>> =>
+  apiPut<Booking>(`/api/v1/mentor/bookings/${bookingId}/reschedule-request/reject`, { reason: reason || undefined });
+
 /* ---------------- Gói kèm 1-1 ---------------- */
 
 export const createMentoringPlanApi = (payload: CreateMentoringPlanPayload): Promise<ApiResponse<MentoringPlan>> =>
@@ -99,8 +117,12 @@ export const rejectPlanApi = (planId: string, reason?: string): Promise<ApiRespo
 
 /* ---------------- Tư vấn lộ trình ---------------- */
 
-export const requestConsultationApi = (phone: string, note?: string): Promise<ApiResponse<Consultation>> =>
-  apiPost<Consultation>('/api/v1/me/consultation-requests', { phone, note: note || undefined });
+export const requestConsultationApi = (
+  phone: string,
+  availableSlots: AvailableSlot[],
+  note?: string,
+): Promise<ApiResponse<Consultation>> =>
+  apiPost<Consultation>('/api/v1/me/consultation-requests', { phone, availableSlots, note: note || undefined });
 
 export const getMyConsultationApi = (): Promise<ApiResponse<Consultation | null>> =>
   apiGet<Consultation | null>('/api/v1/me/consultation-requests/latest');

@@ -282,3 +282,59 @@ export function isFileSizeAllowed(
 ): boolean {
   return bytes <= HOMEWORK_FILE_LIMITS[resourceType];
 }
+
+/* =====================================================
+ * Bài tập riêng của mentor (Dev 5, V27)
+ * API: /api/v1/mentor/homeworks, /api/v1/me/homeworks/{id}
+ * Lưu như homework khóa học (course_content, course_id = NULL) → nộp / chấm dùng lại API của Dev 2.5.
+ * ===================================================== */
+
+/** Hình thức nộp bài tập mentor (không có trắc nghiệm) */
+export type MentorHomeworkSubmissionType = 'text' | 'file' | 'audio';
+
+export interface MentorHomework {
+  contentId: string;
+  title: string;
+  /** Đề bài dạng chữ (AI đọc từ PDF) */
+  instructions: string | null;
+  submissionType: MentorHomeworkSubmissionType;
+  maxScore: number;
+  /** % điểm cần đạt, null = 50% */
+  passingScore: number | null;
+  maxAttempts: number | null;
+  /** Hạn nộp: số ngày kể từ khi học viên ghi danh lộ trình, null = không hạn */
+  dueDays: number | null;
+  allowedFileTypes: string[] | null;
+  attachmentUrl: string | null;
+  attachmentName: string | null;
+  attachmentPublicId: string | null;
+  /** Lộ trình đang chứa bài */
+  learningPaths: { learningPathId: string; name: string }[];
+  /** > 0 thì không đổi hình thức nộp / điểm tối đa, không xóa được */
+  submissionCount: number;
+  createdAt: string | null;
+  lastUpdated: string | null;
+}
+
+/** POST / PUT /api/v1/mentor/homeworks */
+export interface MentorHomeworkPayload {
+  title: string;
+  instructions?: string;
+  submissionType: MentorHomeworkSubmissionType;
+  maxScore: number;
+  passingScore?: number;
+  maxAttempts?: number;
+  dueDays?: number;
+  allowedFileTypes?: string[];
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentPublicId?: string;
+}
+
+/** Bản nháp AI đọc từ PDF — POST /api/v1/mentor/homeworks/ai-import */
+export interface HomeworkAiDraft {
+  title: string;
+  instructions: string;
+  submissionType: MentorHomeworkSubmissionType;
+  maxScore: number;
+}

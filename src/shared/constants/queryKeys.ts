@@ -91,6 +91,10 @@ export const QUERY_KEYS = {
     /** Bảng thống kê kết quả làm bài trắc nghiệm (Nhóm A). */
     examStats: (homeworkContentId: string) =>
       ['homework', 'exam-stats', homeworkContentId] as const,
+    /** Bài tập riêng của mentor (V27). */
+    mentorLibrary: () => ['homework', 'mentor-library'] as const,
+    /** Học viên mở bài tập mentor từ lộ trình. */
+    pathHomework: (contentId: string) => ['homework', 'path-homework', contentId] as const,
   },
   account: {
     profile: ['account', 'profile'] as const,

@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   CreditCard,
   Route,
+  CalendarClock,
 } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Button } from '@/shared/components/Button';
@@ -53,9 +54,17 @@ import {
   formatDayLabel,
   formatTime,
   isActiveBooking,
+  isWithinSlots,
+  RESCHEDULE_DEADLINE_HOURS,
+  scheduleDateBounds,
+  toDateInput,
+  toUtcIso,
+  useRequestReschedule,
+  validateSessionTime,
   useCancelBooking,
   useCancelSessionPayment,
   useCheckoutPlan,
+  useMyConsultation,
   useMyPlans,
   useMySchedule,
   useRejectPlan,
@@ -132,6 +141,7 @@ export const SchedulePageView: React.FC = () => {
                   <p className="text-xs text-slate-500 font-medium">
                     {durationMinutes(upcoming.startTime, upcoming.endTime)} phút · Phòng học trực tuyến
                   </p>
+                  {upcoming.topic && <p className="text-sm text-slate-700 font-semibold">{upcoming.topic}</p>}
                 </div>
                 <div className="hidden md:block w-px self-stretch bg-slate-200" />
                 <div className="flex-1 min-w-0 flex items-center gap-3">
@@ -198,6 +208,9 @@ export const SchedulePageView: React.FC = () => {
 const MyPlansSection: React.FC<{ onPay: (orderCode: string) => void }> = ({ onPay }) => {
   const toast = useToast();
   const plansQuery = useMyPlans(true);
+  // Lịch rảnh đã gửi khi xin tư vấn → cảnh báo buổi nằm ngoài lịch rảnh trước khi thanh toán
+  const consultationQuery = useMyConsultation(true);
+  const mySlots = consultationQuery.data?.availableSlots ?? [];
   const checkoutMutation = useCheckoutPlan();
   const [rejecting, setRejecting] = useState<MentoringPlan | null>(null);
   const plans = plansQuery.data ?? [];
@@ -217,7 +230,7 @@ const MyPlansSection: React.FC<{ onPay: (orderCode: string) => void }> = ({ onPa
     <section aria-label="Gói kèm 1-1 của tôi">
       <SectionHeader
         title="Gói kèm 1-1 của tôi"
-        subtitle="Mentor tạo sau khi tư vấn chốt lộ trình. Thanh toán cả gói để giữ lịch các buổi."
+        subtitle="Mentor tạo sau khi tư vấn chốt lộ trình. Xem kỹ ngày giờ và nội dung từng buổi, thanh toán cả gói để giữ lịch."
       />
       {plansQuery.isLoading ? (
         <Card>
@@ -235,7 +248,12 @@ const MyPlansSection: React.FC<{ onPay: (orderCode: string) => void }> = ({ onPa
         </Card>
       ) : (
         <div className="space-y-3">
-          {plans.map((plan) => (
+          {plans.map((plan) => {
+            const isPending = plan.status === 'pending_payment';
+            const outsideCount = isPending
+              ? plan.sessions.filter((s) => !isWithinSlots(s.startTime, s.endTime, mySlots)).length
+              : 0;
+            return (
             <Card key={plan.planId} className="space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                 <div className="flex-1 min-w-0">
@@ -281,23 +299,52 @@ const MyPlansSection: React.FC<{ onPay: (orderCode: string) => void }> = ({ onPa
                   </p>
                 )}
               </div>
+              {outsideCount > 0 && (
+                <div className="rounded-input border border-amber-200 bg-amber-50 p-3 flex gap-2 text-xs text-amber-800">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <p>
+                    <b>{outsideCount} buổi</b> nằm ngoài lịch rảnh bạn đã gửi. Nếu chưa thỏa thuận giờ này với mentor, hãy bấm{' '}
+                    <b>Từ chối</b> và ghi giờ mong muốn để mentor xếp lại.
+                  </p>
+                </div>
+              )}
               <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {plan.sessions.map((s, i) => (
-                  <li key={s.bookingId} className="rounded-input border border-slate-200/70 bg-slate-50/50 px-3 py-2 text-xs">
-                    <span className="font-bold text-slate-400 mr-1.5">#{i + 1}</span>
-                    <span className="font-semibold text-slate-800 tabular-nums">
-                      {formatDayLabel(s.startTime)} · {formatTime(s.startTime)} – {formatTime(s.endTime)}
-                    </span>
-                    {plan.status !== 'pending_payment' && (
-                      <Badge variant={BOOKING_STATUS_VARIANT[s.status]} size="sm" className="ml-1.5">
-                        {BOOKING_STATUS_LABEL[s.status]}
-                      </Badge>
-                    )}
-                  </li>
-                ))}
+                {plan.sessions.map((s, i) => {
+                  const outside = isPending && !isWithinSlots(s.startTime, s.endTime, mySlots);
+                  return (
+                    <li
+                      key={s.bookingId}
+                      className={cn(
+                        'rounded-input border px-3 py-2 text-xs space-y-1',
+                        outside ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200/70 bg-slate-50/50',
+                      )}
+                    >
+                      <div>
+                        <span className="font-bold text-slate-400 mr-1.5">#{i + 1}</span>
+                        <span className="font-semibold text-slate-800 tabular-nums">
+                          {formatDayLabel(s.startTime)} · {formatTime(s.startTime)} – {formatTime(s.endTime)}
+                        </span>
+                        {!isPending && (
+                          <Badge variant={BOOKING_STATUS_VARIANT[s.status]} size="sm" className="ml-1.5">
+                            {BOOKING_STATUS_LABEL[s.status]}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className={cn('text-slate-600', !s.topic && 'italic text-slate-400')}>
+                        {s.topic ?? 'Mentor chưa ghi nội dung buổi này'}
+                      </p>
+                      {outside && (
+                        <p className="text-[11px] font-semibold text-amber-700 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Ngoài lịch rảnh bạn đã gửi
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
       {rejecting && <RejectPlanModal plan={rejecting} onClose={() => setRejecting(null)} />}
@@ -399,6 +446,7 @@ const MyBookingsSection: React.FC = () => {
   const [listType, setListType] = useState<ScheduleListType>('upcoming');
   const [page, setPage] = useState(0);
   const [cancelling, setCancelling] = useState<Booking | null>(null);
+  const [requesting, setRequesting] = useState<Booking | null>(null);
   const query = useMySchedule(listType, page, true);
   const bookings = query.data?.data ?? [];
 
@@ -406,7 +454,7 @@ const MyBookingsSection: React.FC = () => {
     <section aria-label="Lịch của tôi">
       <SectionHeader
         title="Lịch của tôi"
-        subtitle="Các buổi kèm 1-1 trong gói của bạn. Có thể hủy buổi đã thanh toán trước giờ học theo quy định"
+        subtitle="Các buổi kèm 1-1 trong gói của bạn. Bận thì bấm Xin dời lịch để mentor xếp giờ khác, hoặc hủy buổi trước giờ học theo quy định"
       />
       <Card>
         <div className="flex gap-2 mb-4">
@@ -460,8 +508,19 @@ const MyBookingsSection: React.FC = () => {
                     </Badge>
                   </div>
                   <p className="text-xs text-slate-600 mt-0.5">Mentor {b.mentorName}</p>
+                  {b.topic && <p className="text-xs text-slate-700 mt-0.5">Nội dung: {b.topic}</p>}
                   {b.cancelReason && (
                     <p className="text-[11px] text-slate-500 mt-0.5">Lý do hủy: {b.cancelReason}</p>
+                  )}
+                  {b.rescheduleRequestedAt && (
+                    <p className="text-[11px] text-amber-700 font-semibold mt-1 flex items-center gap-1">
+                      <CalendarClock className="w-3.5 h-3.5" />
+                      Đã xin dời
+                      {b.reschedulePreferredTime
+                        ? ` sang ${formatDayLabel(b.reschedulePreferredTime)} · ${formatTime(b.reschedulePreferredTime)}`
+                        : ''}{' '}
+                      — chờ mentor xác nhận
+                    </p>
                   )}
                 </div>
                 {listType === 'upcoming' && isActiveBooking(b.status) && (
@@ -478,9 +537,21 @@ const MyBookingsSection: React.FC = () => {
                     )}
                     {/* Buổi của gói chưa thanh toán: thanh toán / từ chối cả gói ở mục Gói kèm 1-1 */}
                     {b.status === 'confirmed' && (
-                      <Button variant="ghost" size="sm" leftIcon={XCircle} onClick={() => setCancelling(b)}>
-                        Hủy
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={CalendarClock}
+                          disabled={new Date(b.startTime).getTime() - Date.now() <= RESCHEDULE_DEADLINE_HOURS * 3600 * 1000}
+                          title={`Gửi yêu cầu cho mentor, trước giờ học ít nhất ${RESCHEDULE_DEADLINE_HOURS} giờ`}
+                          onClick={() => setRequesting(b)}
+                        >
+                          {b.rescheduleRequestedAt ? 'Sửa yêu cầu dời' : 'Xin dời lịch'}
+                        </Button>
+                        <Button variant="ghost" size="sm" leftIcon={XCircle} onClick={() => setCancelling(b)}>
+                          Hủy
+                        </Button>
+                      </>
                     )}
                   </div>
                 )}
@@ -498,7 +569,128 @@ const MyBookingsSection: React.FC = () => {
       </Card>
 
       {cancelling && <CancelBookingModal booking={cancelling} onClose={() => setCancelling(null)} />}
+      {requesting && <RescheduleRequestModal booking={requesting} onClose={() => setRequesting(null)} />}
     </section>
+  );
+};
+
+/* ============================================================
+ *  RescheduleRequestModal — học viên xin mentor dời 1 buổi (V28)
+ *  Chỉ là yêu cầu: lý do bắt buộc, giờ mong muốn tùy chọn (cùng thời lượng buổi cũ).
+ *  Mentor nhận thông báo → dời lịch (yêu cầu tự xóa) hoặc từ chối (buổi giữ nguyên giờ).
+ * ============================================================ */
+const RescheduleRequestModal: React.FC<{ booking: Booking; onClose: () => void }> = ({ booking, onClose }) => {
+  const toast = useToast();
+  const requestMutation = useRequestReschedule();
+  const bounds = scheduleDateBounds();
+  const minutes = durationMinutes(booking.startTime, booking.endTime);
+  const [note, setNote] = useState(booking.rescheduleRequestNote ?? '');
+  const [date, setDate] = useState(booking.reschedulePreferredTime ? toDateInput(booking.reschedulePreferredTime) : '');
+  const [time, setTime] = useState(booking.reschedulePreferredTime ? formatTime(booking.reschedulePreferredTime) : '');
+  const [touched, setTouched] = useState(false);
+
+  // Giờ mong muốn: bỏ trống cả 2 ô = để mentor tự đề xuất
+  const preferredIso = date && time ? toUtcIso(date, time) : '';
+  const endTime = preferredIso ? formatTime(new Date(new Date(preferredIso).getTime() + minutes * 60000).toISOString()) : '';
+  const noteError = !note.trim() ? 'Hãy ghi lý do để mentor sắp xếp' : '';
+  const timeError =
+    (date && !time) || (!date && time)
+      ? 'Chọn đủ ngày và giờ, hoặc bỏ trống cả hai'
+      : preferredIso
+        ? validateSessionTime(date, time, endTime)
+        : null;
+
+  const handleSubmit = () => {
+    setTouched(true);
+    if (noteError || timeError) return;
+    requestMutation.mutate(
+      { bookingId: booking.bookingId, note: note.trim(), preferredStartTime: preferredIso || undefined },
+      {
+        onSuccess: () => {
+          toast.success('Đã gửi yêu cầu, mentor sẽ xác nhận giờ mới');
+          onClose();
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-900/60 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="w-full max-w-md bg-white rounded-card shadow-elevation border border-slate-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <p className="text-sm font-extrabold text-slate-900">Xin dời lịch</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            aria-label="Đóng"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="rounded-input bg-slate-50 border border-slate-200/70 p-3 space-y-1.5">
+            <Row
+              label="Buổi học"
+              value={`${formatDayLabel(booking.startTime)} · ${formatTime(booking.startTime)} – ${formatTime(booking.endTime)}`}
+            />
+            <Row label="Mentor" value={booking.mentorName} />
+          </div>
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-1">Lý do *</p>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="VD: em bận thi giữa kỳ tối thứ 5"
+              className={cn(
+                'w-full rounded-input border p-2.5 text-sm text-slate-800 focus:outline-none focus:border-primary',
+                touched && noteError ? 'border-rose-400' : 'border-slate-200',
+              )}
+            />
+            {touched && noteError && <p className="text-[11px] text-status-danger font-semibold">{noteError}</p>}
+          </div>
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-1">
+              Giờ mong muốn (không bắt buộc)
+            </p>
+            <div className="grid grid-cols-[1fr_110px] gap-2">
+              <input
+                type="date"
+                min={bounds.min}
+                max={bounds.max}
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="h-10 px-3 rounded-input border border-slate-200 text-sm focus:outline-none focus:border-primary"
+              />
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="h-10 px-3 rounded-input border border-slate-200 text-sm focus:outline-none focus:border-primary"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">
+              {endTime ? `Buổi mới dự kiến ${time} – ${endTime} (giữ ${minutes} phút). ` : ''}
+              Mentor sẽ xác nhận giờ mới hoặc liên hệ bạn.
+            </p>
+            {timeError && <p className="text-[11px] text-status-danger font-semibold">{timeError}</p>}
+          </div>
+          {requestMutation.isError && (
+            <p className="text-xs text-status-danger font-semibold">{getErrorMessage(requestMutation.error)}</p>
+          )}
+        </div>
+        <div className="px-5 py-4 border-t border-slate-100 bg-slate-50/40 flex items-center justify-end gap-2">
+          <Button variant="ghost" size="md" onClick={onClose}>
+            Đóng
+          </Button>
+          <Button variant="primary" size="md" leftIcon={CalendarClock} isLoading={requestMutation.isPending} onClick={handleSubmit}>
+            Gửi yêu cầu
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 };
 

@@ -13,6 +13,7 @@ import {
   getLearningPathsApi,
   getMyLearningPathProgressApi,
 } from '../services/learningPathService';
+import { getPathHomeworkApi } from '@/shared/api/mentorHomeworkService';
 
 /** Danh sách lộ trình (lọc theo chứng chỉ, '' = tất cả) */
 export function useLearningPaths(certificateId: string) {
@@ -45,5 +46,14 @@ export function useEnrollLearningPath() {
   return useMutation({
     mutationFn: async (pathId: string) => unwrapOrThrow(await enrollLearningPathApi(pathId)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.learningPath.all }),
+  });
+}
+
+/** Bài tập của mentor trong lộ trình (V27): chỉ tải khi học viên bấm "Làm bài" */
+export function usePathHomework(contentId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: QUERY_KEYS.homework.pathHomework(contentId),
+    queryFn: async () => unwrapOrThrow(await getPathHomeworkApi(contentId)),
+    enabled,
   });
 }

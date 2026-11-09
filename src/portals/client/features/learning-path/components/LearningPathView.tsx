@@ -4,17 +4,22 @@
  * Phần 1 "Lộ trình của tôi" (chỉ STUDENT): % tiến độ và trạng thái từng chặng.
  *   - Chặng PRACTICE_EXAM → nút "Luyện đề" mở /practice?examId=...
  *   - Chặng COURSE → mở trang khóa học /courses/{id}
+ *   - Chặng HOMEWORK (V27, bài tập mentor) → nút "Làm bài" mở modal nộp bài của Dev 2.5 ngay tại đây;
+ *     chỉ học viên đã mua gói kèm 1-1 mới làm được (chưa mua → nhắc sang trang Mentor 1-1); mentor 1-1 chấm,
+ *     hoàn thành khi bài được chấm đạt.
  *   Tiến độ do BE tự cập nhật khi học viên hoàn thành khóa học / đạt band đề luyện tập.
  * Phần 2 "Khám phá lộ trình": danh sách lộ trình (lọc theo chứng chỉ) + nút Ghi danh.
  */
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen,
   CheckCircle2,
   Circle,
   ClipboardList,
+  FileText,
   Loader2,
   Map as MapIcon,
   PenLine,
@@ -27,6 +32,11 @@ import { Button } from '@/shared/components/Button';
 import { cn } from '@/shared/utils';
 import { useRole } from '@/portals/client/features/auth';
 import { getErrorMessage } from '@/shared/api/axiosClient';
+import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import { useToast } from '@/shared/components/Toast';
+import { HomeworkSubmitModal } from '@/portals/client/features/homework';
+import { CLIENT_ROUTES } from '@/shared/constants/routes';
+import { useMyPlans } from '@/shared/schedule';
 import type {
   LearningPath,
   LearningPathItem,
@@ -38,6 +48,7 @@ import {
   useEnrollLearningPath,
   useLearningPaths,
   useMyLearningPathProgress,
+  usePathHomework,
 } from '../hooks/useLearningPaths';
 
 /** Gom các chặng theo tên giai đoạn, giữ đúng thứ tự học */
@@ -57,6 +68,7 @@ const TYPE_LABEL: Record<LearningPathItem['type'], string> = {
   COURSE: 'Khóa học',
   EXAM: 'Đề thi',
   PRACTICE_EXAM: 'Luyện đề AI',
+  HOMEWORK: 'Bài tập mentor',
 };
 
 const STATUS_BADGE: Record<LearningPathStatus, { label: string; variant: 'primary' | 'success' | 'neutral' }> = {
@@ -206,7 +218,8 @@ const LoadingCard: React.FC = () => (
 );
 
 const ItemIcon: React.FC<{ type: LearningPathItem['type'] }> = ({ type }) => {
-  const Icon = type === 'COURSE' ? BookOpen : type === 'PRACTICE_EXAM' ? PenLine : ClipboardList;
+  const Icon =
+    type === 'COURSE' ? BookOpen : type === 'PRACTICE_EXAM' ? PenLine : type === 'HOMEWORK' ? FileText : ClipboardList;
   return <Icon className="w-4 h-4 text-slate-400 shrink-0" />;
 };
 
@@ -280,6 +293,9 @@ const ItemAction: React.FC<{ item: LearningPathItem }> = ({ item }) => {
       </Link>
     );
   }
+  if (item.type === 'HOMEWORK') {
+    return <PathHomeworkAction contentId={item.refId} />;
+  }
   if (item.type === 'COURSE') {
     return (
       <Link to={`/courses/${item.refId}`} className="text-xs font-bold text-[#0052CC] hover:underline shrink-0">
@@ -289,6 +305,60 @@ const ItemAction: React.FC<{ item: LearningPathItem }> = ({ item }) => {
   }
   // EXAM: module thi của Dev 3 chưa bàn giao
   return <span className="text-xs text-slate-400 shrink-0">{TYPE_LABEL.EXAM}</span>;
+};
+
+/**
+ * Chặng bài tập của mentor: bấm "Làm bài" mới tải bài (kèm hạn nộp riêng của học viên),
+ * mở modal nộp bài dùng chung với bài tập khóa học. Đóng modal thì tải lại tiến độ lộ trình.
+ */
+const PathHomeworkAction: React.FC<{ contentId: string }> = ({ contentId }) => {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const homeworkQuery = usePathHomework(contentId, open);
+  // Bài tập mentor chỉ dành cho học viên đã thanh toán gói kèm 1-1 (BE cũng chặn)
+  const plansQuery = useMyPlans(true);
+  const hasPaidPlan = (plansQuery.data ?? []).some((p) => p.status === 'active' || p.status === 'completed');
+
+  React.useEffect(() => {
+    if (open && homeworkQuery.isError) {
+      toast.error(getErrorMessage(homeworkQuery.error));
+      setOpen(false);
+    }
+  }, [open, homeworkQuery.isError, homeworkQuery.error, toast]);
+
+  const handleClose = () => {
+    setOpen(false);
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.learningPath.myProgress });
+  };
+
+  if (plansQuery.isSuccess && !hasPaidPlan) {
+    return (
+      <Link
+        to={CLIENT_ROUTES.schedule}
+        title="Bài tập do mentor giao và chấm, chỉ dành cho học viên đã mua gói kèm 1-1"
+        className="text-xs font-bold text-slate-400 hover:text-[#0052CC] hover:underline shrink-0"
+      >
+        Cần gói kèm 1-1 →
+      </Link>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-xs font-bold text-amber-700 hover:underline shrink-0 inline-flex items-center gap-1"
+      >
+        {open && homeworkQuery.isLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+        Làm bài →
+      </button>
+      {open && homeworkQuery.data && (
+        <HomeworkSubmitModal open onClose={handleClose} homework={homeworkQuery.data} />
+      )}
+    </>
+  );
 };
 
 /** Thẻ 1 lộ trình trong danh sách khám phá */

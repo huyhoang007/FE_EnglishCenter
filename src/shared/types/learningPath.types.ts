@@ -3,8 +3,11 @@
  * API: /api/v1/learning-paths, /api/v1/users/me/learning-paths/...
  */
 
-/** COURSE: khóa học, EXAM: đề thi (Dev 3), PRACTICE_EXAM: đề luyện tập AI chấm */
-export type LearningPathItemType = 'COURSE' | 'EXAM' | 'PRACTICE_EXAM';
+/**
+ * COURSE: khóa học, EXAM: đề thi (Dev 3), PRACTICE_EXAM: đề luyện tập AI chấm,
+ * HOMEWORK: bài tập riêng của mentor (V27, chỉ mentor gắn bài của mình vào lộ trình của mình)
+ */
+export type LearningPathItemType = 'COURSE' | 'EXAM' | 'PRACTICE_EXAM' | 'HOMEWORK';
 
 /** Trạng thái lộ trình của học viên (chữ thường, khớp BE) */
 export type LearningPathStatus = 'active' | 'completed' | 'abandoned';

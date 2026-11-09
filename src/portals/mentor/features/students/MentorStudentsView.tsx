@@ -29,6 +29,7 @@ import {
   useStudentOverview,
   useStudentSearch,
   useUpdateConsultationStatus,
+  AvailableSlotChips,
 } from '@/shared/schedule';
 import type { Consultation, StudentOverview } from '@/shared/types';
 import { PracticeLevelCard } from '@/portals/client/features/exams/components/PracticeLevelCard';
@@ -92,6 +93,7 @@ const MentorStudentsView: React.FC = () => {
                 fullName: c.studentName,
                 email: c.studentEmail,
                 targetCertificateId: c.targetCertificateId,
+                availableSlots: c.availableSlots,
               },
               consultationId: c.requestId,
             })
@@ -184,6 +186,7 @@ const ConsultationListCard: React.FC<{
                     {c.currentLevel ?? '—'} ({fmtScore(c.currentScore)})
                   </b>
                 </p>
+                <AvailableSlotChips slots={c.availableSlots} />
                 {c.note && <p className="text-sm text-slate-600 italic">"{c.note}"</p>}
               </div>
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -354,6 +357,7 @@ const StudentDetailModal: React.FC<{
                   {student.currentLevel ?? '—'} ({fmtScore(student.currentScore)})
                 </b>
               </p>
+              <AvailableSlotChips slots={student.availableSlots} className="mt-2" />
             </div>
           ) : (
             <p className="text-sm text-slate-500">{overviewQuery.isError ? getErrorMessage(overviewQuery.error) : 'Đang tải…'}</p>
@@ -370,6 +374,7 @@ const StudentDetailModal: React.FC<{
                     fullName: student.fullName,
                     email: student.email,
                     targetCertificateId: student.targetCertificateId,
+                    availableSlots: student.availableSlots,
                   })
                 }
               >

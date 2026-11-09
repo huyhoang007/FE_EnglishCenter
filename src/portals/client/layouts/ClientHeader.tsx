@@ -68,8 +68,8 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['MENTOR'],
   },
   {
-    // Flow Dev 2.5: mentor chấm bài tập (homework) học viên nộp trong khóa học
-    label: 'Homework Grading',
+    // Dev 2.5 + V27: mentor chấm bài tập + quản lý bài tập riêng (import PDF, gắn vào lộ trình)
+    label: 'Homework',
     to: CLIENT_ROUTES.homeworkGrading,
     roles: ['MENTOR'],
   },

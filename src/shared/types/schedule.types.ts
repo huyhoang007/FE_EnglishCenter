@@ -25,10 +25,17 @@ export interface Booking {
   endTime: string;
   price: number;
   meetingUrl: string | null;
+  /** Buổi này học gì (mentor ghi khi tạo gói) */
+  topic: string | null;
   status: BookingStatus;
   cancelReason: string | null;
   cancelledAt: string | null;
   rescheduledFromId: string | null;
+  /** Học viên xin dời lịch (V28): null = không có yêu cầu đang chờ */
+  rescheduleRequestedAt: string | null;
+  /** Giờ học viên mong muốn (có thể trống) */
+  reschedulePreferredTime: string | null;
+  rescheduleRequestNote: string | null;
   createdAt: string | null;
   /** Mã đơn SePay đang chờ thanh toán — chỉ có khi status = 'pending' */
   paymentOrderCode: string | null;
@@ -95,6 +102,20 @@ export interface MentoringPlan {
 export interface PlanSessionPayload {
   startTime: string;
   endTime: string;
+  /** Nội dung buổi, tối đa 255 ký tự */
+  topic?: string;
+}
+
+/** POST /api/v1/me/bookings/{id}/reschedule-request — học viên xin dời, mentor quyết định */
+export interface RescheduleRequestPayload {
+  preferredStartTime?: string;
+  note: string;
+}
+
+/** PUT /api/v1/mentor/bookings/{id}/reschedule — chỉ gửi giờ bắt đầu mới, BE giữ nguyên thời lượng */
+export interface RescheduleBookingPayload {
+  newStartTime: string;
+  reason?: string;
 }
 
 /** POST /api/v1/mentor/mentoring-plans */
@@ -110,6 +131,16 @@ export interface CreateMentoringPlanPayload {
 
 /* ---------------- Tư vấn lộ trình (Dev 5, V21) ---------------- */
 
+/** Thứ trong tuần — khớp java.time.DayOfWeek */
+export type DayOfWeek = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
+
+/** 1 khung giờ rảnh hằng tuần, giờ Việt Nam dạng "HH:mm" (V26) */
+export interface AvailableSlot {
+  day: DayOfWeek;
+  from: string;
+  to: string;
+}
+
 /** pending: chưa mentor nào nhận · contacted: mentor đang liên hệ · agreed: đã chốt gói · closed */
 export type ConsultationStatus = 'pending' | 'contacted' | 'agreed' | 'closed';
 
@@ -120,6 +151,8 @@ export interface Consultation {
   studentEmail: string;
   phone: string;
   note: string | null;
+  /** Lịch rảnh hằng tuần học viên gửi kèm SĐT */
+  availableSlots: AvailableSlot[];
   status: ConsultationStatus;
   mentorId: string | null;
   mentorName: string | null;
@@ -147,6 +180,8 @@ export interface StudentOverview {
   currentScore: number | null;
   levelTestCount: number;
   consultationStatus: ConsultationStatus | null;
+  /** Lịch rảnh của yêu cầu tư vấn gần nhất (rỗng nếu chưa gửi) */
+  availableSlots: AvailableSlot[];
 }
 
 /** Bộ lọc booking của Admin */

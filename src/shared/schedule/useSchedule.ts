@@ -8,7 +8,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 import { unwrapOrThrow } from '@/shared/api/axiosClient';
-import type { AdminBookingFilter, CreateMentoringPlanPayload, ScheduleListType } from '@/shared/types';
+import type {
+  AdminBookingFilter,
+  AvailableSlot,
+  CreateMentoringPlanPayload,
+  RescheduleBookingPayload,
+  RescheduleRequestPayload,
+  ScheduleListType,
+} from '@/shared/types';
 import {
   adminCancelBookingApi,
   cancelBookingApi,
@@ -30,6 +37,9 @@ import {
   getStudentOverviewApi,
   rejectPlanApi,
   requestConsultationApi,
+  rejectRescheduleRequestApi,
+  requestRescheduleApi,
+  rescheduleBookingApi,
   searchStudentsApi,
   updateBookingStatusApi,
   updateConsultationStatusApi,
@@ -95,8 +105,8 @@ export function useMyConsultation(enabled: boolean) {
 export function useRequestConsultation() {
   const invalidate = useInvalidateSchedule();
   return useMutation({
-    mutationFn: async (vars: { phone: string; note?: string }) =>
-      unwrapOrThrow(await requestConsultationApi(vars.phone, vars.note)),
+    mutationFn: async (vars: { phone: string; availableSlots: AvailableSlot[]; note?: string }) =>
+      unwrapOrThrow(await requestConsultationApi(vars.phone, vars.availableSlots, vars.note)),
     onSuccess: invalidate,
   });
 }
@@ -152,6 +162,43 @@ export function useUpdateBookingStatus() {
   return useMutation({
     mutationFn: async (vars: { bookingId: string; status: 'completed' | 'no_show' }) =>
       unwrapOrThrow(await updateBookingStatusApi(vars.bookingId, vars.status)),
+    onSuccess: invalidate,
+  });
+}
+
+/** Mentor dời 1 buổi sang giờ khác (giữ nguyên thời lượng) */
+export function useRescheduleBooking() {
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string } & RescheduleBookingPayload) =>
+      unwrapOrThrow(
+        await rescheduleBookingApi(vars.bookingId, { newStartTime: vars.newStartTime, reason: vars.reason }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Học viên xin dời 1 buổi (V28) */
+export function useRequestReschedule() {
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string } & RescheduleRequestPayload) =>
+      unwrapOrThrow(
+        await requestRescheduleApi(vars.bookingId, {
+          preferredStartTime: vars.preferredStartTime,
+          note: vars.note,
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Mentor từ chối yêu cầu dời lịch */
+export function useRejectRescheduleRequest() {
+  const invalidate = useInvalidateSchedule();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; reason?: string }) =>
+      unwrapOrThrow(await rejectRescheduleRequestApi(vars.bookingId, vars.reason)),
     onSuccess: invalidate,
   });
 }

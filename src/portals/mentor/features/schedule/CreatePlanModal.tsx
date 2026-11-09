@@ -4,12 +4,15 @@
  * Dùng sau khi đã tư vấn chốt lộ trình: chọn học viên → chọn lộ trình (VD 12 buổi) → xếp N khung giờ.
  * - Lộ trình có "số buổi" thì danh sách buổi tự tạo đúng số đó (BE cũng bắt buộc khớp).
  * - "Lặp hàng tuần": lấy buổi đầu tiên, tự điền các buổi sau cách nhau 7 ngày.
+ * - "Xếp theo lịch rảnh" (V26): tự sinh N buổi vào các khung giờ rảnh học viên đã gửi, từ ngày của buổi 1.
+ *   Buổi nằm ngoài lịch rảnh KHÔNG bị chặn (có thể đã thỏa thuận qua điện thoại) nhưng hiện cảnh báo rõ.
+ * - Mỗi buổi có "nội dung" (topic): gợi ý từ các chặng của lộ trình, học viên xem trước khi thanh toán.
  * - Mỗi buổi: chỉ trong 90 ngày tới, dài 30 – 180 phút (khớp BE app.schedule.*).
  * Học phí = hourly rate của mentor x số giờ, học viên thanh toán 1 lần cả gói.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, Plus, Repeat, Search, Trash2, Video, X } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, Plus, Repeat, Search, Trash2, Video, Wand2, X } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { useToast } from '@/shared/components/Toast';
 import { getErrorMessage } from '@/shared/api/axiosClient';
@@ -17,6 +20,9 @@ import { cn } from '@/shared/utils/cn';
 import { useLearningPaths } from '@/portals/client/features/learning-path';
 import {
   addDays,
+  AvailableSlotChips,
+  generateSessionsFromSlots,
+  isWithinSlots,
   scheduleDateBounds,
   toDateInput,
   toUtcIso,
@@ -25,7 +31,7 @@ import {
   validateMeetingUrl,
   validateSessionTime,
 } from '@/shared/schedule';
-import type { StudentOverview } from '@/shared/types';
+import type { AvailableSlot, StudentOverview } from '@/shared/types';
 
 const INPUT_CLASS =
   'w-full h-10 px-3 rounded-lg border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:border-[#0052CC]';
@@ -35,11 +41,15 @@ const DEFAULT_SESSIONS = 1;
 const MAX_SESSIONS = 60;
 /** Trang chủ Google Meet — mentor tạo phòng rồi dán link vào ô bên cạnh */
 const GOOGLE_MEET_HOME = 'https://meet.google.com/home';
+/** Thời lượng mặc định khi tự xếp theo lịch rảnh (phút) */
+const DEFAULT_SESSION_MINUTES = 90;
 
 interface SessionRow {
   date: string;
   startTime: string;
   endTime: string;
+  /** Nội dung buổi học */
+  topic: string;
 }
 
 export interface PlanStudent {
@@ -47,18 +57,22 @@ export interface PlanStudent {
   fullName: string;
   email?: string;
   targetCertificateId?: string | null;
+  /** Lịch rảnh hằng tuần học viên gửi kèm yêu cầu tư vấn */
+  availableSlots?: AvailableSlot[];
 }
 
 const tomorrowRow = (): SessionRow => ({
   date: toDateInput(addDays(new Date(), 1).toISOString()),
   startTime: '19:00',
   endTime: '20:30',
+  topic: '',
 });
 
 /** Dãy buổi lặp hàng tuần từ buổi đầu tiên */
 const weeklyRows = (first: SessionRow, count: number): SessionRow[] =>
   Array.from({ length: count }, (_, i) => ({
     ...first,
+    topic: '',
     date: i === 0 ? first.date : toDateInput(addDays(new Date(`${first.date}T00:00`), i * 7).toISOString()),
   }));
 
@@ -90,12 +104,40 @@ export const CreatePlanModal: React.FC<{
   const hasPaths = paths.length > 0;
 
   const searchQuery = useStudentSearch(keyword.trim(), 0);
+  const slots = student?.availableSlots ?? [];
+  // Gợi ý nội dung buổi từ các chặng của lộ trình đã chọn
+  const topicSuggestions = (selectedPath?.items ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((item) => `${item.stage}: ${item.title}`);
+
+  /** Giữ lại nội dung các buổi đã nhập khi xếp lại giờ */
+  const withTopics = (next: Omit<SessionRow, 'topic'>[], prev: SessionRow[]): SessionRow[] =>
+    next.map((r, i) => ({ ...r, topic: prev[i]?.topic ?? '' }));
+
+  const arrangeBySlots = () => {
+    const count = requiredSessions ?? Math.max(rows.length, DEFAULT_SESSIONS);
+    const first = rows[0] ?? tomorrowRow();
+    const minutes =
+      Math.round(
+        (new Date(`${first.date}T${first.endTime}`).getTime() - new Date(`${first.date}T${first.startTime}`).getTime()) / 60000,
+      ) || DEFAULT_SESSION_MINUTES;
+    const generated = generateSessionsFromSlots(first.date, count, slots, minutes > 0 ? minutes : DEFAULT_SESSION_MINUTES);
+    if (generated.length === 0) {
+      toast.error('Không tìm được khung rảnh nào trong 90 ngày tới, hãy chọn lại ngày bắt đầu của buổi 1');
+      return;
+    }
+    if (generated.length < count) {
+      toast.error(`Lịch rảnh chỉ đủ ${generated.length}/${count} buổi trong 90 ngày tới, hãy thêm buổi thủ công`);
+    }
+    setRows((prev) => withTopics(generated, prev));
+  };
 
   // Chọn lộ trình có số buổi → tạo đúng số buổi đó, lặp hàng tuần từ buổi đầu
   useEffect(() => {
     if (!selectedPath) return;
     if (!title.trim()) setTitle(selectedPath.name);
-    if (requiredSessions) setRows((prev) => weeklyRows(prev[0] ?? tomorrowRow(), requiredSessions));
+    if (requiredSessions) setRows((prev) => withTopics(weeklyRows(prev[0] ?? tomorrowRow(), requiredSessions), prev));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [learningPathId]);
 
@@ -107,6 +149,11 @@ export const CreatePlanModal: React.FC<{
   for (let k = 1; k < sorted.length; k++) {
     if (sorted[k].start < sorted[k - 1].end && !rowErrors[sorted[k].i]) rowErrors[sorted[k].i] = 'Trùng giờ với buổi khác trong gói';
   }
+  // Buổi ngoài lịch rảnh: không chặn, chỉ cảnh báo để mentor cân nhắc
+  const outsideSlots = rows.map(
+    (r, i) => !rowErrors[i] && !isWithinSlots(toUtcIso(r.date, r.startTime), toUtcIso(r.date, r.endTime), slots),
+  );
+  const outsideCount = outsideSlots.filter(Boolean).length;
   const countError =
     requiredSessions && rows.length !== requiredSessions
       ? `Lộ trình "${selectedPath?.name}" gồm ${requiredSessions} buổi, hiện có ${rows.length} buổi`
@@ -131,7 +178,11 @@ export const CreatePlanModal: React.FC<{
         title: title.trim(),
         note: note.trim() || undefined,
         meetingUrl: meetingUrl.trim() || undefined,
-        sessions: rows.map((r) => ({ startTime: toUtcIso(r.date, r.startTime), endTime: toUtcIso(r.date, r.endTime) })),
+        sessions: rows.map((r) => ({
+          startTime: toUtcIso(r.date, r.startTime),
+          endTime: toUtcIso(r.date, r.endTime),
+          topic: r.topic.trim() || undefined,
+        })),
       },
       {
         onSuccess: () => {
@@ -167,6 +218,7 @@ export const CreatePlanModal: React.FC<{
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-slate-900 truncate">{student.fullName}</p>
                   {student.email && <p className="text-xs text-slate-500 truncate">{student.email}</p>}
+                  <AvailableSlotChips slots={slots} className="mt-1.5" />
                 </div>
                 {!initialStudent && (
                   <Button variant="ghost" size="sm" onClick={() => setStudent(null)}>
@@ -191,7 +243,13 @@ export const CreatePlanModal: React.FC<{
                       <button
                         type="button"
                         onClick={() =>
-                          setStudent({ userId: s.userId, fullName: s.fullName, email: s.email, targetCertificateId: s.targetCertificateId })
+                          setStudent({
+                            userId: s.userId,
+                            fullName: s.fullName,
+                            email: s.email,
+                            targetCertificateId: s.targetCertificateId,
+                            availableSlots: s.availableSlots,
+                          })
                         }
                         className="w-full text-left px-3 py-2 hover:bg-slate-50"
                       >
@@ -289,12 +347,24 @@ export const CreatePlanModal: React.FC<{
                 Các buổi ({rows.length}
                 {requiredSessions ? `/${requiredSessions}` : ''})
               </span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={Wand2}
+                  disabled={slots.length === 0}
+                  title={slots.length === 0 ? 'Học viên chưa gửi lịch rảnh' : 'Tự xếp các buổi vào khung giờ rảnh, từ ngày của buổi 1'}
+                  onClick={arrangeBySlots}
+                >
+                  Xếp theo lịch rảnh
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   leftIcon={Repeat}
-                  onClick={() => setRows((prev) => weeklyRows(prev[0], requiredSessions ?? Math.max(prev.length, DEFAULT_SESSIONS)))}
+                  onClick={() =>
+                    setRows((prev) => withTopics(weeklyRows(prev[0], requiredSessions ?? Math.max(prev.length, DEFAULT_SESSIONS)), prev))
+                  }
                 >
                   Lặp hàng tuần từ buổi 1
                 </Button>
@@ -303,7 +373,7 @@ export const CreatePlanModal: React.FC<{
                   size="sm"
                   leftIcon={Plus}
                   disabled={rows.length >= MAX_SESSIONS || (requiredSessions != null && rows.length >= requiredSessions)}
-                  onClick={() => setRows((prev) => [...prev, { ...prev[prev.length - 1] }])}
+                  onClick={() => setRows((prev) => [...prev, { ...prev[prev.length - 1], topic: '' }])}
                 >
                   Thêm buổi
                 </Button>
@@ -311,7 +381,15 @@ export const CreatePlanModal: React.FC<{
             </div>
             <p className="text-[11px] text-slate-500">
               Chỉ xếp trong 90 ngày tới (đến {new Date(`${bounds.max}T00:00`).toLocaleDateString('vi-VN')}), mỗi buổi 30 – 180 phút.
+              Ghi nội dung từng buổi để học viên biết buổi nào học gì trước khi thanh toán.
             </p>
+            {topicSuggestions.length > 0 && (
+              <datalist id="plan-topic-suggestions">
+                {topicSuggestions.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            )}
             <ul className="space-y-2">
               {rows.map((r, i) => (
                 <li key={i} className="grid grid-cols-[32px_1fr_110px_110px_32px] gap-2 items-start">
@@ -336,14 +414,37 @@ export const CreatePlanModal: React.FC<{
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
+                  <input
+                    value={r.topic}
+                    maxLength={255}
+                    list={topicSuggestions.length > 0 ? 'plan-topic-suggestions' : undefined}
+                    onChange={(e) => updateRow(i, { topic: e.target.value })}
+                    placeholder="Nội dung buổi, VD: Writing Task 2 — dàn ý & mở bài"
+                    className={cn(INPUT_CLASS, 'col-start-2 col-span-3 -mt-1')}
+                  />
                   {touched && rowErrors[i] && (
                     <p className="col-start-2 col-span-3 text-[11px] text-rose-600 font-semibold -mt-1">{rowErrors[i]}</p>
+                  )}
+                  {outsideSlots[i] && (
+                    <p className="col-start-2 col-span-3 text-[11px] text-amber-700 font-semibold -mt-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Ngoài lịch rảnh của học viên
+                    </p>
                   )}
                 </li>
               ))}
             </ul>
             {touched && countError && <p className="text-xs text-rose-600 font-semibold">{countError}</p>}
           </div>
+
+          {outsideCount > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex gap-2 text-sm text-amber-800">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <p>
+                <b>{outsideCount} buổi</b> nằm ngoài lịch rảnh học viên đã gửi. Vẫn tạo được gói, nhưng hãy chắc chắn đã
+                thỏa thuận giờ này với học viên — học viên cũng sẽ thấy cảnh báo này trước khi thanh toán.
+              </p>
+            </div>
+          )}
 
           {createMutation.isError && (
             <p className="text-xs text-rose-600 font-semibold">{getErrorMessage(createMutation.error)}</p>

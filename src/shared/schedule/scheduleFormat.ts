@@ -6,8 +6,10 @@
 
 import type { BadgeVariant } from '@/shared/components/Badge';
 import type {
+  AvailableSlot,
   BookingStatus,
   ConsultationStatus,
+  DayOfWeek,
   MentoringPlanStatus,
   StudyRepeatRule,
   StudyStatus,
@@ -94,6 +96,8 @@ export const SCHEDULE_MAX_DAYS_AHEAD = 90;
 /** Mỗi buổi dài từ … tới … phút (BE: app.schedule.min/max-session-minutes) */
 export const SESSION_MIN_MINUTES = 30;
 export const SESSION_MAX_MINUTES = 180;
+/** Mentor phải dời lịch trước giờ học ít nhất bao nhiêu giờ (khớp BE app.booking.reschedule-deadline-hours) */
+export const RESCHEDULE_DEADLINE_HOURS = 2;
 
 /** min / max cho <input type="date">: hôm nay → hôm nay + 90 ngày */
 export const scheduleDateBounds = (): { min: string; max: string } => {
@@ -206,4 +210,102 @@ export const validateMeetingUrl = (value: string): string | null => {
   const host = url.hostname.toLowerCase().replace(/^www\./, '');
   const ok = MEETING_URL_ALLOWED_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
   return ok ? null : 'Chỉ nhận link Google Meet, Zoom, Microsoft Teams hoặc Discord';
+};
+
+/* ---------------- Lịch rảnh hằng tuần của học viên (V26) ---------------- */
+
+/** Thứ tự hiển thị: Thứ 2 → Chủ Nhật */
+export const DAY_OF_WEEK_ORDER: DayOfWeek[] = [
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+  'SUNDAY',
+];
+
+export const DAY_OF_WEEK_SHORT: Record<DayOfWeek, string> = {
+  MONDAY: 'T2',
+  TUESDAY: 'T3',
+  WEDNESDAY: 'T4',
+  THURSDAY: 'T5',
+  FRIDAY: 'T6',
+  SATURDAY: 'T7',
+  SUNDAY: 'CN',
+};
+
+/** Date.getDay(): 0 = Chủ Nhật */
+const JS_DAY_TO_DAY_OF_WEEK: DayOfWeek[] = [
+  'SUNDAY',
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+];
+
+/** Thứ trong tuần của 1 ngày (giờ máy người dùng) */
+export const dayOfWeekOf = (date: Date): DayOfWeek => JS_DAY_TO_DAY_OF_WEEK[date.getDay()];
+
+/** "T2 19:00 – 21:00" */
+export const formatSlot = (slot: AvailableSlot): string => `${DAY_OF_WEEK_SHORT[slot.day]} ${slot.from} – ${slot.to}`;
+
+/** Sắp theo Thứ 2 → CN rồi theo giờ bắt đầu */
+export const sortSlots = (slots: AvailableSlot[]): AvailableSlot[] =>
+  [...slots].sort(
+    (a, b) => DAY_OF_WEEK_ORDER.indexOf(a.day) - DAY_OF_WEEK_ORDER.indexOf(b.day) || a.from.localeCompare(b.from),
+  );
+
+/** Lỗi của 1 khung giờ rảnh (null = hợp lệ) */
+export const validateSlot = (slot: AvailableSlot): string | null => {
+  if (!slot.from || !slot.to) return 'Nhập đủ giờ bắt đầu và kết thúc';
+  if (slot.to <= slot.from) return 'Giờ kết thúc phải sau giờ bắt đầu';
+  return null;
+};
+
+/**
+ * Buổi học (giờ máy người dùng) có nằm trọn trong 1 khung rảnh của học viên không.
+ * Lịch rảnh lưu theo giờ Việt Nam; người dùng hệ thống ở Việt Nam nên so trực tiếp với giờ máy.
+ * Chưa có lịch rảnh → coi như hợp lệ (không cảnh báo).
+ */
+export const isWithinSlots = (startIso: string, endIso: string, slots: AvailableSlot[]): boolean => {
+  if (slots.length === 0) return true;
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (!isSameDay(start, end)) return false;
+  const day = dayOfWeekOf(start);
+  const from = formatTime(startIso);
+  const to = formatTime(endIso);
+  return slots.some((s) => s.day === day && s.from <= from && to <= s.to);
+};
+
+/**
+ * Tự sinh `count` buổi theo lịch rảnh, bắt đầu từ ngày `startDate` ("YYYY-MM-DD").
+ * Mỗi khung rảnh = 1 buổi, dài `minutes` phút tính từ đầu khung (khung ngắn hơn thì lấy hết khung).
+ * Bỏ qua khung đã qua giờ, dừng khi đủ buổi hoặc quá 90 ngày tới.
+ */
+export const generateSessionsFromSlots = (
+  startDate: string,
+  count: number,
+  slots: AvailableSlot[],
+  minutes: number,
+): { date: string; startTime: string; endTime: string }[] => {
+  const result: { date: string; startTime: string; endTime: string }[] = [];
+  if (slots.length === 0 || count <= 0) return result;
+  const sorted = sortSlots(slots);
+  const lastDay = addDays(startOfDay(new Date()), SCHEDULE_MAX_DAYS_AHEAD);
+  for (let day = new Date(`${startDate}T00:00`); day <= lastDay && result.length < count; day = addDays(day, 1)) {
+    const date = toDateInput(day.toISOString());
+    for (const slot of sorted.filter((s) => s.day === dayOfWeekOf(day))) {
+      if (result.length >= count) break;
+      const startAt = new Date(`${date}T${slot.from}`);
+      if (startAt.getTime() <= Date.now()) continue;
+      const slotEnd = new Date(`${date}T${slot.to}`);
+      const endAt = new Date(Math.min(startAt.getTime() + minutes * 60000, slotEnd.getTime()));
+      result.push({ date, startTime: slot.from, endTime: formatTime(endAt.toISOString()) });
+    }
+  }
+  return result;
 };

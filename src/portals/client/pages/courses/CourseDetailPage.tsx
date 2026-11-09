@@ -110,14 +110,6 @@ const CourseDetailContent: React.FC = () => {
     null,
   );
   const [activeVideo, setActiveVideo] = useState<CourseContentDto | null>(null);
-  /**
-   * Chế độ "Học thử miễn phí".
-   * <p>
-   * Khi bật, trang hiển thị banner và mở khoá phần xem thử của bài học + từ
-   * vựng (những nội dung admin đánh dấu `isPreview`). Bài tập LUÔN khoá với
-   * người chưa mua khóa học — không mở form nộp bài, không nộp được.
-   */
-  const [trialMode, setTrialMode] = useState(false);
 
   /**
    * Backend nhận `@PathVariable UUID courseId` nên URL phải là UUID.
@@ -195,20 +187,6 @@ const CourseDetailContent: React.FC = () => {
   const hasEnrollment = Boolean(enrollment.data?.enrolled);
   const purchaseDisabled = isAuthenticated && (enrollment.isPending || enrollment.isError || (!hasEnrollment && (!['USER', 'STUDENT'].includes(role) || course?.status !== 'active' || !course.price || course.price <= 0)));
   const lessons = filterByType(contents, 'lesson');
-
-  /**
-   * Nội dung xem thử (admin đánh dấu `isPreview`) — dùng cho chế độ học thử.
-   * <p>
-   * Bài học: server đã trả `videoUrl` cho `isPreview = true` nên xem được ngay.
-   * Từ vựng: server mở khoá bộ từ thuộc nội dung 'vocabulary' có `isPreview`.
-   * Bài tập: LUÔN khoá với người chưa mua khóa học (không tính vào xem thử).
-   */
-  const previewCount = useMemo(
-    () =>
-      lessons.filter((l) => l.isPreview).length +
-      vocabularies.filter((v) => v.isPreview).length,
-    [lessons, vocabularies],
-  );
 
   /* ---------- Loading / Error ---------- */
   if (resolving || (courseLoading && !courseError)) {
@@ -391,30 +369,6 @@ const CourseDetailContent: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* ========== LEFT — Nội dung học ========== */}
             <main className="lg:col-span-8 min-w-0 space-y-5">
-              {/* ========== BANNER HỌC THỬ ========== */}
-              {trialMode && !hasEnrollment && (
-                <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
-                  <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-extrabold text-amber-900">
-                      Đang xem chế độ học thử miễn phí
-                    </p>
-                    <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                      Bạn đang xem {previewCount} nội dung mẫu của khóa học (bài
-                      học thử và từ vựng). Bài tập chỉ mở khi đăng ký khóa học —
-                      bạn chưa thể nộp bài trong chế độ học thử.
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={buyCourse}
-                    className="shrink-0 bg-[#0052CC] hover:bg-[#0040A8]"
-                  >
-                    {isAuthenticated ? 'Đăng ký ngay' : 'Đăng nhập'}
-                  </Button>
-                </div>
-              )}
 
               {/* Video player — chỉ mở khi bài học cho phép */}
               {activeVideo?.videoUrl && (
@@ -569,24 +523,6 @@ const CourseDetailContent: React.FC = () => {
                     {hasEnrollment ? 'Vào học ngay' : !isAuthenticated ? 'Đăng nhập để mua khóa học' : course.status !== 'active' || !course.price || course.price <= 0 ? 'Khóa học chưa mở bán' : 'Mua khóa học'}
                   </Button>
                   {enrollment.isError && isAuthenticated && <div role="alert" className="text-xs text-rose-700">{paymentError(enrollment.error)} <button type="button" onClick={() => void enrollment.refetch()} className="underline font-bold">Thử lại</button></div>}
-                  <Button
-                    variant="outline"
-                    size="md"
-                    fullWidth
-                    onClick={() => {
-                      // Bật chế độ học thử: mở khoá phần xem thử của bài học +
-                      // từ vựng, đồng thời phát bài học thử đầu tiên nếu có.
-                      // Bài tập vẫn khoá (không nộp được khi chưa mua khóa học).
-                      setTrialMode(true);
-                      if (!activeVideo) {
-                        const preview = lessons.find((l) => l.isPreview);
-                        if (preview) setActiveVideo(preview);
-                      }
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                  >
-                    Học thử miễn phí
-                  </Button>
 
                   <p className="text-xs text-slate-500 flex items-start gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-px" />

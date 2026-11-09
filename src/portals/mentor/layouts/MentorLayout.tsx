@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { to: '/mentor', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/mentor/schedule', label: 'Schedule', icon: CalendarDays, end: false },
   { to: '/mentor/exam-grading', label: 'Exam Grading', icon: FileCheck2, end: false },
-  { to: '/mentor/homework-grading', label: 'Homework Grading', icon: ClipboardCheck, end: false },
+  { to: '/mentor/homework-grading', label: 'Homework', icon: ClipboardCheck, end: false },
 ];
 
 export const MentorLayout: React.FC = () => {
