@@ -103,17 +103,148 @@ export const ProfilePage = () => {
   const isChangingCertificate =
     isEditingGoal && Boolean(goal.certificateId) && goal.certificateId !== user?.targetCertificateId && Boolean(currentLevel);
 
+  /* ---------- Sửa thông tin cá nhân (Họ tên, SĐT) ---------- */
+  const [isEditingInfo, setEditingInfo] = useState(false);
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [infoError, setInfoError] = useState<string | null>(null);
+
+  const openEditInfo = () => {
+    setFullName(user?.fullName || '');
+    setPhone(user?.phone || '');
+    setInfoError(null);
+    setEditingInfo(true);
+  };
+
+  const saveInfoMutation = useMutation({
+    mutationFn: () => {
+      if (!fullName.trim()) {
+        throw new Error('Họ tên không được để trống');
+      }
+      return updateProfile({ fullName: fullName.trim(), phone: phone.trim() });
+    },
+    onSuccess: (updated) => {
+      toast.success('Đã cập nhật thông tin cá nhân!');
+      queryClient.setQueryData(QUERY_KEYS.account.profile, updated);
+      useAuthStore.setState((prev) => ({
+        ...prev,
+        user: prev.user ? { ...prev.user, ...updated } : null,
+      }));
+      setEditingInfo(false);
+    },
+    onError: (err: Error) => setInfoError(err.message || 'Cập nhật thông tin thất bại'),
+  });
+
   return (
     <div className="space-y-6">
       {/* ---------- 1. Thông tin cá nhân ---------- */}
       <Card className="p-6">
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Thông tin cá nhân</h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          <InfoItem label="Họ tên" value={user?.fullName} />
-          <InfoItem label="Email" value={user?.email} />
-          <InfoItem label="Số điện thoại" value={user?.phone || '—'} />
-          <InfoItem label="Vai trò" value={ROLE_LABEL[role] ?? role} />
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="text-xl font-bold text-slate-900">Thông tin cá nhân</h2>
+          {!isEditingInfo && (
+            <Button variant="outline" size="sm" leftIcon={Pencil} onClick={openEditInfo}>
+              Chỉnh sửa thông tin
+            </Button>
+          )}
         </div>
+
+        {isEditingInfo ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveInfoMutation.mutate();
+            }}
+            className="space-y-4"
+          >
+            {infoError && (
+              <div className="p-3 rounded-xl bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                {infoError}
+              </div>
+            )}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Họ và tên <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Nhập họ và tên"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
+                  disabled={saveInfoMutation.isPending}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Số điện thoại
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Nhập số điện thoại (vd: 0912345678)"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#0052CC]"
+                  disabled={saveInfoMutation.isPending}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={user?.email || ''}
+                  disabled
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-100 bg-slate-50 text-slate-400 text-sm cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  Vai trò
+                </label>
+                <input
+                  type="text"
+                  value={ROLE_LABEL[role] ?? role}
+                  disabled
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-100 bg-slate-50 text-slate-400 text-sm cursor-not-allowed font-semibold"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={() => setEditingInfo(false)}
+                disabled={saveInfoMutation.isPending}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                type="submit"
+                isLoading={saveInfoMutation.isPending}
+                disabled={!fullName.trim()}
+              >
+                Lưu thay đổi
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+            <InfoItem label="Họ tên" value={user?.fullName} />
+            <InfoItem label="Email" value={user?.email} />
+            <InfoItem label="Số điện thoại" value={user?.phone || '—'} />
+            <InfoItem label="Vai trò" value={ROLE_LABEL[role] ?? role} />
+          </div>
+        )}
       </Card>
 
       {/* ---------- 2. Trình độ & mục tiêu (học viên) ---------- */}
