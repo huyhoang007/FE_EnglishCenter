@@ -4,10 +4,11 @@
  */
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StatCard } from '@/portals/admin/components/StatCard';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
+import { useToast } from '@/shared/components/Toast';
 import {
   Users,
   UserCheck,
@@ -18,7 +19,6 @@ import {
   Download,
   RotateCcw,
   SlidersHorizontal,
-  Edit2,
   Eye,
   Mail,
   Phone,
@@ -27,11 +27,14 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
-import { getUsers } from '@/shared/api/domainApi';
+import { getUsers, updateUserStatus } from '@/shared/api/domainApi';
 import type { AuthUser } from '@/shared/types';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
 export const StudentManagementView: React.FC = () => {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
   // Filters
   const [keyword, setKeyword] = useState('');
   const [courseFilter, setCourseFilter] = useState('');
@@ -41,6 +44,29 @@ export const StudentManagementView: React.FC = () => {
 
   // Modals
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
+  const [studentToToggleStatus, setStudentToToggleStatus] = useState<{
+    id: string;
+    fullName: string;
+    isActive: boolean;
+  } | null>(null);
+
+  // Status mutation (Vô hiệu hóa / Khóa hoặc Kích hoạt tài khoản học viên)
+  const statusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      updateUserStatus(id, isActive),
+    onSuccess: (_, variables) => {
+      toast.success(
+        variables.isActive
+          ? 'Đã kích hoạt lại tài khoản học viên!'
+          : 'Đã vô hiệu hóa (khóa) tài khoản học viên!'
+      );
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.accounts });
+      setStudentToToggleStatus(null);
+    },
+    onError: () => {
+      toast.error('Không thể cập nhật trạng thái học viên. Vui lòng thử lại.');
+    },
+  });
 
   // Query Backend Students (roleName: 'STUDENT')
   const { data: usersData, isLoading } = useQuery({
@@ -313,22 +339,40 @@ export const StudentManagementView: React.FC = () => {
                       {s.enrolledDate}
                     </td>
                     <td className="py-3 pr-4 text-right">
-                      <div className="inline-flex items-center gap-1">
+                      <div className="inline-flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => setSelectedStudent(s)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-[#0052CC] hover:bg-slate-100 transition-colors"
-                          title="View student profile"
+                          title="Xem chi tiết học viên"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => alert(`Chỉnh sửa học viên ${s.fullName}`)}
-                          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                          title="Edit student"
+                          onClick={() =>
+                            setStudentToToggleStatus({
+                              id: s.id,
+                              fullName: s.fullName,
+                              isActive: s.status === 'Active',
+                            })
+                          }
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            s.status === 'Active'
+                              ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                              : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                          }`}
+                          title={
+                            s.status === 'Active'
+                              ? 'Vô hiệu hóa (Khóa tài khoản học viên)'
+                              : 'Kích hoạt lại tài khoản học viên'
+                          }
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          {s.status === 'Active' ? (
+                            <UserX className="w-3.5 h-3.5" />
+                          ) : (
+                            <UserCheck className="w-3.5 h-3.5" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -454,6 +498,72 @@ export const StudentManagementView: React.FC = () => {
             >
               Close
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: CONFIRM DEACTIVATE / ACTIVATE STUDENT ================= */}
+      {studentToToggleStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                  studentToToggleStatus.isActive
+                    ? 'bg-rose-100 text-rose-600'
+                    : 'bg-emerald-100 text-emerald-600'
+                }`}
+              >
+                {studentToToggleStatus.isActive ? (
+                  <UserX className="w-5 h-5" />
+                ) : (
+                  <UserCheck className="w-5 h-5" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {studentToToggleStatus.isActive
+                    ? 'Vô hiệu hóa (Khóa tài khoản) học viên'
+                    : 'Kích hoạt lại tài khoản học viên'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {studentToToggleStatus.isActive
+                    ? 'Khóa quyền truy cập hệ thống của học viên này.'
+                    : 'Mở lại quyền truy cập cho học viên.'}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+              Bạn có chắc chắn muốn {studentToToggleStatus.isActive ? 'vô hiệu hóa' : 'kích hoạt lại'} tài khoản của học viên{' '}
+              <strong className="text-slate-900">{studentToToggleStatus.fullName}</strong>?
+              {studentToToggleStatus.isActive &&
+                ' Toàn bộ lịch sử học tập, giao dịch và kết quả thi cử vẫn được bảo toàn trong hệ thống.'}
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setStudentToToggleStatus(null)}
+                disabled={statusMutation.isPending}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant={studentToToggleStatus.isActive ? 'danger' : 'primary'}
+                size="sm"
+                isLoading={statusMutation.isPending}
+                onClick={() =>
+                  statusMutation.mutate({
+                    id: studentToToggleStatus.id,
+                    isActive: !studentToToggleStatus.isActive,
+                  })
+                }
+              >
+                {studentToToggleStatus.isActive ? 'Xác nhận khóa' : 'Kích hoạt'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
