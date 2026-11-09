@@ -169,6 +169,20 @@ export const addQuestionApi = (examId: string, payload: CreateQuestionRequest): 
   apiPost<ExamQuestion>(`${BASE}/${examId}/questions`, payload);
 
 /** Sửa nội dung hiển thị của câu — được cả khi đã có học viên trả lời (BE chặn đổi đáp án, điểm, dạng câu) */
+/** GET /api/v1/admin/exams/rules — giới hạn của đề theo chứng chỉ + loại đề (BE giữ con số, FE không chép lại) */
+export interface ExamRules {
+  minDurationMinutes: number;
+  maxDurationMinutes: number;
+  /** Thời gian thi thật của chứng chỉ (phút) */
+  fullTestMinutes: number;
+  minDescriptionLength: number;
+}
+
+export const getExamRulesApi = (certificateId?: string, examType?: string): Promise<ApiResponse<ExamRules>> =>
+  apiGet<ExamRules>(`${BASE}/rules`, {
+    params: { certificateId: certificateId || undefined, examType: examType || undefined },
+  });
+
 export interface UpdateQuestionContentRequest {
   /** Chỉ đổi được khi đề chưa có lượt thi (BE chặn 5006) */
   points?: number;

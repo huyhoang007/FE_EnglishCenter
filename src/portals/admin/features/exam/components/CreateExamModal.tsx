@@ -5,7 +5,7 @@
  * Thang điểm và điểm đạt lấy tự động theo chứng chỉ (VD IELTS 5.5), admin không nhập; FE đổi sang % cho backend.
  * Đề luôn thuộc một khóa học của chứng chỉ đó (kiểm tra đầu vào / thi thử đã bỏ — thi thử đầy đủ ở Luyện tập AI).
  * Loại đề: Quiz / Giữa kỳ / Cuối kỳ, mở nối tiếp cho học viên.
- * Mô tả bắt buộc, tối thiểu MIN_DESCRIPTION ký tự — BE chặn tương tự (5028 / 5029 / 5034).
+ * Ngưỡng thời lượng / độ dài mô tả lấy từ BE (GET /admin/exams/rules), không chép lại ở FE — BE chặn 5029 / 5034.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -17,30 +17,11 @@ import { passToPercent } from '@/shared/constants/examScales';
 import { useCertificateScale } from '@/portals/client/features/exams/hooks/useCertificateScale';
 import { EXAM_TYPE_LABEL, type ExamType } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
-import { useCreateExam, useExamFormOptions } from '../hooks/useAdminExams';
+import { useCreateExam, useExamFormOptions, useExamRules } from '../hooks/useAdminExams';
 import { Checkbox, ExamModal, FIELD_CLASS, Field } from './ExamFormParts';
-
-/** Khớp ExamServiceImpl.MIN_DESCRIPTION_LENGTH */
-const MIN_DESCRIPTION = 30;
 
 /** Loại đề của khóa học — khớp ExamServiceImpl.validateType */
 const COURSE_EXAM_TYPES: ExamType[] = ['quiz', 'midterm', 'final'];
-
-/** Khớp ExamServiceImpl: đề ngắn nhất 15 phút; Quiz tối đa 60 phút. */
-const MIN_DURATION = 15;
-const MAX_QUIZ_MINUTES = 60;
-/** Thời gian thi thật theo preset chứng chỉ (phút) — đề không dài hơn đề thi thật. Khớp ExamServiceImpl.FULL_TEST_MINUTES */
-const FULL_TEST_MINUTES: Record<string, number> = {
-  IELTS: 165,
-  TOEIC_LR: 120,
-  TOEIC_SW: 80,
-  TOEFL: 120,
-  TOEFL_OLD: 120,
-  TOEFL_NEW: 90,
-  VSTEP: 172,
-  APTIS: 180,
-};
-const DEFAULT_FULL_TEST_MINUTES = 180;
 
 const EMPTY = {
   certificateId: '',
@@ -76,20 +57,23 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
   /** Đổi chứng chỉ: bỏ khóa học không còn thuộc chứng chỉ. */
   const changeCertificate = (certificateId: string) => setForm((f) => ({ ...f, certificateId, courseId: '' }));
   const descriptionLength = form.description.trim().length;
-  const fullTestMinutes = FULL_TEST_MINUTES[scale.preset?.toUpperCase() ?? ''] ?? DEFAULT_FULL_TEST_MINUTES;
-  const maxDuration = form.examType === 'quiz' ? Math.min(MAX_QUIZ_MINUTES, fullTestMinutes) : fullTestMinutes;
+  const rules = useExamRules(form.certificateId, form.examType).data;
+  const minDescription = rules?.minDescriptionLength ?? 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.certificateId) return setFieldError('Chọn chứng chỉ của đề');
     if (!form.courseId) return setFieldError('Chọn khóa học của đề');
     if (!form.examTitle.trim()) return setFieldError('Nhập tiêu đề đề thi');
-    if (descriptionLength < MIN_DESCRIPTION) {
-      return setFieldError(`Mô tả tối thiểu ${MIN_DESCRIPTION} ký tự: ghi rõ đề gồm những phần nào, dành cho ai`);
+    if (!rules) return setFieldError('Chưa tải được giới hạn của đề, thử lại sau giây lát');
+    if (descriptionLength < rules.minDescriptionLength) {
+      return setFieldError(`Mô tả tối thiểu ${rules.minDescriptionLength} ký tự: ghi rõ đề gồm những phần nào, dành cho ai`);
     }
     const minutes = Number(form.durationMinutes);
-    if (!(minutes >= MIN_DURATION && minutes <= maxDuration)) {
-      return setFieldError(`Thời lượng đề ${EXAM_TYPE_LABEL[form.examType]} phải từ ${MIN_DURATION} đến ${maxDuration} phút`);
+    if (!(minutes >= rules.minDurationMinutes && minutes <= rules.maxDurationMinutes)) {
+      return setFieldError(
+        `Thời lượng đề ${EXAM_TYPE_LABEL[form.examType]} phải từ ${rules.minDurationMinutes} đến ${rules.maxDurationMinutes} phút`,
+      );
     }
     setFieldError(null);
     create.mutate(
@@ -157,9 +141,6 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
             ))}
           </select>
         </Field>
-        <p className="sm:col-span-2 -mt-2 text-xs text-slate-500">
-          Chỉ học viên đã mua khóa mới thấy đề. Đề thi thử đầy đủ tạo ở mục Luyện tập AI.
-        </p>
 
         <Field label="Tiêu đề *" className="sm:col-span-2">
           <input value={form.examTitle} onChange={(e) => set('examTitle', e.target.value)} className={FIELD_CLASS} />
@@ -188,15 +169,15 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
         <Field label="Thời lượng (phút) *">
           <input
             type="number"
-            min={MIN_DURATION}
-            max={maxDuration}
+            min={rules?.minDurationMinutes}
+            max={rules?.maxDurationMinutes}
             value={form.durationMinutes}
             onChange={(e) => set('durationMinutes', e.target.value)}
             className={FIELD_CLASS}
           />
           <span className="mt-1 block text-xs text-slate-500">
-            {MIN_DURATION}–{maxDuration} phút
-            {form.examType === 'quiz'
+            {rules ? `${rules.minDurationMinutes}–${rules.maxDurationMinutes} phút` : 'Đang tải giới hạn…'}
+            {rules && rules.maxDurationMinutes < rules.fullTestMinutes
               ? ' (Quiz là bài ngắn)'
               : certificate
                 ? ` (không quá thời gian thi thật của ${certificate.certificateName})`
@@ -236,10 +217,10 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
           <span
             className={cn(
               'mt-1 block text-xs',
-              descriptionLength >= MIN_DESCRIPTION ? 'text-emerald-600' : 'text-slate-500',
+              descriptionLength >= minDescription ? 'text-emerald-600' : 'text-slate-500',
             )}
           >
-            {descriptionLength}/{MIN_DESCRIPTION} ký tự tối thiểu — ghi rõ đề gồm những phần nào, dành cho ai
+            {descriptionLength}/{minDescription} ký tự tối thiểu — ghi rõ đề gồm những phần nào, dành cho ai
           </span>
         </Field>
         <div className="sm:col-span-2 flex flex-wrap items-center gap-4 text-sm text-slate-700">

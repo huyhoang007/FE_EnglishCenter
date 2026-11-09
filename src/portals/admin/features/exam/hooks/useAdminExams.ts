@@ -17,6 +17,7 @@ import {
   deleteSectionApi,
   getAdminExamApi,
   getAdminExamsApi,
+  getExamRulesApi,
   publishExamApi,
   removeQuestionApi,
   restoreExamApi,
@@ -58,6 +59,16 @@ export function useExamFormOptions() {
     queryFn: async () => (await fetchCourses({ size: 100 })).data,
   });
   return { certificates, courses };
+}
+
+/** Giới hạn thời lượng / mô tả của đề theo chứng chỉ + loại đề (lấy từ BE). */
+export function useExamRules(certificateId: string, examType: string) {
+  return useQuery({
+    queryKey: ['admin', 'exam-rules', certificateId, examType],
+    queryFn: async () => unwrapOrThrow(await getExamRulesApi(certificateId, examType)),
+    placeholderData: (previous) => previous,
+    staleTime: 10 * 60_000,
+  });
 }
 
 /** Làm mới mọi cache liên quan tới đề: danh sách admin, ngân hàng đề, dropdown đề của lộ trình học. */

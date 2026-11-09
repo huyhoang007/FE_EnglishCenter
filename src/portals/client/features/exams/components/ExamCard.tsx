@@ -7,11 +7,9 @@ import { Clock, FileQuestion, Hourglass, Layers, Lock } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Card } from '@/shared/components/Card';
 import { useCertificateScale } from '../hooks/useCertificateScale';
-import { EXAM_TYPE_LABEL, type ExamSummary } from '@/shared/types';
+import { EXAM_ERROR_CODE, EXAM_TYPE_LABEL, type ExamSummary } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 
-/** BE: bài trước đang chờ mentor chấm - học viên không cần làm gì thêm. */
-const PENDING_GRADING = 5033;
 
 interface ExamCardProps {
   exam: ExamSummary;
@@ -21,7 +19,7 @@ interface ExamCardProps {
 export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
   const scale = useCertificateScale(exam.certificateId, exam.certificateName);
   const locked = exam.accessible === false && !!exam.lockReason;
-  const pending = exam.lockCode === PENDING_GRADING;
+  const pending = String(exam.lockCode) === EXAM_ERROR_CODE.PREREQUISITE_PENDING_GRADING;
   const LockIcon = pending ? Hourglass : Lock;
   return (
     <Card

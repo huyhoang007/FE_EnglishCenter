@@ -16,7 +16,7 @@ import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
 import { CLIENT_ROUTES } from '@/shared/constants/routes';
 import { formatPass, formatScore } from '@/shared/constants/examScales';
-import { EXAM_TYPE_LABEL } from '@/shared/types';
+import { EXAM_ERROR_CODE, EXAM_TYPE_LABEL } from '@/shared/types';
 import { useExamDetail, useStartAttempt } from '../hooks/useExams';
 import { useCertificateScale } from '../hooks/useCertificateScale';
 
@@ -57,6 +57,7 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
   }
 
   const { exam } = data;
+  const waitingForGrading = String(data.accessCode) === EXAM_ERROR_CODE.PREREQUISITE_PENDING_GRADING;
 
   // Learner (USER) chưa mua khóa nên không có đề thi (kiểm tra đầu vào đã bỏ) → về Luyện tập AI
   if (isLearner) {
@@ -128,15 +129,15 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
           </p>
           {!isAuthenticated && <p className="text-status-warning font-semibold">Bạn cần đăng nhập để làm bài.</p>}
           {isAuthenticated && data.accessible === false && (
-            // 5033: bài trước đang chờ mentor chấm - chỉ cần chờ, không phải lỗi của học viên
+            // Bài trước đang chờ mentor chấm - chỉ cần chờ, không phải lỗi của học viên
             <p
               className={
-                data.accessCode === 5033
+                waitingForGrading
                   ? 'text-blue-700 font-semibold flex items-center gap-1.5'
                   : 'text-status-danger font-semibold flex items-center gap-1.5'
               }
             >
-              {data.accessCode === 5033 ? <Hourglass className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              {waitingForGrading ? <Hourglass className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
               {data.accessMessage}
             </p>
           )}

@@ -330,8 +330,10 @@ export const EXAM_STATUS_LABEL: Record<ExamStatus, string> = {
   archived: 'Lưu trữ',
 };
 
-/** Mã lỗi backend Exam (5001-5023) cần xử lý riêng ở FE. */
+/** Mã lỗi backend Exam (50xx) cần xử lý riêng ở FE. */
 export const EXAM_ERROR_CODE = {
   ATTEMPT_ALREADY_SUBMITTED: '5013',
   ATTEMPT_TIME_EXPIRED: '5014',
+  /** Bài trước (Quiz / Giữa kỳ / bài tập) đang chờ mentor chấm — học viên chỉ cần chờ */
+  PREREQUISITE_PENDING_GRADING: '5033',
 } as const;
