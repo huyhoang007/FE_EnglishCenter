@@ -14,7 +14,6 @@ import {
   BookA,
   Award,
   ShieldCheck,
-  Settings,
   CalendarDays,
   Route,
   Sparkles,
@@ -53,7 +52,6 @@ const MANAGEMENT_NAV: NavItem[] = [
 
 const OTHER_NAV: NavItem[] = [
   { to: '/admin/accounts', label: 'Users & Roles', icon: ShieldCheck },
-  { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export const AdminLayout: React.FC = () => {

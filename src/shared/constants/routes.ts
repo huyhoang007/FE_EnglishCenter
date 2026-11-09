@@ -74,7 +74,6 @@ export const ADMIN_ROUTES = {
   accounts: '/admin/accounts',
   payments: '/admin/payments',
   bookings: '/admin/bookings',
-  settings: '/admin/settings',
   /* Dev 3: quản lý đề thi */
   exams: '/admin/exams',
   examEditor: (examId: string = ':examId') => `/admin/exams/${examId}`,
