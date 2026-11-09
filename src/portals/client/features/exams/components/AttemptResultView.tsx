@@ -15,7 +15,6 @@ import {
   BookOpen,
   Check,
   Clock,
-  Gauge,
   Hourglass,
   Loader2,
   MinusCircle,
@@ -90,7 +89,6 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
 
   const { attempt } = data;
   const isPending = attempt.pendingManualGrading === true;
-  const isPlacement = examDetail.data?.exam.examType === 'placement_test';
 
   return (
     <div className="space-y-5">
@@ -161,11 +159,6 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
           )}
           {startAttempt.isError && (
             <p className="text-sm text-status-danger font-semibold">{startAttempt.error.message}</p>
-          )}
-          {isPlacement && (
-            <Button size="sm" variant="secondary" leftIcon={Gauge} onClick={() => navigate(CLIENT_ROUTES.examPlacement)}>
-              Xem năng lực của tôi
-            </Button>
           )}
           {isPractice ? (
             <p className="text-xs text-slate-500 inline-flex items-center gap-1.5">

@@ -8,7 +8,6 @@ import { Badge } from '@/shared/components/Badge';
 import { Card } from '@/shared/components/Card';
 import { useCertificateScale } from '../hooks/useCertificateScale';
 import { EXAM_TYPE_LABEL, type ExamSummary } from '@/shared/types';
-import { formatVND } from '@/shared/utils';
 import { cn } from '@/shared/utils/cn';
 
 /** BE: bài trước đang chờ mentor chấm - học viên không cần làm gì thêm. */
@@ -20,7 +19,6 @@ interface ExamCardProps {
 }
 
 export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
-  const isPaid = exam.examScope === 'trial' && exam.isFree === false;
   const scale = useCertificateScale(exam.certificateId, exam.certificateName);
   const locked = exam.accessible === false && !!exam.lockReason;
   const pending = exam.lockCode === PENDING_GRADING;
@@ -78,7 +76,7 @@ export const ExamCard: React.FC<ExamCardProps> = ({ exam, onSelect }) => {
 
       <div className="flex items-center justify-between border-t border-slate-100 pt-3">
         <span className="text-sm font-extrabold text-primary">
-          {isPaid ? formatVND(exam.price ?? 0) : 'Miễn phí'}
+          {exam.courseTitle ?? 'Đề của khóa học'}
         </span>
         {exam.examCode && <span className="text-[11px] font-mono text-slate-400">{exam.examCode}</span>}
       </div>

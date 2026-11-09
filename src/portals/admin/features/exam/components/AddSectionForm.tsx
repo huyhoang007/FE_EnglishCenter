@@ -11,9 +11,9 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
-import { formatScore, skillToSectionType, type ScaleInfo } from '@/shared/constants/examScales';
+import { skillToSectionType, type ScaleInfo } from '@/shared/constants/examScales';
 import type { CreateSectionRequest } from '../services/adminExamService';
-import { AutoGrowTextarea, FIELD_CLASS, Field } from './ExamFormParts';
+import { FIELD_CLASS, Field } from './ExamFormParts';
 
 interface AddSectionFormProps {
   /** Thang của chứng chỉ của đề — quyết định các phần thi được chọn */
@@ -43,7 +43,7 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
   const options: PartOption[] = linkedParts.length
     ? linkedParts.map((p) => ({
         value: p.partId as string,
-        label: `${p.name} (${formatScore(p.min, p.step)} – ${formatScore(p.max, p.step)})`,
+        label: p.name,
         sectionType: skillToSectionType(p.skill),
         certificatePartId: p.partId,
       }))
@@ -54,7 +54,6 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
   const option = options.find((o) => o.value === optionValue) ?? options[0];
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
-  const [passageText, setPassageText] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
   const isListening = option?.sectionType === 'LISTENING';
@@ -62,7 +61,6 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
   const reset = () => {
     setTitle('');
     setInstructions('');
-    setPassageText('');
     setAudioUrl('');
   };
 
@@ -70,6 +68,8 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
     e.preventDefault();
     if (!title.trim()) return setFieldError('Nhập tên phần thi');
     if (!option) return setFieldError('Chứng chỉ chưa có phần thi nào — thêm phần thi ở trang Chứng chỉ');
+    // Phần Listening phải có file nghe
+    if (isListening && !audioUrl.trim()) return setFieldError('Phần Listening phải có link file nghe');
     setFieldError(null);
     onSubmit(
       {
@@ -77,7 +77,6 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
         sectionType: option.sectionType,
         certificatePartId: option.certificatePartId,
         instructions: instructions.trim() || undefined,
-        passageText: passageText.trim() || undefined,
         // Chỉ phần Listening mới có file nghe
         audioUrl: isListening ? audioUrl.trim() || undefined : undefined,
       },
@@ -115,11 +114,8 @@ export const AddSectionForm: React.FC<AddSectionFormProps> = ({
           placeholder="VD: Đọc đoạn văn và trả lời câu hỏi"
         />
       </Field>
-      <Field label="Đoạn đọc (không bắt buộc)">
-        <AutoGrowTextarea value={passageText} onChange={(e) => setPassageText(e.target.value)} rows={3} className={FIELD_CLASS} />
-      </Field>
       {isListening && (
-        <Field label="Link file nghe">
+        <Field label="Link file nghe *">
           <input
             value={audioUrl}
             onChange={(e) => setAudioUrl(e.target.value)}

@@ -302,22 +302,6 @@ export interface AnswerItemRequest {
   timeSpentSeconds?: number;
 }
 
-/** Kết quả bài kiểm tra năng lực (placement_test) gần nhất theo chứng chỉ — GET /me/proficiency.
- *  Backend trả % từng phần; FE quy đổi theo thang của chứng chỉ (scaleResult). */
-export interface Proficiency {
-  certificateId: string;
-  certificateName: string;
-  examId: string;
-  examTitle: string;
-  attemptId: string;
-  takenAt?: string;
-  /** assessed: đã đủ điểm; pending_grading: còn phần Writing / Speaking chờ mentor chấm */
-  status: 'assessed' | 'pending_grading';
-  /** Tỷ lệ % cả bài */
-  percentage?: number;
-  sections: SectionScore[];
-}
-
 export const EXAM_TYPE_LABEL: Record<ExamType, string> = {
   quiz: 'Quiz',
   midterm: 'Giữa kỳ',

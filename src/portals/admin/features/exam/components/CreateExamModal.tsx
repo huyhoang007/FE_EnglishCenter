@@ -3,9 +3,9 @@
  * -----------------------------------------------------------
  * Luôn chọn chứng chỉ trước (IELTS / TOEIC / VSTEP…) → hiện thang điểm của chứng chỉ.
  * Thang điểm và điểm đạt lấy tự động theo chứng chỉ (VD IELTS 5.5), admin không nhập; FE đổi sang % cho backend.
- * trial: chỉ cần chứng chỉ, chỉ dùng cho Kiểm tra đầu vào (thi thử đầy đủ nằm ở Luyện tập AI);
- * course: chọn thêm khóa học thuộc chứng chỉ đó, loại đề là Quiz / Giữa kỳ / Cuối kỳ (đề đầu ra của khóa, mở nối tiếp).
- * Mô tả bắt buộc, tối thiểu MIN_DESCRIPTION ký tự — BE chặn tương tự (5028 / 5029).
+ * Đề luôn thuộc một khóa học của chứng chỉ đó (kiểm tra đầu vào / thi thử đã bỏ — thi thử đầy đủ ở Luyện tập AI).
+ * Loại đề: Quiz / Giữa kỳ / Cuối kỳ, mở nối tiếp cho học viên.
+ * Mô tả bắt buộc, tối thiểu MIN_DESCRIPTION ký tự — BE chặn tương tự (5028 / 5029 / 5034).
  */
 
 import React, { useMemo, useState } from 'react';
@@ -15,7 +15,7 @@ import { useToast } from '@/shared/components/Toast';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
 import { passToPercent } from '@/shared/constants/examScales';
 import { useCertificateScale } from '@/portals/client/features/exams/hooks/useCertificateScale';
-import { EXAM_TYPE_LABEL, type ExamScope, type ExamType } from '@/shared/types';
+import { EXAM_TYPE_LABEL, type ExamType } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
 import { useCreateExam, useExamFormOptions } from '../hooks/useAdminExams';
 import { Checkbox, ExamModal, FIELD_CLASS, Field } from './ExamFormParts';
@@ -23,18 +23,30 @@ import { Checkbox, ExamModal, FIELD_CLASS, Field } from './ExamFormParts';
 /** Khớp ExamServiceImpl.MIN_DESCRIPTION_LENGTH */
 const MIN_DESCRIPTION = 30;
 
-/** Loại đề được phép theo phạm vi — khớp ExamServiceImpl.validateType */
-const TYPES_BY_SCOPE: Partial<Record<ExamScope, ExamType[]>> = {
-  trial: ['placement_test'],
-  course: ['quiz', 'midterm', 'final'],
+/** Loại đề của khóa học — khớp ExamServiceImpl.validateType */
+const COURSE_EXAM_TYPES: ExamType[] = ['quiz', 'midterm', 'final'];
+
+/** Khớp ExamServiceImpl: đề ngắn nhất 15 phút; Quiz tối đa 60 phút. */
+const MIN_DURATION = 15;
+const MAX_QUIZ_MINUTES = 60;
+/** Thời gian thi thật theo preset chứng chỉ (phút) — đề không dài hơn đề thi thật. Khớp ExamServiceImpl.FULL_TEST_MINUTES */
+const FULL_TEST_MINUTES: Record<string, number> = {
+  IELTS: 165,
+  TOEIC_LR: 120,
+  TOEIC_SW: 80,
+  TOEFL: 120,
+  TOEFL_OLD: 120,
+  TOEFL_NEW: 90,
+  VSTEP: 172,
+  APTIS: 180,
 };
+const DEFAULT_FULL_TEST_MINUTES = 180;
 
 const EMPTY = {
-  examScope: 'trial' as ExamScope,
   certificateId: '',
   courseId: '',
   examCode: '',
-  examType: 'placement_test' as ExamType,
+  examType: 'quiz' as ExamType,
   examTitle: '',
   description: '',
   durationMinutes: '60',
@@ -63,28 +75,28 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
   /** Đổi chứng chỉ: bỏ khóa học không còn thuộc chứng chỉ. */
   const changeCertificate = (certificateId: string) => setForm((f) => ({ ...f, certificateId, courseId: '' }));
-  /** Đổi phạm vi: loại đề về loại đầu tiên hợp lệ của phạm vi mới. */
-  const changeScope = (examScope: ExamScope) =>
-    setForm((f) => ({ ...f, examScope, examType: (TYPES_BY_SCOPE[examScope] ?? ['placement_test'])[0] }));
-  const typeOptions = TYPES_BY_SCOPE[form.examScope] ?? [];
   const descriptionLength = form.description.trim().length;
+  const fullTestMinutes = FULL_TEST_MINUTES[scale.preset?.toUpperCase() ?? ''] ?? DEFAULT_FULL_TEST_MINUTES;
+  const maxDuration = form.examType === 'quiz' ? Math.min(MAX_QUIZ_MINUTES, fullTestMinutes) : fullTestMinutes;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.certificateId) return setFieldError('Chọn chứng chỉ của đề');
-    if (form.examScope === 'course' && !form.courseId) return setFieldError('Đề khóa học phải chọn khóa học');
+    if (!form.courseId) return setFieldError('Chọn khóa học của đề');
     if (!form.examTitle.trim()) return setFieldError('Nhập tiêu đề đề thi');
     if (descriptionLength < MIN_DESCRIPTION) {
       return setFieldError(`Mô tả tối thiểu ${MIN_DESCRIPTION} ký tự: ghi rõ đề gồm những phần nào, dành cho ai`);
     }
-    if (Number(form.durationMinutes) < 1) return setFieldError('Thời lượng tối thiểu 1 phút');
+    const minutes = Number(form.durationMinutes);
+    if (!(minutes >= MIN_DURATION && minutes <= maxDuration)) {
+      return setFieldError(`Thời lượng đề ${EXAM_TYPE_LABEL[form.examType]} phải từ ${MIN_DURATION} đến ${maxDuration} phút`);
+    }
     setFieldError(null);
-    const isTrial = form.examScope === 'trial';
     create.mutate(
       {
-        examScope: form.examScope,
+        examScope: 'course',
         certificateId: form.certificateId,
-        courseId: isTrial ? undefined : form.courseId,
+        courseId: form.courseId,
         examCode: form.examCode.trim() || undefined,
         examType: form.examType,
         examTitle: form.examTitle.trim(),
@@ -94,8 +106,6 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
         passingScore: passToPercent(scale, scale.defaultPass),
         maxAttempts: Number(form.maxAttempts),
         recommendedLevel: form.recommendedLevel.trim() || undefined,
-        // Chưa có luồng thanh toán đề thi → đề thi thử luôn miễn phí
-        isFree: isTrial ? true : undefined,
         showAnswers: form.showAnswers,
         showScore: form.showScore,
       },
@@ -126,45 +136,30 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
             ))}
           </select>
         </Field>
-        <Field label="Phạm vi">
+        <Field label="Khóa học *">
           <select
-            value={form.examScope}
-            onChange={(e) => changeScope(e.target.value as ExamScope)}
+            value={form.courseId}
+            onChange={(e) => set('courseId', e.target.value)}
             className={FIELD_CLASS}
+            disabled={!form.certificateId}
           >
-            <option value="trial">Kiểm tra đầu vào</option>
-            <option value="course">Đề đầu ra của khóa học</option>
+            <option value="">
+              {!form.certificateId
+                ? '— Chọn chứng chỉ trước —'
+                : courseOptions.length
+                  ? '— Chọn khóa học —'
+                  : '— Chứng chỉ này chưa có khóa học —'}
+            </option>
+            {courseOptions.map((c) => (
+              <option key={c.courseId} value={c.courseId}>
+                {c.title}
+              </option>
+            ))}
           </select>
         </Field>
         <p className="sm:col-span-2 -mt-2 text-xs text-slate-500">
-          {form.examScope === 'trial'
-            ? 'Học viên làm để xác định năng lực hiện tại. Đề thi thử đầy đủ tạo ở mục Luyện tập AI.'
-            : 'Chỉ học viên đã mua khóa mới thấy đề. Thi nối tiếp: Giữa kỳ mở khi đã đạt hết Quiz của khóa; Cuối kỳ mở khi đã đạt Giữa kỳ và đạt đủ bài tập.'}
+          Chỉ học viên đã mua khóa mới thấy đề. Đề thi thử đầy đủ tạo ở mục Luyện tập AI.
         </p>
-
-        {form.examScope === 'course' && (
-          <Field label="Khóa học *" className="sm:col-span-2">
-            <select
-              value={form.courseId}
-              onChange={(e) => set('courseId', e.target.value)}
-              className={FIELD_CLASS}
-              disabled={!form.certificateId}
-            >
-              <option value="">
-                {!form.certificateId
-                  ? '— Chọn chứng chỉ trước —'
-                  : courseOptions.length
-                    ? '— Chọn khóa học —'
-                    : '— Chứng chỉ này chưa có khóa học —'}
-              </option>
-              {courseOptions.map((c) => (
-                <option key={c.courseId} value={c.courseId}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
 
         <Field label="Tiêu đề *" className="sm:col-span-2">
           <input value={form.examTitle} onChange={(e) => set('examTitle', e.target.value)} className={FIELD_CLASS} />
@@ -182,9 +177,8 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
             value={form.examType}
             onChange={(e) => set('examType', e.target.value as ExamType)}
             className={FIELD_CLASS}
-            disabled={typeOptions.length < 2}
           >
-            {typeOptions.map((t) => (
+            {COURSE_EXAM_TYPES.map((t) => (
               <option key={t} value={t}>
                 {EXAM_TYPE_LABEL[t]}
               </option>
@@ -194,11 +188,20 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
         <Field label="Thời lượng (phút) *">
           <input
             type="number"
-            min={1}
+            min={MIN_DURATION}
+            max={maxDuration}
             value={form.durationMinutes}
             onChange={(e) => set('durationMinutes', e.target.value)}
             className={FIELD_CLASS}
           />
+          <span className="mt-1 block text-xs text-slate-500">
+            {MIN_DURATION}–{maxDuration} phút
+            {form.examType === 'quiz'
+              ? ' (Quiz là bài ngắn)'
+              : certificate
+                ? ` (không quá thời gian thi thật của ${certificate.certificateName})`
+                : ''}
+          </span>
         </Field>
         <Field label="Điểm đạt (theo chứng chỉ)">
           <div className={cn(FIELD_CLASS, 'bg-slate-50 text-slate-600 font-semibold')}>

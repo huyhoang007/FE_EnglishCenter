@@ -13,7 +13,6 @@ import {
   getExamDetailApi,
   getExamsApi,
   getMyAttemptsApi,
-  getMyProficiencyApi,
   startAttemptApi,
   unwrapExam,
   type ExamListFilter,
@@ -84,11 +83,3 @@ export function useAttemptResult(attemptId: string) {
   });
 }
 
-/** Năng lực hiện tại theo chứng chỉ (từ bài kiểm tra năng lực gần nhất). */
-export function useMyProficiency(enabled: boolean) {
-  return useQuery({
-    queryKey: ['exam', 'proficiency'],
-    queryFn: async () => unwrapExam(await getMyProficiencyApi()),
-    enabled,
-  });
-}

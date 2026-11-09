@@ -52,9 +52,9 @@ export const ExamRoomView: React.FC<ExamRoomViewProps> = ({ attemptId }) => {
           variant="ghost"
           size="sm"
           leftIcon={ArrowLeft}
-          onClick={() => navigate(isLearner ? CLIENT_ROUTES.examPlacement : CLIENT_ROUTES.exams)}
+          onClick={() => navigate(isLearner ? CLIENT_ROUTES.practice : CLIENT_ROUTES.exams)}
         >
-          {isLearner ? 'Kiểm tra năng lực' : 'Ngân hàng đề'}
+          {isLearner ? 'Luyện tập AI' : 'Ngân hàng đề'}
         </Button>
         <ErrorState
           message={room.attemptQuery.error?.message ?? 'Lượt thi đã kết thúc.'}

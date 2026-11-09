@@ -28,7 +28,6 @@ export const CLIENT_ROUTES = {
   exams: '/exams',
   examHistory: '/exams/history',
   /** Dev 3: kiểm tra năng lực đầu vào theo chứng chỉ mục tiêu */
-  examPlacement: '/exams/placement',
   examAttempt: (attemptId: string = ':attemptId') => `/exams/attempts/${attemptId}`,
   examResult: (attemptId: string = ':attemptId') => `/exams/attempts/${attemptId}/result`,
   /* ---------- Homework: làm bài trắc nghiệm ---------- */

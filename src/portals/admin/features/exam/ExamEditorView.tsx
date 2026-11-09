@@ -5,7 +5,8 @@
  * (Công khai đề / Chuyển về nháp / Khôi phục về nháp), Lưu trữ + Xóa đề nằm trong menu phụ.
  * Vùng làm việc: danh sách phần thi theo chiều dọc; "Thêm phần thi" mở form tại chỗ; "Nhập từ Word".
  * Đề của khóa: hiện cảnh báo khi bộ đề của khóa chưa đủ (BE trả `warnings`), luật thi nối tiếp bị bỏ qua.
- * Chỉ sửa cấu trúc khi đề là nháp và chưa có lượt thi (backend chặn với mã 5005 / 5006).
+ * Chỉ sửa cấu trúc khi đề là nháp và chưa có lượt thi (backend chặn với mã 5005 / 5006): đề đã có lượt thi thì
+ * ẩn mọi nút thêm / xóa phần thi, câu hỏi, ẩn mục Xóa đề và hướng dẫn dùng Nhân bản trong menu ⋯.
  * URL: /admin/exams/:examId
  */
 
@@ -30,7 +31,7 @@ import { Button } from '@/shared/components/Button';
 import { ErrorState, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { ADMIN_ROUTES } from '@/shared/constants/routes';
-import { formatPass } from '@/shared/constants/examScales';
+import { formatPass, formatScore } from '@/shared/constants/examScales';
 import { useCertificateScale } from '@/portals/client/features/exams/hooks/useCertificateScale';
 import { EXAM_TYPE_LABEL, type ExamQuestion, type ExamSection } from '@/shared/types';
 import { cn } from '@/shared/utils/cn';
@@ -100,6 +101,10 @@ export const ExamEditorView: React.FC = () => {
   const onError = (err: Error) => toast.error(err.message);
   const looseQuestions = data.unsectionedQuestions ?? [];
   const hasContent = data.sections.length > 0 || looseQuestions.length > 0;
+  const attemptCount = exam.totalAttempts ?? 0;
+  /** Đề đã có lượt thi: cấu trúc khóa vĩnh viễn (kể cả khi về nháp) để giữ đúng kết quả đã chấm */
+  const hasAttempts = attemptCount > 0;
+  const canEditStructure = isDraft && !hasAttempts;
 
   const handleDelete = () => {
     if (!window.confirm(`Xóa đề "${exam.examTitle}"? Thao tác này không hoàn tác được.`)) return;
@@ -128,13 +133,35 @@ export const ExamEditorView: React.FC = () => {
   };
   // Đề lưu trữ thì chỉ xem; còn lại sửa được nội dung hiển thị kể cả khi đã có lượt thi
   const canEditContent = !isArchived;
-  const saveEditing = (values: Record<string, string>) => {
+  const saveEditing = async (values: Record<string, string>) => {
     if (!editing) return;
-    const done = { onSuccess: () => { toast.success('Đã lưu'); setEditing(null); }, onError };
-    if (editing.kind === 'section') {
-      actions.updateSection.mutate({ sectionId: editing.section.sectionId, payload: values }, done);
-    } else {
-      actions.updateQuestion.mutate({ questionId: editing.question.questionId, payload: values }, done);
+    const { points, pointsPerQuestion, ...content } = values;
+    try {
+      if (editing.kind === 'section') {
+        if (Object.keys(content).length > 0) {
+          await actions.updateSection.mutateAsync({ sectionId: editing.section.sectionId, payload: content });
+        }
+        // "Điểm mỗi câu": đặt một lần cho mọi câu của phần thi
+        if (pointsPerQuestion) {
+          await Promise.all(
+            (editing.section.questions ?? []).map((q) =>
+              actions.updateQuestion.mutateAsync({
+                questionId: q.questionId,
+                payload: { points: Number(pointsPerQuestion) },
+              }),
+            ),
+          );
+        }
+      } else {
+        await actions.updateQuestion.mutateAsync({
+          questionId: editing.question.questionId,
+          payload: { ...content, ...(points ? { points: Number(points) } : {}) },
+        });
+      }
+      toast.success('Đã lưu');
+      setEditing(null);
+    } catch (err) {
+      onError(err as Error);
     }
   };
 
@@ -182,7 +209,10 @@ export const ExamEditorView: React.FC = () => {
     `${exam.durationMinutes} phút`,
     `${exam.totalQuestions} câu hỏi`,
     `${data.sections.length} phần thi`,
-    `${data.maxScore} điểm`,
+    // Đề theo chứng chỉ: điểm của câu chỉ là trọng số trong kỹ năng, kết quả quy về thang chứng chỉ
+    scale.kind === 'raw'
+      ? `${data.maxScore} điểm`
+      : `Thang ${scale.label} ${formatScore(scale.min, scale.step)} – ${formatScore(scale.max, scale.step)}`,
     `${exam.totalAttempts ?? 0} lượt thi`,
     `Điểm đạt ${formatPass(scale, exam.passingScore ?? 0)}`,
   ].filter(Boolean);
@@ -208,7 +238,8 @@ export const ExamEditorView: React.FC = () => {
               ...(!isArchived
                 ? [{ label: 'Lưu trữ', icon: Archive, onSelect: handleArchive }]
                 : []),
-              { label: 'Xóa', icon: Trash2, onSelect: handleDelete, danger: true },
+              // Đề đã có lượt thi không xóa được (giữ lịch sử làm bài) -> không hiện mục Xóa
+              ...(!hasAttempts ? [{ label: 'Xóa', icon: Trash2, onSelect: handleDelete, danger: true }] : []),
             ]}
           />
         </div>
@@ -239,20 +270,25 @@ export const ExamEditorView: React.FC = () => {
       )}
 
       {/* ---------- Thông báo trạng thái ---------- */}
-      {!isDraft && (
+      {(!isDraft || hasAttempts) && (
         <div
           className={cn(
-            'flex items-start gap-3 rounded-xl border px-4 py-3 text-sm',
-            isArchived ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-blue-200 bg-blue-50 text-blue-900',
+            'flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border px-4 py-3 text-sm',
+            isArchived || hasAttempts ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-blue-200 bg-blue-50 text-blue-900',
           )}
           role="status"
         >
-          <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
-          <p>
-            {isArchived
-              ? 'Đề đã lưu trữ: học viên không thấy đề này, lịch sử và kết quả các lượt thi vẫn được giữ. Khôi phục về nháp để chỉnh sửa và dùng lại.'
-              : 'Đề đang công khai: chuyển về nháp để sửa phần thi và câu hỏi. Đề đã có lượt thi thì không sửa được cấu trúc.'}
-          </p>
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+            <p>
+              {isArchived && 'Đề đã lưu trữ: học viên không thấy đề này, lịch sử và kết quả các lượt thi vẫn được giữ. '}
+              {hasAttempts
+                ? `Đề đã có ${attemptCount} lượt thi nên không đổi được phần thi, câu hỏi, đáp án hay điểm (để giữ đúng kết quả đã chấm), kể cả khi về nháp. Vẫn sửa được chữ, giải thích và link audio. Muốn đổi cấu trúc, chọn Nhân bản trong menu ⋯ để tạo đề mới.`
+                : isArchived
+                  ? 'Khôi phục về nháp để chỉnh sửa và dùng lại.'
+                  : 'Đề đang công khai: chuyển về nháp để sửa phần thi và câu hỏi.'}
+            </p>
+          </div>
         </div>
       )}
 
@@ -261,13 +297,13 @@ export const ExamEditorView: React.FC = () => {
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-bold text-slate-900">Phần thi ({data.sections.length})</h2>
           {/* Đề trống: nút nằm ở khung trống bên dưới, không lặp lại trên thanh công cụ */}
-          {isDraft && hasContent && (
+          {canEditStructure && hasContent && (
             <p className="text-xs text-slate-600 mt-0.5">
               Có sẵn đề trong file? Dùng “Nhập từ file” để AI đọc PDF / Word và tạo cả bộ đề.
             </p>
           )}
         </div>
-        {isDraft && hasContent && (
+        {canEditStructure && hasContent && (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" leftIcon={FileUp} className="h-10" onClick={() => setImportOpen(true)}>
               Nhập từ file
@@ -286,7 +322,7 @@ export const ExamEditorView: React.FC = () => {
       </div>
 
       {/* ---------- Form thêm phần thi (mở khi bấm) ---------- */}
-      {isDraft && isAddSectionOpen && (
+      {canEditStructure && isAddSectionOpen && (
         <div className="rounded-2xl border border-[#0052CC]/30 bg-white p-5 space-y-4">
           <h3 className="text-base font-bold text-slate-900">Thêm phần thi</h3>
           <AddSectionForm
@@ -319,7 +355,7 @@ export const ExamEditorView: React.FC = () => {
               key={section.sectionId}
               section={section}
               index={index}
-              isEditable={isDraft}
+              isEditable={canEditStructure}
               onAddQuestion={() => setQuestionTarget(section.sectionId)}
               onRemove={() =>
                 window.confirm(`Xóa phần thi "${section.title}" và các câu hỏi của nó?`) &&
@@ -338,7 +374,7 @@ export const ExamEditorView: React.FC = () => {
                 <QuestionRow
                   key={q.questionId}
                   question={q}
-                  isEditable={isDraft}
+                  isEditable={canEditStructure}
                   onRemove={() => actions.removeQuestion.mutate(q.questionId, { onError })}
                   onEdit={canEditContent ? () => setEditing({ kind: 'question', question: q }) : undefined}
                 />
@@ -350,13 +386,13 @@ export const ExamEditorView: React.FC = () => {
         !isAddSectionOpen && (
           <div
             onDragOver={(e) => {
-              if (!isDraft) return;
+              if (!canEditStructure) return;
               e.preventDefault();
               setDropping(true);
             }}
             onDragLeave={() => setDropping(false)}
             onDrop={(e) => {
-              if (!isDraft) return;
+              if (!canEditStructure) return;
               e.preventDefault();
               setDropping(false);
               const file = e.dataTransfer.files[0];
@@ -373,11 +409,13 @@ export const ExamEditorView: React.FC = () => {
               {isDropping ? 'Thả file PDF / Word để tạo bộ đề' : 'Đề chưa có phần thi nào'}
             </p>
             <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
-              {isDraft
+              {canEditStructure
                 ? 'Thêm phần thi (Listening, Reading…) rồi thêm câu hỏi vào từng phần, hoặc kéo thả file PDF, Word (.docx) hoặc .txt vào đây để tạo cả bộ đề (AI đọc file tự do).'
-                : 'Chuyển đề về nháp để thêm phần thi và câu hỏi.'}
+                : hasAttempts
+                  ? 'Đề đã có lượt thi nên không thêm được phần thi. Chọn Nhân bản trong menu ⋯ để tạo đề mới.'
+                  : 'Chuyển đề về nháp để thêm phần thi và câu hỏi.'}
             </p>
-            {isDraft && (
+            {canEditStructure && (
               <div className="mt-5 flex flex-wrap justify-center gap-2">
                 <Button leftIcon={Plus} className="h-10" onClick={() => setAddSectionOpen(true)}>
                   Thêm phần thi
@@ -413,15 +451,35 @@ export const ExamEditorView: React.FC = () => {
                   { key: 'instructions', label: 'Hướng dẫn', value: editing.section.instructions, multiline: true },
                   { key: 'passageText', label: 'Đoạn đọc', value: editing.section.passageText, multiline: true },
                   { key: 'audioUrl', label: 'Link file nghe', value: editing.section.audioUrl },
+                  // Đề chưa có lượt thi: đặt điểm cho mọi câu của phần một lần
+                  ...(canEditStructure && (editing.section.questions?.length ?? 0) > 0
+                    ? [
+                        {
+                          key: 'pointsPerQuestion',
+                          label: 'Điểm mỗi câu',
+                          numeric: true,
+                          placeholder: 'Để trống = giữ nguyên',
+                          hint: `Áp dụng cho cả ${editing.section.questions?.length} câu của phần này.`,
+                        },
+                      ]
+                    : []),
                 ]
               : [
                   { key: 'questionText', label: 'Nội dung câu hỏi', value: editing.question.questionText, multiline: true, required: true },
                   { key: 'explanation', label: 'Giải thích đáp án', value: editing.question.explanation, multiline: true },
                   { key: 'audioUrl', label: 'Link audio', value: editing.question.audioUrl },
                   { key: 'imageUrl', label: 'Link ảnh', value: editing.question.imageUrl },
+                  ...(canEditStructure
+                    ? [{ key: 'points', label: 'Điểm', value: String(editing.question.points ?? 1), numeric: true }]
+                    : []),
                 ]
           }
           isSaving={actions.updateSection.isPending || actions.updateQuestion.isPending}
+          note={
+            canEditStructure
+              ? 'Đề chưa có lượt thi nên sửa được cả điểm. Đáp án và dạng câu không đổi ở đây.'
+              : undefined
+          }
           onSave={saveEditing}
           onClose={() => setEditing(null)}
         />

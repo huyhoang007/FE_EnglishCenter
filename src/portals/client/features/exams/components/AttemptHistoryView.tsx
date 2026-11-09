@@ -39,7 +39,7 @@ export const AttemptHistoryView: React.FC = () => {
           title="Bạn chưa làm đề nào"
           description="Vào ngân hàng đề để chọn một đề và bắt đầu làm bài."
           actionLabel="Chọn đề để làm"
-          onAction={() => navigate(isLearner ? CLIENT_ROUTES.examPlacement : CLIENT_ROUTES.exams)}
+          onAction={() => navigate(isLearner ? CLIENT_ROUTES.practice : CLIENT_ROUTES.exams)}
         />
       ) : (
         <>
