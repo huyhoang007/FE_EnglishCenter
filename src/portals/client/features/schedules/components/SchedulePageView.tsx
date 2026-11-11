@@ -22,8 +22,6 @@ import {
   X,
   ShieldCheck,
   Copy,
-  Check,
-  Banknote,
   ArrowRight,
   RefreshCw,
   XCircle,
@@ -35,7 +33,7 @@ import {
 import { Card } from '@/shared/components/Card';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
-import { Pagination } from '@/shared/components/Feedback';
+import { ErrorState, Pagination, Skeleton } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { cn } from '@/shared/utils';
 import { formatVND } from '@/shared/utils';
@@ -72,6 +70,7 @@ import {
 } from '@/shared/schedule';
 import type { Booking, MentoringPlan, ScheduleListType, SessionPaymentStatus } from '@/shared/types';
 import type { MentorDto } from '@/shared/api/apiTypes';
+import { PaymentStatusBadge } from '@/portals/client/features/checkout/components/PaymentStatusBadge';
 import { ConsultationRequestCard } from './ConsultationRequestCard';
 
 /* ============================================================
@@ -801,6 +800,7 @@ const SessionPaymentModal: React.FC<{ orderCode: string; onClose: () => void }> 
   const status = order?.status;
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [qrError, setQrError] = useState(false);
 
   // Đồng hồ đếm ngược hạn thanh toán
   useEffect(() => {
@@ -844,141 +844,77 @@ const SessionPaymentModal: React.FC<{ orderCode: string; onClose: () => void }> 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-900/60 backdrop-blur-sm animate-in fade-in"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 animate-in fade-in"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="session-payment-title"
     >
       <div
-        className="w-full max-w-lg bg-white rounded-card shadow-elevation border border-slate-200 overflow-hidden animate-in zoom-in-95"
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl outline-none animate-in zoom-in-95"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-primary-tint/50 to-ai/5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-md bg-ai-gradient flex items-center justify-center shadow-ai-glow">
-              <ShieldCheck className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-extrabold text-slate-900">Thanh toán học phí 1-1</p>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                Chuyển khoản VietQR · SePay tự động xác nhận
-              </p>
-            </div>
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-blue-700 uppercase">SePay · Chuyển khoản ngân hàng</p>
+            <h2 id="session-payment-title" className="font-extrabold text-xl text-slate-900 mt-1">
+              Thanh toán học phí 1-1
+            </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-            aria-label="Đóng"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Đóng thanh toán">
+            <X className="w-5 h-5" />
+          </Button>
         </div>
 
-        {paymentQuery.isLoading ? (
-          <p className="p-8 text-center text-sm text-slate-500">Đang tải thông tin thanh toán…</p>
-        ) : paymentQuery.isError || !order ? (
-          <div className="p-8 text-center space-y-4">
-            <p className="text-sm text-status-danger font-semibold">{getErrorMessage(paymentQuery.error)}</p>
-            <Button variant="ghost" size="md" onClick={onClose}>
-              Đóng
-            </Button>
-          </div>
-        ) : order.status !== 'PENDING' ? (
-          <div className="p-8 text-center">
-            <div
-              className={cn(
-                'w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4',
-                order.status === 'PAID' ? 'bg-status-success-bg' : 'bg-status-danger-bg',
-              )}
-            >
-              {order.status === 'PAID' ? (
-                <CheckCircle2 className="w-9 h-9 text-status-success" />
-              ) : (
-                <AlertTriangle className="w-9 h-9 text-status-danger" />
-              )}
+        <div className="p-5 sm:p-6 space-y-5">
+          {paymentQuery.isLoading && <Skeleton className="h-64" />}
+          {paymentQuery.isError && <ErrorState message={getErrorMessage(paymentQuery.error)} onRetry={() => void paymentQuery.refetch()} />}
+          {order && order.status !== 'PENDING' && (
+            <div className="text-center">
+              <div className={cn('w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4', order.status === 'PAID' ? 'bg-status-success-bg' : 'bg-status-danger-bg')}>
+                {order.status === 'PAID' ? <CheckCircle2 className="w-9 h-9 text-status-success" /> : <AlertTriangle className="w-9 h-9 text-status-danger" />}
+              </div>
+              <h3 className="text-xl font-extrabold text-slate-900">
+                {order.status === 'PAID' ? 'Thanh toán thành công!' : 'Lịch học chưa được xác nhận'}
+              </h3>
+              <p className="text-sm text-slate-600 mt-2 max-w-sm mx-auto">{PAYMENT_DONE_MESSAGE[order.status]}</p>
+              <Button variant="primary" size="md" className="mt-6" onClick={onClose}>Đóng</Button>
             </div>
-            <h3 className="text-xl font-extrabold text-slate-900">
-              {order.status === 'PAID' ? 'Thanh toán thành công!' : 'Lịch học chưa được xác nhận'}
-            </h3>
-            <p className="text-sm text-slate-600 mt-2 max-w-sm mx-auto">{PAYMENT_DONE_MESSAGE[order.status]}</p>
-            <Button variant="primary" size="md" className="mt-6" onClick={onClose}>
-              Đóng
-            </Button>
-          </div>
-        ) : (
-          <>
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Trái — thông tin chuyển khoản */}
-              <div className="space-y-3">
-                <div className="rounded-input bg-slate-50 border border-slate-200/70 p-3 space-y-1.5">
-                  <Row label="Đơn hàng" value={order.courseTitle} />
-                  <Row label="Mã đơn" value={order.orderCode} mono />
-                </div>
+          )}
+          {order?.status === 'PENDING' && (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Số tiền</p>
-                  <p className="text-2xl font-extrabold text-primary tabular-nums">{formatVND(order.amount)}</p>
+                  <h3 className="font-bold text-slate-900">{order.courseTitle}</h3>
+                  <p className="text-xs text-slate-500 mt-1">Đơn {order.orderCode}</p>
+                  <p className="font-extrabold text-2xl text-blue-700 mt-2">{formatVND(order.amount)}</p>
                 </div>
-                <Row label="Ngân hàng · Chủ tài khoản" value={`${order.bankCode} · ${order.accountName}`} />
-                <CopyLine
-                  label="Số tài khoản"
-                  value={order.accountNumber}
-                  copied={copiedField === 'account'}
-                  onCopy={() => handleCopy('account', order.accountNumber)}
-                />
-                <CopyLine
-                  label="Nội dung (bắt buộc)"
-                  value={order.transferContent}
-                  copied={copiedField === 'content'}
-                  onCopy={() => handleCopy('content', order.transferContent)}
-                  highlight
-                />
+                <PaymentStatusBadge status={order.status} />
               </div>
-
-              {/* Phải — QR */}
-              <div className="rounded-input border-2 border-primary/30 bg-white p-3 text-center">
-                <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider mb-2">
-                  <span className="text-primary inline-flex items-center gap-1">
-                    <span className="w-2 h-2 bg-primary rounded-sm" />
-                    VietQR
-                  </span>
-                  <span className="text-status-danger inline-flex items-center gap-1 tabular-nums">
-                    <Clock className="w-3 h-3" />
-                    {countdown}
-                  </span>
+              <div className="grid sm:grid-cols-2 gap-5 items-start">
+                <div className="bg-slate-50 rounded-xl p-4 text-center border border-slate-200">
+                  {order.qrUrl && !qrError ? (
+                    <img src={order.qrUrl} alt={`QR thanh toán đơn ${order.orderCode}`} className="w-full max-w-60 mx-auto rounded-lg" onError={() => setQrError(true)} />
+                  ) : (
+                    <p className="text-sm text-slate-600 py-10">Không tải được QR. Bạn có thể chuyển khoản theo thông tin bên cạnh.</p>
+                  )}
+                  <p className="font-bold text-sm text-blue-700 mt-3">Còn {countdown}</p>
                 </div>
-                {order.qrUrl && <img src={order.qrUrl} alt="Mã QR thanh toán" className="w-full aspect-square" />}
-                <p className="text-[10px] text-slate-500 mt-2 leading-snug">
-                  Quét bằng ứng dụng ngân hàng, giữ nguyên số tiền và nội dung chuyển khoản
-                </p>
+                <div className="space-y-4 text-sm">
+                  <div><p className="text-xs text-slate-500">Ngân hàng</p><p className="font-bold">{order.bankCode}</p></div>
+                  <div><p className="text-xs text-slate-500">Chủ tài khoản</p><p className="font-bold break-words">{order.accountName}</p></div>
+                  <CopyLine label="Số tài khoản" value={order.accountNumber} copied={copiedField === 'account'} onCopy={() => handleCopy('account', order.accountNumber)} />
+                  <CopyLine label="Nội dung chuyển khoản" value={order.transferContent} copied={copiedField === 'content'} onCopy={() => handleCopy('content', order.transferContent)} />
+                  <p className="text-xs text-slate-600">Chuyển đúng <strong>{formatVND(order.amount)}</strong> và giữ nguyên nội dung để xác nhận đúng đơn hàng.</p>
+                </div>
               </div>
-            </div>
-
-            <div className="px-5 py-4 border-t border-slate-100 bg-slate-50/40 flex flex-wrap items-center gap-2">
-              <Banknote className="w-4 h-4 text-status-success" />
-              <span className="text-xs text-slate-600 flex-1 min-w-[180px]">
-                Hệ thống tự kiểm tra mỗi vài giây và xác nhận ngay khi nhận được chuyển khoản.
-              </span>
-              <Button
-                variant="ghost"
-                size="md"
-                isLoading={cancelMutation.isPending}
-                onClick={handleCancelPayment}
-              >
-                Hủy thanh toán
-              </Button>
-              <Button
-                variant="primary"
-                size="md"
-                leftIcon={RefreshCw}
-                isLoading={paymentQuery.isFetching}
-                onClick={() => paymentQuery.refetch()}
-              >
-                Kiểm tra trạng thái
-              </Button>
-            </div>
-          </>
-        )}
+              <p className="text-sm text-slate-600 flex items-start gap-2"><ShieldCheck className="w-5 h-5 shrink-0 text-blue-600" />Hệ thống tự kiểm tra mỗi vài giây và xác nhận ngay khi nhận được chuyển khoản.</p>
+              <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                <Button variant="outline" leftIcon={RefreshCw} isLoading={paymentQuery.isFetching} onClick={() => void paymentQuery.refetch()}>Kiểm tra trạng thái</Button>
+                <Button variant="ghost" isLoading={cancelMutation.isPending} onClick={handleCancelPayment}>Hủy thanh toán</Button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1009,58 +945,16 @@ const CopyLine: React.FC<{
   value: string;
   copied: boolean;
   onCopy: () => void;
-  highlight?: boolean;
-}> = ({ label, value, copied, onCopy, highlight }) => (
-  <div
-    className={cn(
-      'rounded-md p-2.5 flex items-center justify-between gap-2',
-      highlight
-        ? 'bg-status-danger-bg border border-red-200'
-        : 'bg-slate-50 border border-slate-200/70',
-    )}
-  >
-    <div className="min-w-0 flex-1">
-      <p
-        className={cn(
-          'text-[10px] font-extrabold uppercase tracking-widest',
-          highlight ? 'text-status-danger' : 'text-slate-500',
-        )}
-      >
-        {label}
-      </p>
-      <p
-        className={cn(
-          'font-mono font-bold text-sm truncate',
-          highlight ? 'text-status-danger' : 'text-slate-800',
-        )}
-      >
-        {value}
-      </p>
+}> = ({ label, value, copied, onCopy }) => (
+  <div>
+    <p className="text-xs text-slate-500">{label}</p>
+    <div className="flex items-center justify-between gap-2">
+      <span className="font-mono font-bold break-all select-all">{value}</span>
+      <button type="button" onClick={onCopy} aria-label={`Sao chép ${label.toLowerCase()}`} className="rounded-lg p-2 text-slate-500 hover:bg-white shrink-0">
+        {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+      </button>
     </div>
-    <button
-      type="button"
-      onClick={onCopy}
-      className={cn(
-        'flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold shrink-0',
-        copied
-          ? 'bg-status-success text-white'
-          : highlight
-            ? 'bg-white text-status-danger border border-red-200 hover:bg-red-50'
-            : 'bg-white text-slate-500 border border-slate-200 hover:text-primary',
-      )}
-    >
-      {copied ? (
-        <>
-          <Check className="w-3 h-3" />
-          Đã sao chép
-        </>
-      ) : (
-        <>
-          <Copy className="w-3 h-3" />
-          Sao chép
-        </>
-      )}
-    </button>
+    {copied && <p role="status" className="text-xs text-emerald-600">Đã sao chép</p>}
   </div>
 );
 
