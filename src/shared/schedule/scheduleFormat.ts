@@ -11,8 +11,6 @@ import type {
   ConsultationStatus,
   DayOfWeek,
   MentoringPlanStatus,
-  StudyRepeatRule,
-  StudyStatus,
 } from '@/shared/types';
 
 const WEEKDAY_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -157,28 +155,6 @@ export const CONSULTATION_STATUS_VARIANT: Record<ConsultationStatus, BadgeVarian
 /** Booking còn hiệu lực: được hủy */
 export const isActiveBooking = (status: BookingStatus): boolean =>
   status === 'pending' || status === 'confirmed';
-
-/* ---------------- Lịch học cá nhân (TASK-D5-01) ---------------- */
-
-export const STUDY_STATUS_LABEL: Record<StudyStatus, string> = {
-  pending: 'Chờ học',
-  done: 'Đã học',
-  skipped: 'Bỏ qua',
-  cancelled: 'Đã hủy',
-};
-
-export const STUDY_STATUS_VARIANT: Record<StudyStatus, BadgeVariant> = {
-  pending: 'primary',
-  done: 'success',
-  skipped: 'warning',
-  cancelled: 'neutral',
-};
-
-export const REPEAT_RULE_LABEL: Record<StudyRepeatRule, string> = {
-  none: 'Không lặp',
-  daily: 'Hằng ngày',
-  weekly: 'Hằng tuần',
-};
 
 /* ---------------- Link phòng học online (khớp BE @MeetingUrl) ---------------- */
 

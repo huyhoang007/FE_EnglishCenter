@@ -124,10 +124,10 @@ export const QUERY_KEYS = {
     list: ['notification', 'list'] as const,
     page: (page: number) => ['notification', 'page', page] as const,
   },
-  /** Lịch học cá nhân USER / STUDENT (TASK-D5-01) */
+  /** Lịch học USER / STUDENT = buổi kèm 1-1 — nằm dưới 'schedule' để đổi lịch mentor thì tải lại theo */
   studySchedule: {
-    all: ['study-schedule'] as const,
-    list: (status: string, page: number) => ['study-schedule', 'list', status, page] as const,
+    all: ['schedule', 'study'] as const,
+    list: (status: string, page: number) => ['schedule', 'study', status, page] as const,
   },
   learningPath: {
     all: ['learning-path'] as const,

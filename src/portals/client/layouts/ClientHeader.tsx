@@ -5,7 +5,7 @@
  *  - 100% English navigation labels
  *  - Compact search + notifications + user dropdown (đã bỏ streak giả "5 Days")
  *  - Truly generic — does NOT contain page-specific content
- *  - Menu theo role: MENTOR chỉ có Teaching Schedule, Students, Exam Grading, Learning Paths (tạo được lộ trình)
+ *  - Menu theo role: MENTOR có Dashboard, Teaching Schedule, Students, Exam Grading, Homework, Learning Paths
  *    (không có khóa học, thi thử, luyện đề AI, ô tìm khóa học)
  *  - Learner (USER) / khách: Courses | Free Level Test
  *  - Student: My Courses | Learning Paths | AI Practice | Final Exams | Mentor 1-1
@@ -210,21 +210,22 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
 
       {/* ============== NAV MENU ============== */}
       <nav
-        className={cn(
-          'hidden lg:flex items-center h-full',
-          // Mentor chỉ có 3 mục: dãn đều trên toàn bộ khoảng giữa logo và cụm bên phải
-          isMentor && 'flex-1 mx-8',
-        )}
+        // Menu nằm giữa logo và cụm bên phải, các mục cách đều nhau, không xuống dòng
+        className="hidden lg:flex flex-1 min-w-0 justify-center items-center h-full mx-2 xl:mx-4"
         aria-label="Primary navigation"
       >
-        <ul className={cn('flex items-center gap-1', isMentor && 'w-full justify-evenly')}>
-          {visibleNav.map((item) => (
+        <ul className="flex items-center gap-0.5 xl:gap-1">
+          {visibleNav.map((item) => {
+            const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
+            return (
             <li key={item.to}>
               <Link
                 to={item.to}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'inline-flex items-center gap-1 px-3 h-10 rounded-full',
-                  'text-sm font-semibold text-slate-700',
+                  'inline-flex items-center gap-1 h-10 px-2.5 xl:px-3.5 rounded-full whitespace-nowrap',
+                  'text-[13px] xl:text-sm font-semibold',
+                  active ? 'text-[#0052CC] bg-blue-50' : 'text-slate-700',
                   'hover:text-[#0052CC] hover:bg-blue-50/70',
                   'transition-colors',
                 )}
@@ -235,7 +236,8 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
                 )}
               </Link>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </nav>
 
@@ -243,7 +245,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
       <div className="flex items-center gap-2 shrink-0">
         {/* Search bar — dẫn tới /courses?keyword= (GET /api/v1/courses?keyword=); mentor không có */}
         {!isMentor && (
-          <div className="hidden md:flex items-center gap-2 h-10 px-3.5 rounded-full bg-slate-50 border border-slate-200/80 focus-within:border-[#0052CC] focus-within:bg-white transition-colors min-w-[220px]">
+          <div className="hidden md:flex lg:hidden xl:flex items-center gap-2 h-10 px-3.5 rounded-full bg-slate-50 border border-slate-200/80 focus-within:border-[#0052CC] focus-within:bg-white transition-colors w-[220px] 2xl:w-[260px]">
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
@@ -301,7 +303,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
                 type="button"
                 onClick={() => setUserMenuOpen((o) => !o)}
                 className={cn(
-                  'inline-flex items-center gap-2 h-10 pl-1.5 pr-3 rounded-full',
+                  'inline-flex items-center gap-2 h-10 pl-1.5 pr-1.5 xl:pr-3 rounded-full',
                   'border border-slate-200 hover:border-slate-300 hover:bg-slate-50',
                   'transition-colors',
                 )}
@@ -315,12 +317,12 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
                 >
                   {avatarInitial}
                 </span>
-                <span className="hidden md:inline text-sm font-semibold text-slate-700 max-w-[120px] truncate">
+                <span className="hidden xl:inline text-sm font-semibold text-slate-700 max-w-[140px] truncate">
                   {displayName}
                 </span>
                 <ChevronDown
                   className={cn(
-                    'hidden md:block w-4 h-4 text-slate-400 transition-transform',
+                    'hidden xl:block w-4 h-4 text-slate-400 transition-transform',
                     userMenuOpen && 'rotate-180',
                   )}
                 />
