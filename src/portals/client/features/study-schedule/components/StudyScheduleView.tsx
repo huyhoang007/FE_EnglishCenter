@@ -4,13 +4,15 @@
  * Chỉ USER / STUDENT (BE chặn role khác). Vào từ dropdown avatar → "Study Schedule".
  * Học viên KHÔNG tự tạo lịch nữa: lịch học = các buổi kèm 1-1 mentor xếp trong gói đã thanh toán.
  * - Danh sách 30 ngày tới (mặc định của BE), lọc theo trạng thái buổi, phân trang.
- * - Buổi đã xác nhận có link phòng thì "Vào phòng"; hủy / xin dời lịch làm ở trang Mentor 1-1.
+ * - Buổi đã xác nhận: "Vào phòng" (có link) và "Xin dời lịch" (dùng chung popup với trang Mentor 1-1,
+ *   trước giờ học ít nhất RESCHEDULE_DEADLINE_HOURS giờ). Hủy buổi làm ở trang Mentor 1-1.
  * BE tự gửi thông báo nhắc trước giờ học (BookingReminderJob).
  */
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BookOpen, CalendarClock, Clock, UserRound, Video } from 'lucide-react';
+import { RescheduleRequestModal } from '@/portals/client/features/schedules';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
@@ -21,6 +23,7 @@ import { cn } from '@/shared/utils/cn';
 import {
   BOOKING_STATUS_LABEL,
   BOOKING_STATUS_VARIANT,
+  RESCHEDULE_DEADLINE_HOURS,
   durationMinutes,
   formatDayLabel,
   formatTime,
@@ -71,6 +74,7 @@ const StudyScheduleView: React.FC = () => {
 const ScheduleListCard: React.FC = () => {
   const [status, setStatus] = useState<StudyScheduleStatus | ''>('');
   const [page, setPage] = useState(0);
+  const [requesting, setRequesting] = useState<Booking | null>(null);
 
   const listQuery = useMyStudySchedules(status || undefined, page);
   const sessions = listQuery.data?.data ?? [];
@@ -116,12 +120,14 @@ const ScheduleListCard: React.FC = () => {
       ) : (
         <ul className="mt-4 divide-y divide-slate-100">
           {sessions.map((item) => (
-            <SessionRow key={item.bookingId} session={item} />
+            <SessionRow key={item.bookingId} session={item} onRequestReschedule={() => setRequesting(item)} />
           ))}
         </ul>
       )}
 
       <Pagination className="mt-4" currentPage={page} totalPages={listQuery.data?.totalPages ?? 0} onChange={setPage} />
+
+      {requesting && <RescheduleRequestModal booking={requesting} onClose={() => setRequesting(null)} />}
     </Card>
   );
 };
@@ -129,10 +135,16 @@ const ScheduleListCard: React.FC = () => {
 /* ============================================================
  *  1 buổi học
  * ============================================================ */
-const SessionRow: React.FC<{ session: Booking }> = ({ session }) => {
+const SessionRow: React.FC<{ session: Booking; onRequestReschedule: () => void }> = ({
+  session,
+  onRequestReschedule,
+}) => {
+  const now = Date.now();
   // Chỉ buổi đã xác nhận, chưa kết thúc mới vào phòng được
-  const canJoin =
-    session.status === 'confirmed' && !!session.meetingUrl && new Date(session.endTime).getTime() > Date.now();
+  const canJoin = session.status === 'confirmed' && !!session.meetingUrl && new Date(session.endTime).getTime() > now;
+  // Xin dời: buổi đã xác nhận, chưa bắt đầu; sát giờ (dưới N giờ) thì khóa nút giống trang Mentor 1-1
+  const canReschedule = session.status === 'confirmed' && new Date(session.startTime).getTime() > now;
+  const tooLate = new Date(session.startTime).getTime() - now <= RESCHEDULE_DEADLINE_HOURS * 3600 * 1000;
 
   return (
     <li className="py-3 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -171,16 +183,34 @@ const SessionRow: React.FC<{ session: Booking }> = ({ session }) => {
         )}
       </div>
 
-      {canJoin && (
-        <div className="shrink-0">
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={Video}
-            onClick={() => window.open(session.meetingUrl as string, '_blank')}
-          >
-            Vào phòng
-          </Button>
+      {(canJoin || canReschedule) && (
+        <div className="flex items-center gap-2 shrink-0">
+          {canJoin && (
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={Video}
+              onClick={() => window.open(session.meetingUrl as string, '_blank')}
+            >
+              Vào phòng
+            </Button>
+          )}
+          {canReschedule && (
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={CalendarClock}
+              disabled={tooLate}
+              title={
+                tooLate
+                  ? `Chỉ xin dời trước giờ học ít nhất ${RESCHEDULE_DEADLINE_HOURS} giờ`
+                  : `Gửi yêu cầu cho mentor, trước giờ học ít nhất ${RESCHEDULE_DEADLINE_HOURS} giờ`
+              }
+              onClick={onRequestReschedule}
+            >
+              {session.rescheduleRequestedAt ? 'Sửa yêu cầu dời' : 'Xin dời lịch'}
+            </Button>
+          )}
         </div>
       )}
     </li>

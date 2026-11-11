@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from 'react';
-import { CalendarPlus, Eye, Mail, Phone, Search, UserCheck, X, XCircle } from 'lucide-react';
+import { CalendarPlus, Eye, Mail, Phone, Search, TrendingUp, UserCheck, X, XCircle } from 'lucide-react';
 import { Card } from '@/shared/components/Card';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
@@ -35,6 +35,7 @@ import type { Consultation, StudentOverview } from '@/shared/types';
 import { PracticeLevelCard } from '@/portals/client/features/exams/components/PracticeLevelCard';
 import { AnswerReviewItem } from '@/portals/client/features/exams/components/AnswerReviewItem';
 import { CreatePlanModal, type PlanStudent } from '../schedule/CreatePlanModal';
+import { StudentProgressModal } from './StudentProgressModal';
 
 type Tab = 'open' | 'mine' | 'search';
 
@@ -51,6 +52,7 @@ const fmtScore = (v: number | null | undefined) =>
 const MentorStudentsView: React.FC = () => {
   const [tab, setTab] = useState<Tab>('open');
   const [viewingStudentId, setViewingStudentId] = useState<string | null>(null);
+  const [progressOf, setProgressOf] = useState<{ studentId: string; name: string } | null>(null);
   const [planFor, setPlanFor] = useState<{ student: PlanStudent; consultationId?: string } | null>(null);
 
   return (
@@ -86,6 +88,7 @@ const MentorStudentsView: React.FC = () => {
         <ConsultationListCard
           mine={tab === 'mine'}
           onView={setViewingStudentId}
+          onViewProgress={(c) => setProgressOf({ studentId: c.studentId, name: c.studentName })}
           onCreatePlan={(c) =>
             setPlanFor({
               student: {
@@ -111,6 +114,13 @@ const MentorStudentsView: React.FC = () => {
           }}
         />
       )}
+      {progressOf && (
+        <StudentProgressModal
+          studentId={progressOf.studentId}
+          studentName={progressOf.name}
+          onClose={() => setProgressOf(null)}
+        />
+      )}
       {planFor && (
         <CreatePlanModal student={planFor.student} consultationId={planFor.consultationId} onClose={() => setPlanFor(null)} />
       )}
@@ -124,8 +134,9 @@ const MentorStudentsView: React.FC = () => {
 const ConsultationListCard: React.FC<{
   mine: boolean;
   onView: (studentId: string) => void;
+  onViewProgress: (c: Consultation) => void;
   onCreatePlan: (c: Consultation) => void;
-}> = ({ mine, onView, onCreatePlan }) => {
+}> = ({ mine, onView, onViewProgress, onCreatePlan }) => {
   const toast = useToast();
   const [page, setPage] = useState(0);
   const query = useMentorConsultations(mine, page);
@@ -189,10 +200,17 @@ const ConsultationListCard: React.FC<{
                 <AvailableSlotChips slots={c.availableSlots} />
                 {c.note && <p className="text-sm text-slate-600 italic">"{c.note}"</p>}
               </div>
-              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {/* Các nút xếp dọc, cùng bề rộng */}
+              <div className="flex flex-col items-stretch gap-2 shrink-0 lg:w-52">
                 <Button variant="outline" size="sm" leftIcon={Eye} onClick={() => onView(c.studentId)}>
                   Xem test level
                 </Button>
+                {/* Mentor phụ trách: theo dõi % khóa học, điểm bài tập, lộ trình, buổi kèm */}
+                {mine && (
+                  <Button variant="secondary" size="sm" leftIcon={TrendingUp} onClick={() => onViewProgress(c)}>
+                    Xem tiến độ học tập
+                  </Button>
+                )}
                 {c.status === 'pending' && (
                   <Button variant="primary" size="sm" leftIcon={UserCheck} isLoading={claimMutation.isPending} onClick={() => claim(c)}>
                     Nhận tư vấn

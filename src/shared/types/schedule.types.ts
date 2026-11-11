@@ -6,6 +6,8 @@
  * FE hiển thị theo múi giờ máy người dùng (TASK D5-19).
  */
 
+import type { LearningPathProgress } from './learningPath.types';
+
 /** Trạng thái lịch hẹn (chữ thường, khớp BE) */
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
 
@@ -189,4 +191,49 @@ export interface AdminBookingFilter {
   status?: BookingStatus | '';
   page?: number;
   size?: number;
+}
+
+/* ---------------- Mentor xem tiến độ học tập của học viên mình phụ trách ---------------- */
+
+/** % khóa học = bài học có video đã xem xong / tổng bài học có video */
+export interface StudentCourseProgress {
+  courseId: string;
+  courseTitle: string;
+  thumbnailUrl: string | null;
+  completedLessons: number;
+  totalLessons: number;
+  progressPercent: number;
+}
+
+/** 1 bài tập (gộp các lần nộp): điểm của lần chấm gần nhất */
+export interface StudentHomeworkScore {
+  homeworkId: string;
+  title: string;
+  /** null = bài tập mentor giao (không thuộc khóa học) */
+  courseTitle: string | null;
+  score: number | null;
+  maxScore: number | null;
+  passingScore: number | null;
+  passed: boolean | null;
+  /** Lần nộp mới nhất chưa được chấm */
+  pendingGrading: boolean;
+  attemptCount: number;
+  lastSubmittedDate: string | null;
+  gradedDate: string | null;
+}
+
+/** Buổi kèm 1-1 giữa học viên và mentor đang xem */
+export interface StudentSessionSummary {
+  total: number;
+  completed: number;
+  noShow: number;
+  cancelled: number;
+  upcoming: number;
+}
+
+export interface StudentProgress {
+  courses: StudentCourseProgress[];
+  homeworks: StudentHomeworkScore[];
+  learningPaths: LearningPathProgress[];
+  sessions: StudentSessionSummary;
 }

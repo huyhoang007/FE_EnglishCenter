@@ -33,6 +33,7 @@ import {
   getMyScheduleApi,
   getSessionPaymentApi,
   getStudentLevelTestResultApi,
+  getStudentProgressApi,
   getStudentLevelTestsApi,
   getStudentOverviewApi,
   rejectPlanApi,
@@ -264,6 +265,15 @@ export function useStudentOverview(studentId: string | null) {
   return useQuery({
     queryKey: QUERY_KEYS.schedule.student(studentId ?? ''),
     queryFn: async () => unwrapOrThrow(await getStudentOverviewApi(studentId as string)),
+    enabled: !!studentId,
+  });
+}
+
+/** Tiến độ học tập của học viên mentor phụ trách (chỉ tải khi mở popup) */
+export function useStudentProgress(studentId: string | null) {
+  return useQuery({
+    queryKey: QUERY_KEYS.schedule.studentProgress(studentId ?? ''),
+    queryFn: async () => unwrapOrThrow(await getStudentProgressApi(studentId as string)),
     enabled: !!studentId,
   });
 }

@@ -56,6 +56,7 @@ import type {
   ScheduleListType,
   SessionPaymentOrder,
   StudentOverview,
+  StudentProgress,
 } from '@/shared/types';
 
 /* ---------------- Booking ---------------- */
@@ -154,6 +155,10 @@ export const searchStudentsApi = (
 
 export const getStudentOverviewApi = (studentId: string): Promise<ApiResponse<StudentOverview>> =>
   apiGet<StudentOverview>(`/api/v1/mentor/students/${studentId}`);
+
+/** Tiến độ học tập (khóa học, bài tập, lộ trình, buổi kèm) — chỉ mentor phụ trách học viên */
+export const getStudentProgressApi = (studentId: string): Promise<ApiResponse<StudentProgress>> =>
+  apiGet<StudentProgress>(`/api/v1/mentor/students/${studentId}/progress`);
 
 export const getStudentLevelTestsApi = (
   studentId: string,

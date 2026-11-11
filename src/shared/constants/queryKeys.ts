@@ -59,6 +59,7 @@ export const QUERY_KEYS = {
     mentorConsultations: (mine: boolean, page: number) => ['schedule', 'consultations', mine, page] as const,
     students: (keyword: string, page: number) => ['schedule', 'students', keyword, page] as const,
     student: (studentId: string) => ['schedule', 'student', studentId] as const,
+    studentProgress: (studentId: string) => ['schedule', 'student', studentId, 'progress'] as const,
     studentLevelTests: (studentId: string, page: number) => ['schedule', 'student', studentId, 'tests', page] as const,
     studentLevelTest: (studentId: string, attemptId: string) =>
       ['schedule', 'student', studentId, 'test', attemptId] as const,

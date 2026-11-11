@@ -579,7 +579,7 @@ const MyBookingsSection: React.FC = () => {
  *  Chỉ là yêu cầu: lý do bắt buộc, giờ mong muốn tùy chọn (cùng thời lượng buổi cũ).
  *  Mentor nhận thông báo → dời lịch (yêu cầu tự xóa) hoặc từ chối (buổi giữ nguyên giờ).
  * ============================================================ */
-const RescheduleRequestModal: React.FC<{ booking: Booking; onClose: () => void }> = ({ booking, onClose }) => {
+export const RescheduleRequestModal: React.FC<{ booking: Booking; onClose: () => void }> = ({ booking, onClose }) => {
   const toast = useToast();
   const requestMutation = useRequestReschedule();
   const bounds = scheduleDateBounds();
