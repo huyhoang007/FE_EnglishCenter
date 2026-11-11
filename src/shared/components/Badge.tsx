@@ -33,6 +33,7 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 const variantClasses: Record<BadgeVariant, string> = {
   primary: 'bg-primary/10 text-primary border border-primary/20',
   ai: 'bg-ai/10 text-ai border border-ai/20',
+  info: 'bg-sky-50 text-sky-700 border border-sky-200',
   ielts: 'bg-cert-ielts-bg text-cert-ielts-text border border-cert-ielts-border',
   toeic: 'bg-cert-toeic-bg text-cert-toeic-text border border-cert-toeic-border',
   vstep: 'bg-cert-vstep-bg text-cert-vstep-text border border-cert-vstep-border',

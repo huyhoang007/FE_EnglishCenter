@@ -35,6 +35,7 @@ import {
 } from '@/shared/components/Feedback';
 import { useToast } from '@/shared/components/Toast';
 import { cn } from '@/shared/utils/cn';
+import type { HomeworkSource } from '@/shared/constants/queryKeys';
 import type {
   HomeworkAiSuggestion,
   RubricScore,
@@ -76,10 +77,12 @@ const isManualType = (type?: string | null) =>
 export const HomeworkGradingView: React.FC = () => {
   const [page, setPage] = useState(0);
   const [pendingOnly, setPendingOnly] = useState(true);
+  // Tách 2 nguồn bài tập: bài tập mặc định của khóa (admin tạo) và bài tập mentor tự giao.
+  const [source, setSource] = useState<HomeworkSource>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const toast = useToast();
 
-  const queue = useHomeworkGradingQueue(page, 20, pendingOnly);
+  const queue = useHomeworkGradingQueue(page, 20, pendingOnly, source);
   const detail = useHomeworkForGrading(selectedId);
   const history = useHomeworkGradeHistory(selectedId);
   const gradeMutation = useGradeHomework();
@@ -187,6 +190,37 @@ export const HomeworkGradingView: React.FC = () => {
       <div className="grid lg:grid-cols-[360px,1fr] gap-5 items-start">
         {/* ---------------- Hàng đợi (chỉ bài thủ công) ---------------- */}
         <Card noPadding>
+          {/* Tách 2 nguồn bài tập: của khóa (admin tạo) và mentor tự giao */}
+          <div className="px-4 pt-3 pb-2 border-b border-slate-200">
+            <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+              {(
+                [
+                  { key: 'all', label: 'Tất cả' },
+                  { key: 'course', label: 'Bài tập khóa học' },
+                  { key: 'mentor', label: 'Bài tập tôi giao' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => {
+                    setSource(tab.key);
+                    setPage(0);
+                    setSelectedId(null);
+                  }}
+                  className={cn(
+                    'flex-1 px-2 py-1.5 rounded-lg text-xs font-bold transition',
+                    source === tab.key
+                      ? 'bg-white text-[#0052CC] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2">
             <span className="font-bold text-sm text-slate-800">
               Hàng đợi chấm tay ({queue.data?.totalElements ?? 0})
@@ -261,11 +295,26 @@ export const HomeworkGradingView: React.FC = () => {
                       <p className="text-xs text-slate-600 truncate">
                         {s.homeworkTitle ?? 'Bài tập'}
                       </p>
+                      {s.courseTitle && (
+                        <p className="text-[11px] text-slate-400 truncate">
+                          Khóa: {s.courseTitle}
+                        </p>
+                      )}
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                         <Badge variant="neutral" size="sm">
                           {TYPE_LABEL[s.submissionType ?? 'text'] ??
                             s.submissionType}
                         </Badge>
+                        {/* Nhãn nguồn bài tập: của khóa học hay mentor tự giao */}
+                        {s.homeworkSource === 'mentor' ? (
+                          <Badge variant="info" size="sm">
+                            Mentor giao
+                          </Badge>
+                        ) : s.courseTitle ? (
+                          <Badge variant="primary" size="sm">
+                            Bài tập khóa
+                          </Badge>
+                        ) : null}
                         {/* Nhãn phân biệt: học viên đã mua gói mentor */}
                         {s.assignedGraderId ? (
                           <Badge variant="primary" size="sm">
@@ -365,6 +414,13 @@ export const HomeworkGradingView: React.FC = () => {
                   {selected.studentName ?? selected.studentEmail}
                 </h2>
                 <Badge variant="primary">{selected.homeworkTitle}</Badge>
+                {selected.homeworkSource === 'mentor' ? (
+                  <Badge variant="info">Bài tập mentor giao</Badge>
+                ) : selected.courseTitle ? (
+                  <Badge variant="neutral">
+                    Khóa: {selected.courseTitle}
+                  </Badge>
+                ) : null}
                 <Badge variant="neutral">
                   {TYPE_LABEL[selected.submissionType ?? 'text'] ??
                     selected.submissionType}

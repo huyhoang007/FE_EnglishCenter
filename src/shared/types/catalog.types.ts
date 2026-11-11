@@ -93,6 +93,18 @@ export interface CourseDto {
   /** null = khóa VOD tự học, không gắn mentor. */
   mentorId: string | null;
   mentorName: string | null;
+  /**
+   * Mentor 1-1 của HỌC VIÊN ĐANG XEM (null = học viên chưa mua gói kèm 1-1).
+   * Mỗi học viên có thể mua gói với mentor khác nhau nên tên hiển thị trên khóa
+   * phải tính theo người xem.
+   */
+  viewerMentorId?: string | null;
+  viewerMentorName?: string | null;
+  /**
+   * Tab "Bài tập" của khóa có mở cho học viên đang xem hay không.
+   * `false` → FE ẨN HOÀN TOÀN tab "Bài tập".
+   */
+  homeworkEnabled?: boolean | null;
   createdByUserId: string | null;
   createdAt: string | null;
   lastUpdated: string | null;
@@ -102,7 +114,7 @@ export interface CourseDto {
  * Course Content
  * ========================================================= */
 
-export type ContentType = 'lesson' | 'vocabulary' | 'homework';
+export type ContentType = 'lesson' | 'vocabulary' | 'homework' | 'exam';
 
 /** Payload JSONB của bài học. */
 export interface LessonContentData {
@@ -267,6 +279,36 @@ export interface CourseContentDto {
    * chỉ có giá trị khi `contentType = 'vocabulary'`.
    */
   vocabularySetIds?: string[] | null;
+  /**
+   * Học viên đã xem xong video bài học này chưa (V29).
+   *
+   * Chỉ có giá trị khi `contentType = 'lesson'` và người xem đã ghi danh khóa.
+   * Dùng để tick "Hoàn thành" ở danh sách bài học.
+   */
+  completed?: boolean | null;
+  /**
+   * Mốc giây đã xem tối đa của video (chống tua).
+   *
+   * Client không được phát quá `watchedSeconds + sai số cho phép`.
+   */
+  watchedSeconds?: number | null;
+  /**
+   * Đề cuối kỳ này có phần tự luận (Writing/Speaking) cần mentor chấm tay không (V29).
+   *
+   * Chỉ có giá trị khi `contentType = 'exam'`. `true` → học viên phải mua gói
+   * kèm 1-1 mới làm được phần này.
+   */
+  requiresMentor?: boolean | null;
+  /**
+   * Lý do bài thi cuối kỳ bị khoá (null = đã mở) — V29.
+   *
+   * - `'lessons'` — chưa xem xong hết video của khóa;
+   * - `'mentor'` — cần mở khoá mentor để chấm phần tự luận.
+   */
+  examLockReason?: 'lessons' | 'mentor' | null;
+  /** Số video của khóa mà học viên đã xem xong / tổng số video (V29). */
+  completedLessonCount?: number | null;
+  totalLessonCount?: number | null;
 }
 
 /** Cây bài học đã group theo parentContentId cho UI syllabus. */
@@ -421,7 +463,8 @@ export interface CreateCourseContentPayload {
   vocabularySetIds?: string[];
   /**
    * Id đề thi liên kết — chỉ dùng khi `contentType = 'homework'`
-   * và bài tập là trắc nghiệm.
+   * và bài tập là trắc nghiệm, HOẶC `contentType = 'exam'`
+   * (bài thi cuối kỳ — CHỈ chọn được đề `final`).
    */
   examId?: string;
   /**

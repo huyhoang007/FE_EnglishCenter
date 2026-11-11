@@ -139,6 +139,7 @@ export const AdminCourseDetailView: React.FC = () => {
   const vocabCount = contents.filter(
     (c) => c.contentType === 'vocabulary',
   ).length;
+  const examCount = contents.filter((c) => c.contentType === 'exam').length;
 
   /**
    * Lọc bảng theo loại nội dung.
@@ -154,6 +155,7 @@ export const AdminCourseDetailView: React.FC = () => {
     lesson: lessonCount,
     vocabulary: vocabCount,
     homework: homeworkCount,
+    exam: examCount,
   };
 
   /** Nội dung hiển thị sau khi lọc + sắp xếp theo thứ tự. */
@@ -356,7 +358,7 @@ export const AdminCourseDetailView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {(['lesson', 'vocabulary', 'homework'] as ContentType[]).map(
+            {(['lesson', 'vocabulary', 'homework', 'exam'] as ContentType[]).map(
               (type) => (
                 <Button
                   key={type}
@@ -397,7 +399,7 @@ export const AdminCourseDetailView: React.FC = () => {
                 label={t('content.list.filterAll')}
                 count={contents.length}
               />
-              {(['lesson', 'vocabulary', 'homework'] as ContentType[]).map(
+              {(['lesson', 'vocabulary', 'homework', 'exam'] as ContentType[]).map(
                 (type) => {
                   const meta = CONTENT_TYPE_META[type];
                   const FilterIcon = meta.icon;

@@ -14,6 +14,7 @@ import {
   BookOpen,
   ClipboardList,
   FileText,
+  GraduationCap,
   Sparkles,
   Target,
   type LucideIcon,
@@ -62,6 +63,13 @@ export const CONTENT_TYPE_META: Record<
     icon: ClipboardList,
     badgeClass: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
     iconClass: 'bg-amber-50 text-amber-600',
+  },
+  /** Bài thi cuối kỳ (V29) — trỏ tới một đề `final` trong kho đề thi. */
+  exam: {
+    label: 'Bài thi cuối kỳ',
+    icon: GraduationCap,
+    badgeClass: 'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200',
+    iconClass: 'bg-violet-50 text-violet-600',
   },
 };
 
@@ -158,6 +166,25 @@ export function buildSummaryChips(item: CourseContentDto): SummaryChip[] {
     });
     return chips;
   }
+  if (item.contentType === 'exam') {
+    // Bài thi cuối kỳ (V29) — chip: đề liên kết + trạng thái mở khoá.
+    const chips: SummaryChip[] = [];
+    if (item.examTitle) {
+      chips.push({ label: item.examTitle, icon: FileText, tone: 'blue' });
+    }
+    chips.push({ label: 'Đề cuối kỳ', icon: Target, tone: 'blue' });
+    if (item.requiresMentor) {
+      chips.push({ label: 'Cần mentor chấm tay', icon: Target, tone: 'amber' });
+    }
+    if (item.examLockReason === 'lessons') {
+      chips.push({ label: 'Chờ xem xong video', tone: 'amber' });
+    }
+    if (item.examLockReason === 'mentor') {
+      chips.push({ label: 'Chờ mở khoá mentor', tone: 'rose' });
+    }
+    return chips;
+  }
+
   // ---- Homework ----
   const data = readHomeworkData(item);
   const chips: SummaryChip[] = [];

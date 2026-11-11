@@ -258,6 +258,7 @@ export const vi: Record<TranslationKey, string> = {
   'content.type.lesson': 'Bài học',
   'content.type.vocabulary': 'Bộ từ vựng',
   'content.type.homework': 'Bài tập',
+  'content.type.exam': 'Bài thi cuối kỳ',
 
   // Trường chung
   'content.form.contentType': 'Loại nội dung',
@@ -301,7 +302,7 @@ export const vi: Record<TranslationKey, string> = {
   'content.homework.allowedAudioTypesHint':
     'Các đuôi file âm thanh học viên được nộp (mặc định mp3, wav, m4a). Ngăn cách bằng dấu phẩy.',
   'content.homework.submissionTypeHint':
-    'Nộp file PDF: mentor chấm tay. Trắc nghiệm: học viên làm trực tiếp trên web, chấm tự động theo đề. Ghi âm: học viên thu âm trực tiếp hoặc nộp file âm thanh (bài tập Speaking).',
+    'Nộp file PDF: mentor chấm tay. Trắc nghiệm: học viên làm trực tiếp trên web, chấm tự động theo đề. Âm thanh: học viên nộp file âm thanh đã ghi sẵn (bài tập Speaking).',
   'content.homework.passingScore': 'Điểm đạt',
   'content.homework.passingScoreHint':
     'Phần trăm điểm tối thiểu (0-100) để được đạt.',
@@ -390,6 +391,21 @@ export const vi: Record<TranslationKey, string> = {
   'content.homework.examStatusPublished': 'Đã công bố',
   'content.homework.examStatusDraft': 'Nháp',
   'content.homework.examStatusArchived': 'Lưu trữ',
+
+  // Bài thi cuối kỳ (contentType = 'exam') — V29
+  'content.exam.title': 'Đề thi cuối kỳ',
+  'content.exam.hint':
+    'Chỉ chọn được đề CUỐI KỲ trong kho đề thi. Bài thi mở khoá sau khi học viên xem xong tất cả video của khóa; phần tự luận (Writing/Speaking) cần mở khoá mentor 1-1 để mentor chấm tay.',
+  'content.exam.search': 'Tìm đề cuối kỳ…',
+  'content.exam.empty': 'Kho đề thi chưa có đề CUỐI KỲ nào. Hãy tạo ở phần Quản lý đề thi trước.',
+  'content.exam.noResult': 'Không tìm thấy đề cuối kỳ phù hợp.',
+  'content.exam.selectHint':
+    'Chỉ hiện đề CUỐI KỲ đã công bố — học viên làm được sau khi học xong hết video.',
+  'content.exam.notFinalHint': 'Chỉ chọn được đề CUỐI Kỳ.',
+  'content.exam.notCourseScopeHint':
+    'Đề thi thử (không gắn khóa học) không thể gắn vào bài thi cuối kỳ.',
+  'content.exam.lockedLessons': 'Khoá — chưa xem xong hết video của khóa.',
+  'content.exam.lockedMentor': 'Khoá — cần mở khoá mentor để chấm phần tự luận.',
 
   // Cột phải — "HIỆN CÓ"
   'content.existing.title': 'Hiện có',

@@ -151,7 +151,19 @@ interface HomeworkForm extends CommonForm {
   rubric: RubricInput[];
 }
 
-type AnyForm = LessonForm | VocabularyForm | HomeworkForm;
+/**
+ * Form bài thi cuối kỳ (V29) — nội dung `contentType = 'exam'`.
+ *
+ * Trỏ tới MỘT đề CUỐI KỲ (`examType = 'final'`) trong kho đề thi.
+ * Học viên chỉ mở được sau khi xem xong hết video của khóa; phần tự luận
+ * (Writing/Speaking) cần mở khoá mentor 1-1 để mentor chấm tay.
+ */
+interface ExamForm extends CommonForm {
+  /** Id đề cuối kỳ liên kết (FK `course_content.exam_id`). */
+  examId: string;
+}
+
+type AnyForm = LessonForm | VocabularyForm | HomeworkForm | ExamForm;
 
 const EMPTY_COMMON: CommonForm = { title: '', description: '', contentOrder: 1 };
 
@@ -189,6 +201,12 @@ const EMPTY_HOMEWORK: HomeworkForm = {
   rubric: [],
 };
 
+/** Bài thi cuối kỳ — chỉ có id đề cuối kỳ liên kết. */
+const EMPTY_EXAM: ExamForm = {
+  ...EMPTY_COMMON,
+  examId: '',
+};
+
 /** Tách chuỗi "pdf, docx" → ['pdf', 'docx'] (bỏ dấu chấm đầu, hạ chữ thường). */
 function parseAllowedFileTypes(raw: string): string[] {
   return raw
@@ -211,6 +229,8 @@ const createEmptyFormForType = (contentType: ContentType): AnyForm => {
       return { ...EMPTY_HOMEWORK, rubric: [] };
     case 'vocabulary':
       return { ...EMPTY_VOCABULARY, setIds: [], setTitles: {}, isPreview: false };
+    case 'exam':
+      return { ...EMPTY_EXAM, examId: '' };
     case 'lesson':
     default:
       return { ...EMPTY_LESSON };
@@ -317,6 +337,14 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           setTitles: {},
           isPreview: Boolean(data.isPreview),
         } satisfies VocabularyForm);
+      } else if (type === 'exam') {
+        // Bài thi cuối kỳ — trỏ tới đề `final` trong kho đề thi.
+        setForm({
+          title: editing.title ?? '',
+          description: editing.description ?? '',
+          contentOrder: editing.contentOrder ?? 1,
+          examId: (data.examId as string) ?? editing.examId ?? '',
+        } satisfies ExamForm);
       } else {
         const rubric = Array.isArray(data.rubric)
           ? (data.rubric as RubricCriterion[])
@@ -394,6 +422,8 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
   const lesson = form as LessonForm;
   const vocabulary = form as VocabularyForm;
   const homework = form as HomeworkForm;
+  /** Form bài thi cuối kỳ (V29). */
+  const exam = form as ExamForm;
   /**
    * Hình thức nộp hiện tại — dùng để ẩn/khóa các trường không liên quan
    * (Thời gian làm bài + Số lần làm chỉ dành cho trắc nghiệm).
@@ -555,6 +585,13 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
         contentType === 'vocabulary' && selectedSetIds.length === 0
           ? t('content.vocab.bankRequired')
           : '',
+      /**
+       * Bài thi cuối kỳ BẮT BUỘC có đề CUỐI Kỳ liên kết.
+       */
+      finalExamId:
+        contentType === 'exam' && !(exam.examId ?? '').trim()
+          ? t('content.validation.examRequired')
+          : '',
     };
   }, [
     common.title,
@@ -562,6 +599,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
     contentType,
     lesson,
     homework,
+    exam,
     selectedSetIds,
     t,
   ]);
@@ -601,6 +639,10 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
           isPreview: vocabulary.isPreview,
         }),
       );
+    }
+    if (contentType === 'exam') {
+      // Bài thi cuối kỳ — `content_data` chỉ cần id đề (BE cũng set FK `exam_id`).
+      return JSON.stringify({ examId: exam.examId });
     }
     return JSON.stringify(
       buildHomeworkContentData({
@@ -679,7 +721,10 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
         examId:
           contentType === 'homework' && isMultipleChoice
             ? homework.examId || undefined
-            : undefined,
+            : // Nội dung 'exam' (bài thi cuối kỳ) → gửi id đề CUỐI KỲ.
+              contentType === 'exam'
+              ? exam.examId || undefined
+              : undefined,
         // Bài tập → gắn kỹ năng chứng chỉ (FK `course_content.certificate_part_id`).
         certificatePartId:
           contentType === 'homework'
@@ -713,7 +758,9 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
         examId:
           contentType === 'homework' && isMultipleChoice
             ? homework.examId || undefined
-            : undefined,
+            : contentType === 'exam'
+              ? exam.examId || undefined
+              : undefined,
         certificatePartId:
           contentType === 'homework'
             ? homework.certificatePartId || undefined
@@ -810,6 +857,9 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
   /** Cập nhật field riêng của nội dung từ vựng. */
   const setVocabulary = (patch: Partial<VocabularyForm>) =>
     setForm((f) => ({ ...(f as VocabularyForm), ...patch }) as AnyForm);
+  /** Cập nhật field riêng của bài thi cuối kỳ (V29). */
+  const setExam = (patch: Partial<ExamForm>) =>
+    setForm((f) => ({ ...(f as ExamForm), ...patch }) as AnyForm);
 
   /*
    * Bố cục: modal rộng, form chia hàng / cột để vừa 1 màn hình (không phải cuộn).
@@ -839,6 +889,7 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
               <option value="lesson">{t('content.type.lesson')}</option>
               <option value="vocabulary">{t('content.type.vocabulary')}</option>
               <option value="homework">{t('content.type.homework')}</option>
+              <option value="exam">{t('content.type.exam')}</option>
             </Select>
           </Field>
 
@@ -1176,6 +1227,36 @@ export const CourseContentModal: React.FC<CourseContentModalProps> = ({
                     )}
                   </div>
                 </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ============ EXAM: Bài thi cuối kỳ (V29) ============ */}
+        {contentType === 'exam' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Field label={t('content.form.description')}>
+              <TextArea
+                value={common.description ?? ''}
+                onChange={(e) => setCommon({ description: e.target.value })}
+                placeholder={t('content.form.descriptionPlaceholder')}
+                rows={4}
+              />
+            </Field>
+
+            <div className="space-y-2 min-w-0">
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                {t('content.exam.title')} <span className="text-rose-500">*</span>
+              </p>
+              <p className="text-[11px] text-slate-500">{t('content.exam.hint')}</p>
+              <ExamPicker
+                courseId={courseId}
+                selectedExamId={exam.examId ?? ''}
+                onSelect={(examId) => setExam({ examId })}
+                finalOnly
+              />
+              {touched && errors.finalExamId && (
+                <p className="text-[11px] text-rose-500">{errors.finalExamId}</p>
               )}
             </div>
           </div>

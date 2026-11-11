@@ -86,6 +86,17 @@ export interface HomeworkSubmission {
   homeworkContentId: string;
   homeworkTitle?: string | null;
 
+  /**
+   * Nguồn của bài tập:
+   *  - `course`: bài tập mặc định thuộc khóa học (admin tạo)
+   *  - `mentor`: bài tập do mentor tự tạo và gửi cho học viên
+   */
+  homeworkSource?: 'course' | 'mentor' | null;
+  /** Khóa học chứa bài tập (null với bài tập do mentor tự tạo). */
+  courseId?: string | null;
+  /** Tên khóa học chứa bài tập (để mentor đối chiếu khi chấm). */
+  courseTitle?: string | null;
+
   studentId?: string | null;
   studentName?: string | null;
   studentEmail?: string | null;

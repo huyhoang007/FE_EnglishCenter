@@ -18,22 +18,29 @@ import {
   gradeHomeworkApi,
 } from '@/shared/api/homeworkService';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
+import type { HomeworkSource } from '@/shared/constants/queryKeys';
 import type {
   GradeHomeworkPayload,
   HomeworkGradeHistory,
   HomeworkSubmission,
 } from '@/shared/types/homework.types';
 
-/** Hàng đợi bài nộp chờ chấm (hoặc tất cả nếu `pendingOnly = false`). */
+/**
+ * Hàng đợi bài nộp chờ chấm (hoặc tất cả nếu `pendingOnly = false`).
+ *
+ * @param source `course` = bài tập mặc định của khóa học (admin tạo),
+ *               `mentor` = bài tập mentor tự tạo, `all` = tất cả.
+ */
 export function useHomeworkGradingQueue(
   page = 0,
   size = 20,
   pendingOnly = true,
+  source: HomeworkSource = 'all',
 ) {
   return useQuery({
-    queryKey: QUERY_KEYS.homework.gradingQueue(page, pendingOnly),
+    queryKey: QUERY_KEYS.homework.gradingQueue(page, pendingOnly, source),
     queryFn: async () => {
-      const res = await getMentorHomeworkQueueApi(page, size, pendingOnly);
+      const res = await getMentorHomeworkQueueApi(page, size, pendingOnly, source);
       if (!res.success) {
         throw new Error(res.message || 'Không tải được hàng đợi chấm');
       }

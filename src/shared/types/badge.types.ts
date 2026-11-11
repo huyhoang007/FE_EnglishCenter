@@ -6,6 +6,7 @@
 export type BadgeVariant =
   | 'primary'
   | 'ai'
+  | 'info'
   | 'ielts'
   | 'toeic'
   | 'vstep'

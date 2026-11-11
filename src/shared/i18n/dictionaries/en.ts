@@ -261,6 +261,7 @@ export const en = {
   'content.type.lesson': 'Lesson',
   'content.type.vocabulary': 'Vocabulary set',
   'content.type.homework': 'Homework',
+  'content.type.exam': 'Final exam',
 
   // Common fields
   'content.form.contentType': 'Content type',
@@ -298,7 +299,7 @@ export const en = {
   // Homework — hình thức nộp (khớp cột homework_submissions của backend)
   'content.homework.submissionType': 'Submission type',
   'content.homework.submissionTypeHint':
-    'PDF upload: graded by a mentor. Multiple choice: done on the web and graded automatically. Audio: students record live or upload an audio file (Speaking exercises).',
+    'PDF upload: graded by a mentor. Multiple choice: done on the web and graded automatically. Audio: students upload a pre-recorded audio file (Speaking exercises).',
   'content.homework.type.text': 'Written answer',
   'content.homework.type.file': 'PDF upload',
   'content.homework.type.audio': 'Audio recording / Audio file',
@@ -396,6 +397,21 @@ export const en = {
   'content.homework.examStatusPublished': 'Published',
   'content.homework.examStatusDraft': 'Draft',
   'content.homework.examStatusArchived': 'Archived',
+
+  // Final exam content (contentType = 'exam')
+  'content.exam.title': 'Final exam',
+  'content.exam.hint':
+    'Only FINAL exams can be selected. The exam unlocks after the student has watched every lesson video; subjective parts (Writing/Speaking) require an unlocked 1-1 mentor to grade.',
+  'content.exam.search': 'Search final exams…',
+  'content.exam.empty': 'No FINAL exam found yet. Create one in Exam Management first.',
+  'content.exam.noResult': 'No matching final exam found.',
+  'content.exam.selectHint':
+    'Only published FINAL exams are listed — students can attempt them after finishing all videos.',
+  'content.exam.notFinalHint': 'Only FINAL exams can be selected.',
+  'content.exam.notCourseScopeHint':
+    'Trial exams (not attached to a course) cannot be attached to the final exam.',
+  'content.exam.lockedLessons': 'Locked — not all lesson videos finished yet.',
+  'content.exam.lockedMentor': 'Locked — an unlocked mentor is required to grade the subjective part.',
 
   // Cột phải — "HIỆN CÓ"
   'content.existing.title': 'Currently added',

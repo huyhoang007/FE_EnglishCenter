@@ -29,7 +29,6 @@ import { Badge } from '@/shared/components/Badge';
 import { cn } from '@/shared/utils/cn';
 import { formatDateOnly } from '@/shared/utils/format';
 import { useCloudinaryUpload } from '@/shared/hooks/useCloudinaryUpload';
-import { AudioRecorder } from './AudioRecorder';
 import { HomeworkExamPreviewModal } from './HomeworkExamPreviewModal';
 import { useHomeworkSubmission, useSubmitHomework } from '../hooks/useHomework';
 import { useStartHomeworkAttempt } from '../hooks/useHomeworkExam';
@@ -275,7 +274,7 @@ export const HomeworkSubmitModal: React.FC<HomeworkSubmitModalProps> = ({
         if (!uploaded) {
           setError(
             submissionType === 'audio'
-              ? 'Vui lòng ghi âm hoặc chọn file âm thanh trước khi nộp.'
+              ? 'Vui lòng chọn file âm thanh trước khi nộp.'
               : 'Vui lòng chọn file trước khi nộp.',
           );
           return;
@@ -326,7 +325,7 @@ export const HomeworkSubmitModal: React.FC<HomeworkSubmitModalProps> = ({
             : submissionType === 'file'
               ? `Nộp file ${allowedLabel} — tối đa 20 MB`
               : submissionType === 'audio'
-                ? `Ghi âm / nộp file âm thanh (${allowedLabel}) — tối đa 100 MB`
+              ? `Nộp file âm thanh (${allowedLabel}) — tối đa 100 MB`
                 : 'Trắc nghiệm — làm bài trong phòng thi'
       }
       icon={
@@ -623,14 +622,6 @@ export const HomeworkSubmitModal: React.FC<HomeworkSubmitModalProps> = ({
                           </>
                         )}
                       </button>
-
-                      {/* ---- Ghi âm trực tiếp (bài Speaking) ---- */}
-                      {submissionType === 'audio' && (
-                        <AudioRecorder
-                          disabled={isUploading}
-                          onRecorded={(file) => void uploadFile(file)}
-                        />
-                      )}
                     </>
                   )}
 

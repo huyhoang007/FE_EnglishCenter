@@ -18,7 +18,7 @@
  * Be Vietnam Pro, màu nhấn #0052CC.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/shared/auth/useAuthStore';
@@ -49,6 +49,7 @@ import {
   ClipboardList,
   Phone,
   FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/shared/components/Button';
 import { Badge } from '@/shared/components/Badge';
@@ -67,6 +68,7 @@ import {
   filterByType,
   resolveCourseId,
 } from '@/shared/api/courseService';
+import { TrackedVideoPlayer } from '@/portals/client/features/learning/components/TrackedVideoPlayer';
 import {
   fetchCourseVocabularies,
   type CourseVocabularySet,
@@ -87,7 +89,7 @@ import type {
 } from '@/shared/types/catalog.types';
 import type { HomeworkSubmission } from '@/shared/types/homework.types';
 
-type Tab = 'syllabus' | 'vocabulary' | 'homework';
+type Tab = 'syllabus' | 'vocabulary' | 'homework' | 'exam';
 
 /* =========================================================
  * Page
@@ -160,6 +162,36 @@ const CourseDetailContent: React.FC = () => {
     queryFn: () => fetchCourseHomework(courseId!),
     enabled: Boolean(courseId),
   });
+
+  /**
+   * Nội dung "Bài thi cuối kỳ" (V29) — trỏ tới đề `final` trong kho đề thi.
+   *
+   * Backend trả kèm `examLockReason`:
+   *   - `'lessons'` → chưa xem xong hết video của khóa;
+   *   - `'mentor'`  → đề có phần tự luận, cần mua gói kèm 1-1 để mentor chấm.
+   */
+  const examContents = useMemo(
+    () => contents.filter((i) => i.contentType === 'exam'),
+    [contents],
+  );
+
+  /**
+   * Tab "Bài tập" chỉ mở khi học viên ĐÃ MUA GÓI MENTOR 1-1.
+   * Backend trả `homeworkEnabled` theo đúng người xem (mỗi học viên mua mentor
+   * khác nhau) → học viên chưa mua thì tab bị ẨN HOÀN TOÀN.
+   */
+  const homeworkEnabled = course?.homeworkEnabled ?? false;
+
+  /** Tên mentor hiển thị trên khóa: ưu tiên mentor 1-1 của người xem. */
+  const displayMentorName =
+    course?.viewerMentorName || course?.mentorName || null;
+
+  // Tab đang mở bị ẩn (VD: vừa rút gói mentor) → lùi về tab Chương trình.
+  useEffect(() => {
+    if (!homeworkEnabled && tab === 'homework') {
+      setTab('syllabus');
+    }
+  }, [homeworkEnabled, tab]);
 
   const enrollment = useQuery({
     queryKey: paymentKeys.enrollment(viewerId, courseId ?? ''),
@@ -335,7 +367,7 @@ const CourseDetailContent: React.FC = () => {
                 bộ từ vựng
               </span>
             )}
-            {homework.length > 0 && (
+            {homeworkEnabled && homework.length > 0 && (
               <span className="inline-flex items-center gap-1.5">
                 <ClipboardList className="w-4 h-4 text-slate-400" />
                 <strong className="font-bold text-white">{homework.length}</strong>{' '}
@@ -344,7 +376,7 @@ const CourseDetailContent: React.FC = () => {
             )}
           </div>
 
-          {course.mentorName && (
+          {displayMentorName && (
             <div className="mt-6 flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-full bg-slate-700 border-2 border-slate-600 flex items-center justify-center shrink-0"
@@ -354,7 +386,7 @@ const CourseDetailContent: React.FC = () => {
               </div>
               <p className="text-sm text-slate-400">
                 Giảng viên phụ trách{' '}
-                <span className="text-white font-bold">{course.mentorName}</span>
+                <span className="text-white font-bold">{displayMentorName}</span>
               </p>
             </div>
           )}
@@ -392,7 +424,18 @@ const CourseDetailContent: React.FC = () => {
                       <X className="w-5 h-5" />
                     </button>
                   </div>
-                  <VideoPlayer url={activeVideo.videoUrl} title={activeVideo.title} />
+                  <VideoPlayer
+                    url={activeVideo.videoUrl}
+                    title={activeVideo.title}
+                    contentId={activeVideo.contentId}
+                    watchedSeconds={activeVideo.watchedSeconds ?? 0}
+                    onCompleted={() => {
+                      // Refresh danh sách nội dung để tick "hoàn thành" + mở khoá bài thi cuối kỳ.
+                      void queryClient.invalidateQueries({
+                        queryKey: QUERY_KEYS.catalog.contents(courseId ?? ''),
+                      });
+                    }}
+                  />
                 </div>
               )}
 
@@ -406,12 +449,23 @@ const CourseDetailContent: React.FC = () => {
                         {
                           key: 'vocabulary' as const,
                           label: `Từ vựng${vocabularies.length ? ` (${vocabularies.length})` : ''}`,
-                        },                        {
+                        },
+                        {
                           key: 'homework' as const,
                           label: `Bài tập${homework.length ? ` (${homework.length})` : ''}`,
                         },
+                        {
+                          key: 'exam' as const,
+                          label: `Bài thi cuối kỳ${examContents.length ? ` (${examContents.length})` : ''}`,
+                        },
                       ] as const
-                    ).map((t) => {
+                    )
+                      // Tab "Bài tập" bị ẨN HOÀN TOÀN khi học viên chưa mua gói
+                      // mentor 1-1 (bài tập khóa học cần mentor chấm tay).
+                      .filter((t) => t.key !== 'homework' || homeworkEnabled)
+                      // Tab "Bài thi cuối kỳ" chỉ hiện khi khóa học có nội dung 'exam'.
+                      .filter((t) => t.key !== 'exam' || examContents.length > 0)
+                      .map((t) => {
                       const active = tab === t.key;
                       return (
                         <button
@@ -475,6 +529,19 @@ const CourseDetailContent: React.FC = () => {
                     ) : (
                       <HomeworkList
                         items={homework}
+                        hasEnrollment={hasEnrollment}
+                        onLocked={(item) => setLockedLesson(item)}
+                      />
+                    ))}
+                  {tab === 'exam' &&
+                    (examContents.length === 0 ? (
+                      <EmptyState
+                        title="Chưa có bài thi cuối kỳ"
+                        description="Khóa học chưa được gắn đề thi cuối kỳ."
+                      />
+                    ) : (
+                      <FinalExamList
+                        items={examContents}
                         hasEnrollment={hasEnrollment}
                         onLocked={(item) => setLockedLesson(item)}
                       />
@@ -604,7 +671,9 @@ const CourseDetailContent: React.FC = () => {
           <h3 className="text-lg font-extrabold text-slate-900 text-center">
             {lockedLesson.contentType === 'homework'
               ? 'Bài tập đang bị khoá'
-              : 'Bài học đang bị khoá'}
+              : lockedLesson.contentType === 'exam'
+                ? 'Bài thi cuối kỳ đang bị khoá'
+                : 'Bài học đang bị khoá'}
           </h3>
           <p className="text-sm text-slate-500 mt-2 text-center leading-relaxed">
             <span className="font-semibold text-slate-700">
@@ -612,20 +681,43 @@ const CourseDetailContent: React.FC = () => {
             </span>{' '}
             {lockedLesson.contentType === 'homework'
               ? 'chỉ mở cho học viên đã mua khóa học. Bạn chưa thể nộp bài khi đang học thử miễn phí.'
-              : 'chỉ mở cho học viên đã ghi danh khóa học.'}
+              : lockedLesson.contentType === 'exam'
+                ? lockedLesson.examLockReason === 'mentor'
+                  ? 'có phần tự luận (Writing/Speaking) cần mentor chấm tay. Bạn cần mua gói kèm 1-1 để mở phần này.'
+                  : `chỉ mở sau khi bạn xem xong tất cả video của khóa (đã xem ${lockedLesson.completedLessonCount ?? 0}/${lockedLesson.totalLessonCount ?? 0}).`
+                : 'chỉ mở cho học viên đã ghi danh khóa học.'}
           </p>
           <div className="mt-6 flex flex-col gap-2.5">
-            <Button
-              variant="primary"
-              fullWidth
-              className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
-              onClick={() => {
-                setLockedLesson(null);
-                buyCourse();
-              }}
-            >
-              {isAuthenticated ? (hasEnrollment ? 'Vào học ngay' : 'Đăng ký khóa học') : 'Đăng nhập để tiếp tục'}
-            </Button>
+            {lockedLesson.contentType === 'exam' &&
+            lockedLesson.examLockReason === 'mentor' ? (
+              <Button
+                variant="primary"
+                fullWidth
+                className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
+                onClick={() => {
+                  setLockedLesson(null);
+                  navigate(CLIENT_ROUTES.schedule);
+                }}
+              >
+                Mở khoá mentor 1-1
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                fullWidth
+                className="bg-[#0052CC] hover:bg-[#0040A8] font-bold"
+                onClick={() => {
+                  setLockedLesson(null);
+                  buyCourse();
+                }}
+              >
+                {isAuthenticated
+                  ? hasEnrollment
+                    ? 'Vào học ngay'
+                    : 'Đăng ký khóa học'
+                  : 'Đăng nhập để tiếp tục'}
+              </Button>
+            )}
           </div>
         </Modal>
       )}
@@ -636,12 +728,16 @@ const CourseDetailContent: React.FC = () => {
 /* =========================================================
  * VideoPlayer — hỗ trợ cả MP4 lẫn YouTube
  * ========================================================= */
-const VideoPlayer: React.FC<{ url: string; title: string }> = ({
-  url,
-  title,
-}) => {
+const VideoPlayer: React.FC<{
+  url: string;
+  title: string;
+  contentId: string;
+  watchedSeconds?: number;
+  onCompleted?: () => void;
+}> = ({ url, title, contentId, watchedSeconds = 0, onCompleted }) => {
   const yt = getYoutubeEmbed(url);
   if (yt) {
+    // YouTube không chặn tua được → dùng iframe như cũ (chỉ MP4 mới chống tua).
     return (
       <div className="aspect-video rounded-xl overflow-hidden bg-black">
         <iframe
@@ -655,17 +751,13 @@ const VideoPlayer: React.FC<{ url: string; title: string }> = ({
     );
   }
   return (
-    <div className="aspect-video rounded-xl overflow-hidden bg-black">
-      <video
-        src={url}
-        controls
-        preload="metadata"
-        className="w-full h-full"
-        aria-label={title}
-      >
-        Trình duyệt của bạn không hỗ trợ phát video.
-      </video>
-    </div>
+    <TrackedVideoPlayer
+      url={url}
+      title={title}
+      contentId={contentId}
+      initialWatchedSeconds={watchedSeconds}
+      onCompleted={onCompleted}
+    />
   );
 };
 
@@ -785,13 +877,17 @@ const LessonRow: React.FC<{
           'w-8 h-8 rounded-md flex items-center justify-center shrink-0',
           lesson.isLocked
             ? 'bg-slate-100 text-slate-400'
-            : lesson.isPreview
-              ? 'bg-amber-50 text-amber-600'
-              : 'bg-[#E0F2FE] text-[#0052CC]',
+            : lesson.completed
+              ? 'bg-emerald-50 text-emerald-600'
+              : lesson.isPreview
+                ? 'bg-amber-50 text-amber-600'
+                : 'bg-[#E0F2FE] text-[#0052CC]',
         )}
       >
         {lesson.isLocked ? (
           <Lock className="w-3.5 h-3.5" />
+        ) : lesson.completed ? (
+          <CheckCircle2 className="w-4 h-4" />
         ) : (
           <PlayCircle className="w-4 h-4" />
         )}
@@ -814,6 +910,11 @@ const LessonRow: React.FC<{
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {lesson.completed && !lesson.isLocked && (
+          <span className="inline-flex items-center h-5 px-2 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+            HOÀN THÀNH
+          </span>
+        )}
         {lesson.isPreview && (
           <span className="inline-flex items-center h-5 px-2 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
             HỌC THỬ
@@ -853,6 +954,127 @@ const LessonRow: React.FC<{
         </button>
       </div>
     </li>
+  );
+};
+
+/* =========================================================
+ * FinalExamList — Bài thi cuối kỳ (V29)
+ * -----------------------------------------------------------
+ * Nội dung `contentType = 'exam'` → trỏ tới đề `final` trong kho đề thi.
+ *
+ * Trạng thái (do backend quyết định qua `examLockReason`):
+ *   - `null`          → đã mở, học viên làm được;
+ *   - `'lessons'`     → chưa xem xong hết video của khóa;
+ *   - `'mentor'`      → đề có phần tự luận, cần mua gói kèm 1-1 để mentor chấm.
+ * ========================================================= */
+const FinalExamList: React.FC<{
+  items: CourseContentDto[];
+  hasEnrollment: boolean;
+  onLocked: (l: CourseContentDto) => void;
+}> = ({ items, hasEnrollment, onLocked }) => {
+  return (
+    <ul className="space-y-3">
+      {items.map((item) => {
+        const locked = item.isLocked;
+        const lockReason = item.examLockReason;
+        const done = item.completedLessonCount ?? 0;
+        const total = item.totalLessonCount ?? 0;
+
+        return (
+          <li
+            key={item.contentId}
+            className={cn(
+              'rounded-2xl border bg-white p-4 transition-colors',
+              locked ? 'border-slate-200/80' : 'border-[#0052CC]/30 bg-blue-50/30',
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                  locked
+                    ? 'bg-slate-100 text-slate-400'
+                    : 'bg-violet-50 text-violet-600',
+                )}
+              >
+                {locked ? (
+                  <Lock className="w-5 h-5" />
+                ) : (
+                  <Award className="w-5 h-5" />
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-slate-900 truncate">
+                  {item.title}
+                </p>
+                {item.examTitle && (
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                    Đề: {item.examTitle}
+                  </p>
+                )}
+                {item.description && (
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    {item.description}
+                  </p>
+                )}
+
+                {/* ---------- Lý do khoá ---------- */}
+                {locked && lockReason === 'lessons' && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-2 inline-flex items-center gap-1.5 font-semibold">
+                    <Lock className="w-3 h-3 shrink-0" />
+                    Xem xong {done}/{total} video của khóa để mở bài thi này.
+                  </p>
+                )}
+                {locked && lockReason === 'mentor' && (
+                  <p className="text-[11px] text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1.5 mt-2 inline-flex items-center gap-1.5 font-semibold">
+                    <Lock className="w-3 h-3 shrink-0" />
+                    Đề có phần tự luận (Writing/Speaking) — cần mở khoá mentor 1-1 để
+                    mentor chấm tay.
+                  </p>
+                )}
+                {locked && !lockReason && (
+                  <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 mt-2 inline-flex items-center gap-1.5 font-semibold">
+                    <Lock className="w-3 h-3 shrink-0" />
+                    Bài thi chỉ mở cho học viên đã ghi danh khóa học.
+                  </p>
+                )}
+                {item.requiresMentor && !locked && (
+                  <p className="text-[11px] text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1.5 mt-2 inline-flex items-center gap-1.5 font-semibold">
+                    <Users className="w-3 h-3 shrink-0" />
+                    Phần tự luận sẽ được mentor 1-1 của bạn chấm tay.
+                  </p>
+                )}
+              </div>
+
+              <div className="shrink-0">
+                {locked ? (
+                  <button
+                    type="button"
+                    onClick={() => onLocked(item)}
+                    className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  >
+                    <Lock className="w-3 h-3" />
+                    Mở khoá
+                  </button>
+                ) : (
+                  <Link
+                    to={CLIENT_ROUTES.exam(item.examId ?? '')}
+                    className={cn(
+                      'inline-flex items-center gap-1 h-8 px-3 rounded-lg text-[11px] font-bold transition-colors',
+                      'text-white bg-[#0052CC] hover:bg-[#0040A8]',
+                    )}
+                  >
+                    <PlayCircle className="w-3 h-3" />
+                    Làm bài
+                  </Link>
+                )}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 };
 

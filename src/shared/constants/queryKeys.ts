@@ -8,6 +8,8 @@
  * catalog: Certificates + Courses (Dev 2) — điểm vào chính của màn
  * hình sàn khóa học và trang chi tiết khóa học.
  */
+export type HomeworkSource = 'all' | 'course' | 'mentor';
+
 export const QUERY_KEYS = {
   auth: {
     me: ['auth', 'me'] as const,
@@ -80,8 +82,8 @@ export const QUERY_KEYS = {
     /** Toàn bộ bài nộp của tôi. */
     mine: () => ['homework', 'mine'] as const,
     /** Hàng đợi chấm của mentor. `pendingOnly` phải nằm trong key để toggle filter refetch. */
-    gradingQueue: (page: number, pendingOnly = true) =>
-      ['homework', 'grading-queue', page, pendingOnly] as const,
+    gradingQueue: (page: number, pendingOnly = true, source: HomeworkSource = 'all') =>
+      ['homework', 'grading-queue', page, pendingOnly, source] as const,
     /** Chi tiết bài nộp cho mentor. */
     gradingDetail: (submissionId: string) =>
       ['homework', 'grading-detail', submissionId] as const,

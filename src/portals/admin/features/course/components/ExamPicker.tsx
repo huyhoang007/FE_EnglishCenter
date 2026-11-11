@@ -44,6 +44,13 @@ export interface ExamPickerProps {
    * → rất khó hiểu. Đề nháp hiện nhưng KHÔNG chọn được (BE cũng chặn khi lưu).
    */
   publishedOnly?: boolean;
+  /**
+   * CHỈ cho chọn đề CUỐI Kỳ (`examType = 'final'`) — dùng cho nội dung
+   * `contentType = 'exam'` (Bài thi cuối kỳ, V29).
+   *
+   * Mặc định `false` → hiện mọi loại đề (dùng cho bài tập trắc nghiệm).
+   */
+  finalOnly?: boolean;
 }
 
 /* =========================================================
@@ -75,6 +82,7 @@ export const ExamPicker: React.FC<ExamPickerProps> = ({
   selectedExamId,
   onSelect,
   publishedOnly = false,
+  finalOnly = false,
 }) => {
   const { t } = useTranslation();
   const statusLabel = useStatusLabel();
@@ -149,17 +157,28 @@ export const ExamPicker: React.FC<ExamPickerProps> = ({
     });
   }, [examPage, allExamPage, courseId]);
 
+  /**
+   * Lọc theo LOẠI đề khi picker dùng cho nội dung 'exam' (V29).
+   *
+   * Nội dung "Bài thi cuối kỳ" CHỈ được liên kết đề `final` → các đề khác
+   * (Quiz / Giữa kỳ / Kiểm tra đầu vào) bị loại khỏi danh sách, không hiển thị.
+   */
+  const finalExams = useMemo(
+    () => (finalOnly ? exams.filter((e) => e.examType === 'final') : exams),
+    [exams, finalOnly],
+  );
+
   /* ---------- Lọc theo từ khoá (client-side) ---------- */
   const filteredExams = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    if (!kw) return exams;
-    return exams.filter(
+    if (!kw) return finalExams;
+    return finalExams.filter(
       (exam) =>
         exam.examTitle.toLowerCase().includes(kw) ||
         (exam.examCode ?? '').toLowerCase().includes(kw) ||
         (exam.description ?? '').toLowerCase().includes(kw),
     );
-  }, [exams, keyword]);
+  }, [finalExams, keyword]);
 
   if (isLoading || isLoadingAll) {
     return (
@@ -190,21 +209,21 @@ export const ExamPicker: React.FC<ExamPickerProps> = ({
           type="search"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          placeholder={t('content.homework.examSearch')}
+          placeholder={finalOnly ? t('content.exam.search') : t('content.homework.examSearch')}
           className="bg-transparent outline-none w-full text-xs placeholder:text-slate-400 text-slate-700"
-          aria-label={t('content.homework.examSearch')}
+          aria-label={finalOnly ? t('content.exam.search') : t('content.homework.examSearch')}
         />
       </div>
 
       <p className="text-[11px] text-slate-500">
-        {t('content.homework.examSelectHint')}
+        {finalOnly ? t('content.exam.selectHint') : t('content.homework.examSelectHint')}
       </p>
 
       {/* ---------- Danh sách đề ---------- */}
-      {exams.length === 0 ? (
+      {finalExams.length === 0 ? (
         <div className="space-y-2">
           <EmptyState
-            title={t('content.homework.examListEmpty')}
+            title={finalOnly ? t('content.exam.empty') : t('content.homework.examListEmpty')}
             className="py-6"
           />
           <Link
@@ -216,7 +235,10 @@ export const ExamPicker: React.FC<ExamPickerProps> = ({
           </Link>
         </div>
       ) : filteredExams.length === 0 ? (
-        <EmptyState title={t('content.homework.examNoResult')} className="py-6" />
+        <EmptyState
+          title={finalOnly ? t('content.exam.noResult') : t('content.homework.examNoResult')}
+          className="py-6"
+        />
       ) : (
         <ul className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
           {filteredExams.map((exam) => {
@@ -247,10 +269,27 @@ export const ExamPicker: React.FC<ExamPickerProps> = ({
              * Đề giữa kỳ / cuối kỳ có điều kiện tiên quyết (đạt quiz / đạt giữa kỳ +
              * đủ bài tập của khóa). Gắn vào bài tập tạo vòng lặp khoá: bài tập chưa
              * nộp → đề mở không được → không nộp được bài tập. BE cũng chặn.
+             *
+             * <p>NHƯNG nội dung 'exam' (Bài thi cuối kỳ) CHỈ gắn được đề `final`,
+             * và luật mở khoá của nó là "xem xong hết video + mua gói 1-1" — KHÔNG
+             * phải luật thi nối tiếp của `ExamAccessPolicy`. Vì vậy với `finalOnly`
+             * thì đề `final` VẪN phải chọn được.
              */
-            const isSequential = exam.examType === 'midterm' || exam.examType === 'final';
+            const isSequential =
+              !finalOnly &&
+              (exam.examType === 'midterm' || exam.examType === 'final');
+            /**
+             * Nội dung 'exam' yêu cầu đề có `exam_scope = 'course'` — đề phạm vi
+             * `trial` (thi thử, không gắn khóa) thì học viên không mở được lượt thi.
+             */
+            const isCourseScope =
+              !finalOnly || exam.examScope === 'course' || exam.examScope == null;
             const selectable =
-              published && isOwnCourseExam && isFreeTrial && !isSequential;
+              published &&
+              isOwnCourseExam &&
+              isFreeTrial &&
+              isCourseScope &&
+              !isSequential;
 
             return (
               <li
@@ -289,9 +328,11 @@ export const ExamPicker: React.FC<ExamPickerProps> = ({
                           ? t('content.homework.examNotPublishedHint')
                           : !isOwnCourseExam
                             ? t('content.homework.examOtherCourseHint')
-                            : isSequential
-                              ? t('content.homework.examSequentialHint')
-                              : t('content.homework.examPaidHint')}
+                            : !isCourseScope
+                              ? t('content.exam.notCourseScopeHint')
+                              : isSequential
+                                ? t('content.homework.examSequentialHint')
+                                : t('content.homework.examPaidHint')}
                       </p>
                     )}
                     <p className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 flex-wrap">

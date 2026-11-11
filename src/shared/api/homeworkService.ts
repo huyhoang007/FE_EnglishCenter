@@ -28,6 +28,7 @@ import type {
   UploadSignature,
   UploadSignaturePayload,
 } from '@/shared/types/homework.types';
+import type { HomeworkSource } from '@/shared/constants/queryKeys';
 
 /** Nộp bài tập. */
 export const submitHomeworkApi = (
@@ -53,9 +54,10 @@ export const getMentorHomeworkQueueApi = (
   page = 0,
   size = 20,
   pendingOnly = true,
+  source: HomeworkSource = 'all',
 ): Promise<ApiResponse<PageResponse<HomeworkSubmission>>> =>
   apiGet<PageResponse<HomeworkSubmission>>('/api/v1/mentor/homework-submissions', {
-    params: { page, size, pendingOnly },
+    params: { page, size, pendingOnly, source },
   });
 
 /** Chi tiết bài nộp (kèm lịch sử chấm) cho mentor. */
