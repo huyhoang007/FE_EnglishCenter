@@ -37,9 +37,7 @@ export const StudentManagementView: React.FC = () => {
 
   // Filters
   const [keyword, setKeyword] = useState('');
-  const [courseFilter, setCourseFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [batchFilter, setBatchFilter] = useState('');
   const [page, setPage] = useState(0);
 
   // Modals
@@ -68,10 +66,17 @@ export const StudentManagementView: React.FC = () => {
     },
   });
 
-  // Query Backend Students (roleName: 'STUDENT')
+  // Query Backend Students (roleName: 'STUDENT') — keyword / isActive lọc server-side
   const { data: usersData, isLoading } = useQuery({
-    queryKey: [...QUERY_KEYS.admin.accounts, 'STUDENT', page],
-    queryFn: () => getUsers({ roleName: 'STUDENT', page, size: 20 }),
+    queryKey: [...QUERY_KEYS.admin.accounts, 'STUDENT', page, keyword, statusFilter],
+    queryFn: () =>
+      getUsers({
+        roleName: 'STUDENT',
+        keyword: keyword || undefined,
+        isActive: statusFilter === '' ? undefined : statusFilter === 'Active',
+        page,
+        size: 20,
+      }),
   });
 
   // Combine backend users with rich presentation data
@@ -86,46 +91,41 @@ export const StudentManagementView: React.FC = () => {
     const diffDays = (Date.now() - new Date(s.createdAt).getTime()) / (1000 * 3600 * 24);
     return diffDays <= 30;
   }).length;
+  // Học viên đã có trình độ (current_level trong student_profiles)
+  const leveledStudentsCount = backendStudents.filter((s) => !!s.currentLevel).length;
+
+  // Phân trang server-side: /admin/users đã trả totalPages
+  const totalPages = usersData?.totalPages ?? 1;
+  const pageNumbers = Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+    // Cửa sổ 5 trang quanh trang hiện tại, luôn nằm trong [0, totalPages - 1]
+    const half = 2;
+    let start = Math.max(0, Math.min(page - half, totalPages - 5));
+    if (totalPages < 5) start = 0;
+    return start + i;
+  }).filter((p) => p < totalPages);
 
   const combinedStudents = React.useMemo(() => {
-    return backendStudents.map((u, idx) => ({
+    return backendStudents.map((u) => ({
       id: u.id,
       fullName: u.fullName,
       email: u.email,
       phone: u.phone || 'Chưa cập nhật',
-      studentCode: `STD-${String(idx + 1).padStart(4, '0')}`,
-      courseName: 'Khóa học chuẩn hóa',
-      batch: 'Lớp học tiêu chuẩn',
+      studentCode: `STD-${u.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`,
       status: u.isActive ? 'Active' : 'Inactive',
       enrolledDate: u.createdAt
         ? new Date(u.createdAt).toLocaleDateString('vi-VN')
         : 'Mới đăng ký',
-      attendance: '100%',
-      targetScore: 'Tiếng Anh chuẩn đầu ra',
+      currentLevel: u.currentLevel || '—',
+      currentScore: u.currentScore != null ? `${u.currentScore}` : '—',
     }));
   }, [backendStudents]);
 
-  // Client-side filtering
-  const filteredStudents = combinedStudents.filter((s) => {
-    const matchKeyword =
-      !keyword ||
-      s.fullName.toLowerCase().includes(keyword.toLowerCase()) ||
-      s.email.toLowerCase().includes(keyword.toLowerCase()) ||
-      s.studentCode.toLowerCase().includes(keyword.toLowerCase()) ||
-      s.phone.includes(keyword);
-
-    const matchCourse = !courseFilter || s.courseName.includes(courseFilter);
-    const matchStatus = !statusFilter || s.status === statusFilter;
-    const matchBatch = !batchFilter || s.batch.includes(batchFilter);
-
-    return matchKeyword && matchCourse && matchStatus && matchBatch;
-  });
+  // Filter đã xử lý server-side (keyword / isActive truyền lên /admin/users)
+  const filteredStudents = combinedStudents;
 
   const handleResetFilters = () => {
     setKeyword('');
-    setCourseFilter('');
     setStatusFilter('');
-    setBatchFilter('');
     setPage(0);
   };
 
@@ -165,9 +165,9 @@ export const StudentManagementView: React.FC = () => {
           colorScheme="purple"
         />
         <StatCard
-          title="Certificates Awarded"
-          value={activeStudentsCount}
-          subtext="Theo học viên tích cực"
+          title="Leveled Students"
+          value={leveledStudentsCount}
+          subtext="Đã có kết quả test trình độ"
           icon={Award}
           colorScheme="cyan"
         />
@@ -204,46 +204,27 @@ export const StudentManagementView: React.FC = () => {
             <input
               type="text"
               value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              placeholder="Search students by name, email, student ID..."
+              onChange={(e) => {
+                setKeyword(e.target.value);
+                setPage(0);
+              }}
+              placeholder="Search students by name, email, phone..."
               className="bg-transparent outline-none w-full text-slate-700 placeholder:text-slate-400"
             />
           </div>
 
-          {/* Course Program Filter */}
-          <select
-            value={courseFilter}
-            onChange={(e) => setCourseFilter(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
-          >
-            <option value="">All Programs</option>
-            <option value="IELTS">IELTS Courses</option>
-            <option value="TOEIC">TOEIC Courses</option>
-            <option value="VSTEP">VSTEP Courses</option>
-            <option value="Lab">Speaking & Writing Lab</option>
-          </select>
-
           {/* Status Filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(0);
+            }}
             className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
           >
             <option value="">All Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
-          </select>
-
-          {/* Batch Filter */}
-          <select
-            value={batchFilter}
-            onChange={(e) => setBatchFilter(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
-          >
-            <option value="">All Batches</option>
-            <option value="Batch 2024-Q1">Batch 2024-Q1</option>
-            <option value="Batch 2024-Q2">Batch 2024-Q2</option>
-            <option value="Weekend">Weekend Masterclass</option>
           </select>
 
           {/* Reset */}
@@ -278,12 +259,11 @@ export const StudentManagementView: React.FC = () => {
                   <th className="py-3.5 px-2 w-12 font-bold">#</th>
                   <th className="py-3.5 px-3 font-bold">Student</th>
                   <th className="py-3.5 px-3 font-bold">Student ID</th>
-                  <th className="py-3.5 px-3 font-bold">Enrolled Program</th>
-                  <th className="py-3.5 px-3 font-bold">Class / Batch</th>
-                  <th className="py-3.5 px-3 font-bold">Attendance</th>
+                  <th className="py-3.5 px-3 font-bold">Level</th>
+                  <th className="py-3.5 px-3 font-bold">Current Score</th>
                   <th className="py-3.5 px-3 font-bold">Email</th>
                   <th className="py-3.5 px-3 font-bold">Status</th>
-                  <th className="py-3.5 px-3 font-bold">Enrolled Date</th>
+                  <th className="py-3.5 px-3 font-bold">Registered Date</th>
                   <th className="py-3.5 pr-4 text-right font-bold">Action</th>
                 </tr>
               </thead>
@@ -312,14 +292,11 @@ export const StudentManagementView: React.FC = () => {
                     </td>
                     <td className="py-3 px-3">
                       <span className="inline-block px-2.5 py-0.5 rounded-md bg-blue-50 text-[#0052CC] font-bold text-[10px] border border-blue-100 truncate max-w-[150px]">
-                        {s.courseName}
+                        {s.currentLevel}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-slate-600 font-medium truncate max-w-[140px]">
-                      {s.batch}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="font-semibold text-slate-700">{s.attendance}</span>
+                      {s.currentScore}
                     </td>
                     <td className="py-3 px-3 text-slate-500 font-mono text-[11px] truncate max-w-[150px]">
                       {s.email}
@@ -383,59 +360,46 @@ export const StudentManagementView: React.FC = () => {
           </div>
         )}
 
-        {/* ================= 5. PAGINATION (Matching 6.webp) ================= */}
-        <div className="px-5 py-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
+        {/* ================= 5. PAGINATION ================= */}
+        <div className="px-5 py-3 py-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
           <div>
             Showing <span className="font-bold text-slate-700">{filteredStudents.length}</span> of{' '}
-            <span className="font-bold text-slate-700">1,250</span> students
+            <span className="font-bold text-slate-700">{totalStudentsCount}</span> students
           </div>
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50"
+                disabled={page <= 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ‹
               </button>
+              {pageNumbers.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPage(p)}
+                  className={`w-7 h-7 rounded-lg font-bold flex items-center justify-center ${
+                    p === page
+                      ? 'bg-[#0052CC] text-white shadow-xs'
+                      : 'border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50'
+                  }`}
+                >
+                  {p + 1}
+                </button>
+              ))}
               <button
                 type="button"
-                className="w-7 h-7 rounded-lg bg-[#0052CC] text-white font-bold flex items-center justify-center shadow-xs"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 font-semibold flex items-center justify-center hover:bg-slate-50"
-              >
-                2
-              </button>
-              <button
-                type="button"
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 font-semibold flex items-center justify-center hover:bg-slate-50"
-              >
-                3
-              </button>
-              <span className="px-1 text-slate-400">…</span>
-              <button
-                type="button"
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 font-semibold flex items-center justify-center hover:bg-slate-50"
-              >
-                25
-              </button>
-              <button
-                type="button"
-                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ›
               </button>
             </div>
-
-            <select className="h-7 px-2 border border-slate-200 rounded-lg text-slate-600 text-xs bg-white focus:outline-none">
-              <option>10 per page</option>
-              <option>20 per page</option>
-              <option>50 per page</option>
-            </select>
           </div>
         </div>
       </div>
@@ -472,20 +436,20 @@ export const StudentManagementView: React.FC = () => {
 
             <dl className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <dt className="text-slate-400 font-semibold uppercase">Chương trình học</dt>
-                <dd className="font-bold text-[#0052CC] mt-1">{selectedStudent.courseName}</dd>
+                <dt className="text-slate-400 font-semibold uppercase">Trình độ hiện tại</dt>
+                <dd className="font-bold text-[#0052CC] mt-1">{selectedStudent.currentLevel}</dd>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <dt className="text-slate-400 font-semibold uppercase">Lớp / Batch</dt>
-                <dd className="font-bold text-slate-800 mt-1">{selectedStudent.batch}</dd>
+                <dt className="text-slate-400 font-semibold uppercase">Điểm hiện tại</dt>
+                <dd className="font-bold text-emerald-600 mt-1">{selectedStudent.currentScore}</dd>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <dt className="text-slate-400 font-semibold uppercase">Mục tiêu điểm số</dt>
-                <dd className="font-bold text-emerald-600 mt-1">{selectedStudent.targetScore}</dd>
+                <dt className="text-slate-400 font-semibold uppercase">Điện thoại</dt>
+                <dd className="font-bold text-slate-800 mt-1">{selectedStudent.phone}</dd>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <dt className="text-slate-400 font-semibold uppercase">Tỉ lệ chuyên cần</dt>
-                <dd className="font-bold text-slate-800 mt-1">{selectedStudent.attendance}</dd>
+                <dt className="text-slate-400 font-semibold uppercase">Ngày đăng ký</dt>
+                <dd className="font-bold text-slate-800 mt-1">{selectedStudent.enrolledDate}</dd>
               </div>
             </dl>
 
