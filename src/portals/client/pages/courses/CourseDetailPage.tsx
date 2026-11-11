@@ -1042,7 +1042,9 @@ const FinalExamList: React.FC<{
                 {item.requiresMentor && !locked && (
                   <p className="text-[11px] text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-1.5 mt-2 inline-flex items-center gap-1.5 font-semibold">
                     <Users className="w-3 h-3 shrink-0" />
-                    Phần tự luận sẽ được mentor 1-1 của bạn chấm tay.
+                    {item.hasMentorPlan === false
+                      ? 'Phần tự luận sẽ được lưu nháp chờ nâng cấp gói Mentor 1-1 — bạn không cần làm lại bài.'
+                      : 'Phần tự luận sẽ được mentor 1-1 của bạn chấm tay.'}
                   </p>
                 )}
               </div>

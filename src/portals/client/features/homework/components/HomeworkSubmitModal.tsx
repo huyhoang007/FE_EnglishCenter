@@ -784,19 +784,30 @@ const SubmissionResult: React.FC<{
       )}
 
       {/* ---- File đã nộp (bài nộp file) ---- */}
-      {submission.submissionType === 'file' && (
+      {(submission.submissionType === 'file' ||
+        submission.submissionType === 'audio') && (
         <div className="p-3 rounded-lg bg-white/70 border border-slate-200/70 space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            File đã nộp
+            {submission.submissionType === 'audio'
+              ? 'Bài ghi âm đã nộp'
+              : 'File đã nộp'}
           </p>
           <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-            <Paperclip className="w-3.5 h-3.5" />
+            {submission.submissionType === 'audio' ? (
+              <Mic className="w-3.5 h-3.5" />
+            ) : (
+              <Paperclip className="w-3.5 h-3.5" />
+            )}
             {submission.fileOriginalName ?? 'File bài tập'}
           </p>
           <p className="text-[11px] text-slate-500">
             Định dạng: {submission.fileFormat?.toUpperCase() ?? '—'} · Dung
             lượng: {formatBytes(submission.fileBytes)}
           </p>
+          {/* Bài ghi âm → cho nghe lại trực tiếp. */}
+          {submission.submissionType === 'audio' && submission.fileUrl && (
+            <audio controls src={submission.fileUrl} className="w-full h-9" />
+          )}
           {submission.fileUrl ? (
             <a
               href={submission.fileUrl}

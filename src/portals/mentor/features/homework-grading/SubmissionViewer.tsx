@@ -7,7 +7,7 @@
  *   - `text`   → văn bản bài làm
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Download, FileText, PlayCircle } from 'lucide-react';
 
 interface SubmissionViewerProps {
@@ -21,6 +21,30 @@ interface SubmissionViewerProps {
 
 const isPdf = (format?: string | null) =>
   (format ?? '').toLowerCase() === 'pdf';
+
+/**
+ * Trình phát bản ghi âm.
+ * <p>
+ * BE ép đầu ra {@code .mp3} cho file ghi âm (resource_type=video) → Cloudinary
+ * trả {@code Content-Type: audio/mpeg} → thẻ {@code <audio>} phát được.
+ * <p>
+ * Nếu trình duyệt vẫn không phát được (codec lạ, file cũ chưa ép format),
+ * fallback sang thẻ {@code <video>} — browser phát được {@code video/webm}.
+ */
+const AudioPlayer: React.FC<{ url: string }> = ({ url }) => {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <video controls src={url} className="w-full rounded-lg bg-black/5" />
+    );
+  }
+  return (
+    <audio controls src={url} className="w-full" onError={() => setFailed(true)}>
+      Trình duyệt không phát được bản ghi âm này.
+    </audio>
+  );
+};
 
 export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
   submissionType,
@@ -101,9 +125,12 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
     );
   }
 
-  /* ---------------- Audio ---------------- */
+  /* ---------------- Audio ----------------
+   * Bài ghi âm được upload như FILE (publicId + resourceType) → URL do BE dựng
+   * và trả về ở `fileUrl`. `answerContent` chỉ chứa bản phiên âm (nếu có).
+   */
   if (type === 'audio') {
-    const audioUrl = answerContent?.trim() ?? '';
+    const audioUrl = (fileUrl?.trim() || answerContent?.trim() || '');
     const isUrl = /^https?:\/\//i.test(audioUrl);
     return (
       <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2">
@@ -112,7 +139,18 @@ export const SubmissionViewer: React.FC<SubmissionViewerProps> = ({
           Bài ghi âm của học viên
         </p>
         {isUrl ? (
-          <audio controls src={audioUrl} className="w-full" />
+          <>
+            <AudioPlayer url={audioUrl} />
+            <a
+              href={audioUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#0052CC] hover:underline"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Mở bản ghi âm (URL có thời hạn)
+            </a>
+          </>
         ) : audioUrl ? (
           <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
             {audioUrl}

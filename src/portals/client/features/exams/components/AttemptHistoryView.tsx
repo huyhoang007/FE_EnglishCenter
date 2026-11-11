@@ -15,7 +15,13 @@ import { ATTEMPT_STATUS_LABEL, type AttemptSummary } from '@/shared/types';
 import { useMyAttempts } from '../hooks/useExams';
 import { formatDateTime } from '../utils/examRoom';
 
-const STATUS_VARIANT = { in_progress: 'primary', submitted: 'ai', graded: 'success', expired: 'warning' } as const;
+const STATUS_VARIANT = {
+  in_progress: 'primary',
+  submitted: 'ai',
+  graded: 'success',
+  expired: 'warning',
+  awaiting_mentor: 'ai',
+} as const;
 
 export const AttemptHistoryView: React.FC = () => {
   const navigate = useNavigate();

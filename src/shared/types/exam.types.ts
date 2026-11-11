@@ -12,7 +12,7 @@ export type ExamType = 'quiz' | 'midterm' | 'final' | 'placement_test';
 export type ExamStatus = 'draft' | 'published' | 'archived';
 export type QuestionType = 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard' | 'real_test_level';
-export type AttemptStatus = 'in_progress' | 'submitted' | 'graded' | 'expired';
+export type AttemptStatus = 'in_progress' | 'submitted' | 'graded' | 'expired' | 'awaiting_mentor';
 
 export interface ExamSummary {
   examId: string;
@@ -108,6 +108,15 @@ export interface ExamDetail {
   accessMessage?: string;
   /** Mã lỗi khi accessible = false (5033 = đang chờ mentor chấm bài trước). */
   accessCode?: number;
+  /**
+   * V30: đề có câu tự luận (Writing / Speaking) cần mentor chấm tay không.
+   *
+   * Học viên CHƯA mua gói kèm 1-1 vẫn làm + nộp được toàn bộ đề; phần tự luận được
+   * lưu nháp ở trạng thái `awaiting_mentor` cho tới khi nâng cấp gói.
+   */
+  requiresMentorGrading?: boolean;
+  /** V30: học viên đã mua gói kèm 1-1 hay chưa (null = chưa đăng nhập). */
+  hasMentorPlan?: boolean;
   /** Chỉ admin: bộ đề của khóa chưa đủ nên luật thi nối tiếp bị bỏ qua. */
   warnings?: string[];
   questionsIncluded: boolean;
@@ -158,6 +167,11 @@ export interface AttemptSummary {
   passed?: boolean;
   pendingManualGrading?: boolean;
   autoSubmitted?: boolean;
+  /**
+   * V30: true khi phần tự luận đang LƯU NHÁP vì học viên chưa mua gói mentor 1-1.
+   * Bài đã nộp trọn vẹn, không cần làm lại — chỉ cần nâng cấp gói để mentor chấm tay.
+   */
+  mentorUpgradeRequired?: boolean;
   studentId?: string;
   studentName?: string;
   studentEmail?: string;
@@ -293,6 +307,12 @@ export interface AttemptResult {
   answersVisible: boolean;
   sectionScores?: SectionScore[];
   answers: AnswerResult[];
+  /**
+   * V30: điểm phần TRẮC NGHIỆM (chấm tự động) — tách riêng vì khi phần tự luận còn
+   * lưu nháp thì tổng điểm phản ánh cả phần chưa được chấm.
+   */
+  objectiveScore?: number;
+  objectiveMaxScore?: number;
 }
 
 export interface AnswerItemRequest {
@@ -322,6 +342,7 @@ export const ATTEMPT_STATUS_LABEL: Record<AttemptStatus, string> = {
   submitted: 'Chờ chấm',
   graded: 'Đã chấm',
   expired: 'Hết giờ (tự nộp)',
+  awaiting_mentor: 'Chờ nâng cấp gói Mentor',
 };
 
 export const EXAM_STATUS_LABEL: Record<ExamStatus, string> = {

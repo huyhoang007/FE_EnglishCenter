@@ -300,6 +300,13 @@ export interface CourseContentDto {
    */
   requiresMentor?: boolean | null;
   /**
+   * V30: học viên (người đang xem) đã mua gói kèm 1-1 hay chưa.
+   *
+   * `false` → học viên vẫn làm + nộp được toàn bộ đề; phần tự luận được lưu nháp
+   * (`awaiting_mentor`) cho tới khi nâng cấp gói.
+   */
+  hasMentorPlan?: boolean | null;
+  /**
    * Lý do bài thi cuối kỳ bị khoá (null = đã mở) — V29.
    *
    * - `'lessons'` — chưa xem xong hết video của khóa;

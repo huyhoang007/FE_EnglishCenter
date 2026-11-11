@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Clock, FileQuestion, Hourglass, Play, RotateCcw, Target, Trophy } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Clock, FileQuestion, Hourglass, Play, RotateCcw, Target, Trophy, Users } from 'lucide-react';
 import { Badge } from '@/shared/components/Badge';
 import { Button } from '@/shared/components/Button';
 import { Card } from '@/shared/components/Card';
@@ -139,6 +139,15 @@ export const ExamIntroView: React.FC<ExamIntroViewProps> = ({ examId }) => {
             >
               {waitingForGrading ? <Hourglass className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
               {data.accessMessage}
+            </p>
+          )}
+          {/* V30: đề có phần tự luận + học viên chưa mua gói mentor → vẫn làm được,
+              phần tự luận lưu nháp chờ nâng cấp gói (không phải làm lại bài). */}
+          {isAuthenticated && data.requiresMentorGrading === true && data.hasMentorPlan === false && (
+            <p className="text-violet-700 font-semibold flex items-center gap-1.5">
+              <Users className="w-4 h-4" />
+              Đề này có phần Viết/Nói. Bạn vẫn làm và nộp được trọn vẹn — phần Viết/Nói sẽ được lưu nháp và
+              chuyển cho mentor chấm ngay khi bạn nâng cấp gói Mentor 1-1, không cần làm lại bài.
             </p>
           )}
           {start.error && <p className="text-status-danger font-semibold">{start.error.message}</p>}

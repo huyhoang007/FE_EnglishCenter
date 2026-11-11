@@ -35,6 +35,7 @@ import { formatDuration } from '../utils/examRoom';
 import { AnswerReviewItem } from './AnswerReviewItem';
 import { PracticeLevelCard } from './PracticeLevelCard';
 import { CertificateScoreCard } from './CertificateScoreCard';
+import { MentorUpgradeCard } from './MentorUpgradeCard';
 import { TestRecommendations } from '@/portals/client/features/ai-practice/components/TestRecommendations';
 
 interface AttemptResultViewProps {
@@ -89,6 +90,11 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
 
   const { attempt } = data;
   const isPending = attempt.pendingManualGrading === true;
+  // V30: phần tự luận đang lưu nháp vì học viên chưa mua gói mentor → gợi ý nâng cấp.
+  const needsMentorUpgrade = attempt.mentorUpgradeRequired === true;
+  // Khi chờ nâng cấp, tổng điểm phản ánh cả phần tự luận CHƯA chấm → hiện riêng điểm trắc nghiệm.
+  const showObjectiveScore = needsMentorUpgrade && data.objectiveMaxScore !== undefined && data.objectiveMaxScore > 0;
+  const pendingEssayCount = data.answers.filter((a) => a.pendingManualGrading === true).length;
 
   return (
     <div className="space-y-5">
@@ -98,13 +104,23 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
         {/* Đề luyện tập: không hiện điểm thô (23.77/73), chỉ band + CEFR ở thẻ bên dưới */}
         {!isPractice && (
           <div className="rounded-3xl border-2 border-primary/30 bg-gradient-to-br from-blue-50 to-white p-6 text-center min-w-[180px]">
-            <p className="text-[10px] font-extrabold uppercase tracking-widest text-primary">Điểm</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-primary">
+              {showObjectiveScore ? 'Điểm trắc nghiệm' : 'Điểm'}
+            </p>
             {data.scoreVisible ? (
               <>
-                <p className="text-5xl font-extrabold text-slate-900 tabular-nums mt-2">{attempt.score}</p>
-                <p className="text-sm text-slate-400 font-bold">
-                  / {attempt.maxScore} · {attempt.percentage}%
+                <p className="text-5xl font-extrabold text-slate-900 tabular-nums mt-2">
+                  {showObjectiveScore ? data.objectiveScore : attempt.score}
                 </p>
+                <p className="text-sm text-slate-400 font-bold">
+                  / {showObjectiveScore ? data.objectiveMaxScore : attempt.maxScore}
+                  {!showObjectiveScore && attempt.percentage !== undefined ? ` · ${attempt.percentage}%` : ''}
+                </p>
+                {showObjectiveScore && (
+                  <p className="text-[11px] text-slate-500 font-semibold mt-1.5 leading-snug">
+                    Điểm tổng sẽ có thêm phần Viết / Nói sau khi mentor chấm.
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-sm text-slate-500 mt-3">Đề không công bố điểm</p>
@@ -115,14 +131,28 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-extrabold text-slate-900">{attempt.examTitle}</h1>
             <Badge
-              variant={attempt.status === 'graded' ? 'success' : attempt.status === 'expired' ? 'warning' : 'primary'}
+              variant={
+                attempt.status === 'graded'
+                  ? 'success'
+                  : attempt.status === 'expired'
+                    ? 'warning'
+                    : attempt.status === 'awaiting_mentor'
+                      ? 'ai'
+                      : 'primary'
+              }
             >
               {ATTEMPT_STATUS_LABEL[attempt.status]}
             </Badge>
             {!isPractice && attempt.passed === true && <Badge variant="success">Đạt</Badge>}
             {!isPractice && attempt.passed === false && <Badge variant="danger">Chưa đạt</Badge>}
           </div>
-          {isPending && !isPractice && (
+          {needsMentorUpgrade && !isPractice && (
+            <p className="text-sm text-ai font-semibold flex items-center gap-1.5">
+              <Hourglass className="w-4 h-4" /> Phần Viết/Nói đã lưu nháp chờ nâng cấp gói Mentor — bạn không cần làm
+              lại bài.
+            </p>
+          )}
+          {isPending && !isPractice && !needsMentorUpgrade && (
             <p className="text-sm text-ai font-semibold flex items-center gap-1.5">
               <Hourglass className="w-4 h-4" /> Phần Writing/Speaking đang chờ mentor chấm, điểm sẽ cập nhật sau.
             </p>
@@ -176,6 +206,9 @@ export const AttemptResultView: React.FC<AttemptResultViewProps> = ({ attemptId 
       </Card>
 
       {isPractice && data.practiceLevel && <PracticeLevelCard level={data.practiceLevel} />}
+
+      {/* V30: học viên nộp đề cuối kỳ mà chưa mua gói mentor → gợi ý nâng cấp (bài tự luận đã lưu nháp) */}
+      {needsMentorUpgrade && !isPractice && <MentorUpgradeCard pendingCount={pendingEssayCount} />}
 
       {/* Đề luyện tập: gợi ý khóa học / lộ trình ngay sau trình độ, trước phần xem lại bài */}
       {isPractice && !isPending && <TestRecommendations />}

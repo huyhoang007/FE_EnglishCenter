@@ -780,7 +780,7 @@ const CancelBookingModal: React.FC<{ booking: Booking; onClose: () => void }> = 
  *  - Hủy thanh toán → BE hủy đơn, hủy booking pending và mở lại slot.
  * ============================================================ */
 const PAYMENT_DONE_MESSAGE: Record<Exclude<SessionPaymentStatus, 'PENDING'>, string> = {
-  PAID: 'Đã nhận thanh toán. Các buổi kèm 1-1 trong gói đã được xác nhận, xem lại trong mục Lịch của tôi.',
+  PAID: 'Đã nhận thanh toán. Các buổi kèm 1-1 trong gói đã được xác nhận, xem lại trong mục Lịch của tôi. Nếu bạn đã nộp bài thi trước khi mua gói, các bài tự luận đó cũng đã được chuyển cho mentor chấm — bạn không cần làm lại.',
   CANCELLED: 'Bạn đã hủy đơn thanh toán. Gói vẫn được giữ, bấm "Thanh toán cả gói" để tạo đơn mới.',
   EXPIRED: 'Đơn đã hết hạn thanh toán. Gói vẫn được giữ, bấm "Thanh toán cả gói" để tạo đơn mới.',
   REVIEW_REQUIRED:
@@ -814,8 +814,13 @@ const SessionPaymentModal: React.FC<{ orderCode: string; onClose: () => void }> 
     if (status && status !== 'PENDING') {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.schedule.all });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.notification.all });
-      // Learner (USER) trả tiền gói thì BE nâng lên STUDENT → tải lại hồ sơ để mở menu Mentor 1-1
-      if (status === 'PAID') void fetchProfile().catch(() => undefined);
+      // V30: mua gói mentor → các bài thi đang LƯU NHÁP (awaiting_mentor) được chuyển
+      // sang hàng đợi chấm của mentor → tải lại lịch sử thi + kết quả để thấy trạng thái mới.
+      if (status === 'PAID') {
+        queryClient.invalidateQueries({ queryKey: ['exam'] });
+        // Learner (USER) trả tiền gói thì BE nâng lên STUDENT → tải lại hồ sơ để mở menu Mentor 1-1
+        void fetchProfile().catch(() => undefined);
+      }
     }
   }, [status, queryClient, fetchProfile]);
 
