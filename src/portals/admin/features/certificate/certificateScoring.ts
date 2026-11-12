@@ -245,13 +245,13 @@ export const CERTIFICATE_PRESETS: CertificatePreset[] = [
   },
   {
     id: 'IELTS',
-    label: 'IELTS (0 – 9.0 Band)',
+    label: 'IELTS (1.0 – 9.0 Band)',
     category: 'Quốc tế (IDP & British Council)',
     defaultName: 'IELTS Academic',
-    description: 'IELTS Academic & General Training, thang 0-9.0 band, bước 0.5, làm tròn chính thức IELTS',
+    description: 'IELTS Academic & General Training, thang 1.0-9.0 band, bước 0.5, làm tròn chính thức IELTS',
     scoringSystem: {
       scaleType: 'AVERAGE',
-      minScore: 0,
+      minScore: 1.0,
       maxScore: 9.0,
       step: 0.5,
       unit: 'Band',
@@ -260,10 +260,10 @@ export const CERTIFICATE_PRESETS: CertificatePreset[] = [
       note: 'Overall = trung bình 4 kỹ năng làm tròn theo quy tắc chính thức: <.25 xuống .0, [.25, .75) thành .5, >=.75 lên 1.0',
     },
     defaultParts: [
-      { partName: 'Listening', partDescription: 'Kỹ năng nghe (40 câu hỏi, 4 phần)', minScore: 0, maxScore: 9.0, step: 0.5 },
-      { partName: 'Reading', partDescription: 'Kỹ năng đọc (40 câu hỏi, 3 bài đọc)', minScore: 0, maxScore: 9.0, step: 0.5 },
-      { partName: 'Writing', partDescription: 'Kỹ năng viết (Task 1 & Task 2)', minScore: 0, maxScore: 9.0, step: 0.5 },
-      { partName: 'Speaking', partDescription: 'Kỹ năng nói phỏng vấn (Part 1, 2, 3)', minScore: 0, maxScore: 9.0, step: 0.5 },
+      { partName: 'Listening', partDescription: 'Kỹ năng nghe (40 câu hỏi, 4 phần)', minScore: 1.0, maxScore: 9.0, step: 0.5 },
+      { partName: 'Reading', partDescription: 'Kỹ năng đọc (40 câu hỏi, 3 bài đọc)', minScore: 1.0, maxScore: 9.0, step: 0.5 },
+      { partName: 'Writing', partDescription: 'Kỹ năng viết (Task 1 & Task 2)', minScore: 1.0, maxScore: 9.0, step: 0.5 },
+      { partName: 'Speaking', partDescription: 'Kỹ năng nói phỏng vấn (Part 1, 2, 3)', minScore: 1.0, maxScore: 9.0, step: 0.5 },
     ],
     benchmarks: [
       { cefr: 'C2', label: 'Band 9.0', scoreRange: '9.0', note: 'Expert User — Thông thạo hoàn toàn' },

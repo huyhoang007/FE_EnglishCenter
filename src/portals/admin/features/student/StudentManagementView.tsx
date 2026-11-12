@@ -28,6 +28,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { getUsers, updateUserStatus } from '@/shared/api/domainApi';
+import { fetchCourses } from '@/shared/api/courseService';
+import { fetchAllEnrollments } from '@/shared/api/enrollmentService';
 import type { AuthUser } from '@/shared/types';
 import { QUERY_KEYS } from '@/shared/constants/queryKeys';
 
@@ -37,6 +39,7 @@ export const StudentManagementView: React.FC = () => {
 
   // Filters
   const [keyword, setKeyword] = useState('');
+  const [courseFilter, setCourseFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(0);
 
@@ -79,8 +82,42 @@ export const StudentManagementView: React.FC = () => {
       }),
   });
 
+  // Query all courses for the course filter, including courses without enrollments.
+  const { data: coursesData } = useQuery({
+    queryKey: ['courses'],
+    queryFn: () => fetchCourses({ size: 100 }),
+  });
+
+  // Query All Enrollments for mapping students to their courses
+  const { data: enrollmentsData } = useQuery({
+    queryKey: ['admin', 'enrollments'],
+    queryFn: () => fetchAllEnrollments({ size: 1000 }),
+  });
+
   // Combine backend users with rich presentation data
   const backendStudents: AuthUser[] = usersData?.data ?? [];
+
+  // Group active enrollment course titles by student.
+  const enrollmentMap = React.useMemo(() => {
+    const map = new Map<string, string[]>();
+    const enrollments = enrollmentsData?.data ?? [];
+    enrollments.forEach((enrollment) => {
+      if (enrollment.status !== 'active') return;
+
+      const courseTitles = map.get(enrollment.studentId) ?? [];
+      if (!courseTitles.includes(enrollment.courseTitle)) {
+        courseTitles.push(enrollment.courseTitle);
+      }
+      map.set(enrollment.studentId, courseTitles);
+    });
+    return map;
+  }, [enrollmentsData]);
+
+  // Filter options show the full course catalog, not only enrolled courses.
+  const uniqueCourseTitles = React.useMemo(
+    () => Array.from(new Set((coursesData?.data ?? []).map((course) => course.title).filter(Boolean))).sort(),
+    [coursesData]
+  );
 
   // Dynamic KPI Stats from backend data
   const totalStudentsCount = usersData?.totalElements ?? backendStudents.length;
@@ -105,26 +142,34 @@ export const StudentManagementView: React.FC = () => {
   }).filter((p) => p < totalPages);
 
   const combinedStudents = React.useMemo(() => {
-    return backendStudents.map((u) => ({
-      id: u.id,
-      fullName: u.fullName,
-      email: u.email,
-      phone: u.phone || 'Chưa cập nhật',
-      studentCode: `STD-${u.id.replace(/-/g, '').slice(0, 8).toUpperCase()}`,
-      status: u.isActive ? 'Active' : 'Inactive',
-      enrolledDate: u.createdAt
-        ? new Date(u.createdAt).toLocaleDateString('vi-VN')
-        : 'Mới đăng ký',
-      currentLevel: u.currentLevel || '—',
-      currentScore: u.currentScore != null ? `${u.currentScore}` : '—',
-    }));
-  }, [backendStudents]);
+    return backendStudents.map((u) => {
+      const studentCourses = enrollmentMap.get(u.id) ?? [];
+      return {
+        id: u.id,
+        fullName: u.fullName,
+        email: u.email,
+        phone: u.phone || 'Chưa cập nhật',
+        // The API exposes the account UUID, not a separate student code.
+        studentCode: u.id,
+        courseName: studentCourses.length > 0 ? studentCourses.join(', ') : 'Chưa đăng ký khóa học',
+        status: u.isActive ? 'Active' : 'Inactive',
+        enrolledDate: u.createdAt
+          ? new Date(u.createdAt).toLocaleDateString('vi-VN')
+          : 'Mới đăng ký',
+        currentLevel: u.currentLevel || 'Chưa cập nhật',
+        currentScore: u.currentScore != null ? `${u.currentScore}` : 'Chưa cập nhật',
+      };
+    });
+  }, [backendStudents, enrollmentMap]);
 
-  // Filter đã xử lý server-side (keyword / isActive truyền lên /admin/users)
-  const filteredStudents = combinedStudents;
+  // Keyword/status are filtered server-side; course filtering uses each student's active enrollments.
+  const filteredStudents = combinedStudents.filter(
+    (student) => !courseFilter || student.courseName.includes(courseFilter)
+  );
 
   const handleResetFilters = () => {
     setKeyword('');
+    setCourseFilter('');
     setStatusFilter('');
     setPage(0);
   };
@@ -213,6 +258,19 @@ export const StudentManagementView: React.FC = () => {
             />
           </div>
 
+          {/* Course Program Filter */}
+          <select
+            value={courseFilter}
+            onChange={(e) => setCourseFilter(e.target.value)}
+            className="h-10 px-3 rounded-xl border border-slate-200/80 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-[#0052CC]"
+          >
+            <option value="">Course</option>
+            {uniqueCourseTitles.map((title) => (
+              <option key={title} value={title}>
+                {title}
+              </option>
+            ))}
+          </select>
           {/* Status Filter */}
           <select
             value={statusFilter}
@@ -258,7 +316,7 @@ export const StudentManagementView: React.FC = () => {
                   </th>
                   <th className="py-3.5 px-2 w-12 font-bold">#</th>
                   <th className="py-3.5 px-3 font-bold">Student</th>
-                  <th className="py-3.5 px-3 font-bold">Student ID</th>
+                  <th className="py-3.5 px-3 font-bold">Course</th>
                   <th className="py-3.5 px-3 font-bold">Level</th>
                   <th className="py-3.5 px-3 font-bold">Current Score</th>
                   <th className="py-3.5 px-3 font-bold">Email</th>
@@ -287,8 +345,8 @@ export const StudentManagementView: React.FC = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-slate-600 font-mono text-[11px] font-semibold">
-                      {s.studentCode}
+                    <td className="py-3 px-3 text-slate-600 max-w-48 truncate" title={s.courseName}>
+                      {s.courseName}
                     </td>
                     <td className="py-3 px-3">
                       <span className="inline-block px-2.5 py-0.5 rounded-md bg-blue-50 text-[#0052CC] font-bold text-[10px] border border-blue-100 truncate max-w-[150px]">
