@@ -175,7 +175,6 @@ export interface ExamRules {
   maxDurationMinutes: number;
   /** Thời gian thi thật của chứng chỉ (phút) */
   fullTestMinutes: number;
-  minDescriptionLength: number;
 }
 
 export const getExamRulesApi = (certificateId?: string, examType?: string): Promise<ApiResponse<ExamRules>> =>

@@ -5,7 +5,7 @@
  * Thang điểm và điểm đạt lấy tự động theo chứng chỉ (VD IELTS 5.5), admin không nhập; FE đổi sang % cho backend.
  * Đề luôn thuộc một khóa học của chứng chỉ đó (kiểm tra đầu vào / thi thử đã bỏ — thi thử đầy đủ ở Luyện tập AI).
  * Loại đề: Quiz / Giữa kỳ / Cuối kỳ, mở nối tiếp cho học viên.
- * Ngưỡng thời lượng / độ dài mô tả lấy từ BE (GET /admin/exams/rules), không chép lại ở FE — BE chặn 5029 / 5034.
+ * Mô tả bắt buộc, không giới hạn độ dài (BE 5029). Khoảng thời lượng lấy từ BE (GET /admin/exams/rules), không chép lại ở FE (BE 5034).
  */
 
 import React, { useMemo, useState } from 'react';
@@ -56,19 +56,15 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
   /** Đổi chứng chỉ: bỏ khóa học không còn thuộc chứng chỉ. */
   const changeCertificate = (certificateId: string) => setForm((f) => ({ ...f, certificateId, courseId: '' }));
-  const descriptionLength = form.description.trim().length;
   const rules = useExamRules(form.certificateId, form.examType).data;
-  const minDescription = rules?.minDescriptionLength ?? 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.certificateId) return setFieldError('Chọn chứng chỉ của đề');
     if (!form.courseId) return setFieldError('Chọn khóa học của đề');
     if (!form.examTitle.trim()) return setFieldError('Nhập tiêu đề đề thi');
+    if (!form.description.trim()) return setFieldError('Nhập mô tả đề thi');
     if (!rules) return setFieldError('Chưa tải được giới hạn của đề, thử lại sau giây lát');
-    if (descriptionLength < rules.minDescriptionLength) {
-      return setFieldError(`Mô tả tối thiểu ${rules.minDescriptionLength} ký tự: ghi rõ đề gồm những phần nào, dành cho ai`);
-    }
     const minutes = Number(form.durationMinutes);
     if (!(minutes >= rules.minDurationMinutes && minutes <= rules.maxDurationMinutes)) {
       return setFieldError(
@@ -214,14 +210,6 @@ export const CreateExamModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
             className={FIELD_CLASS}
             placeholder="VD: Đề cuối kỳ khóa IELTS Foundation: Listening 2 part, Reading 1 bài đọc, Writing Task 2. Làm trong 60 phút, đạt từ band 5.0."
           />
-          <span
-            className={cn(
-              'mt-1 block text-xs',
-              descriptionLength >= minDescription ? 'text-emerald-600' : 'text-slate-500',
-            )}
-          >
-            {descriptionLength}/{minDescription} ký tự tối thiểu — ghi rõ đề gồm những phần nào, dành cho ai
-          </span>
         </Field>
         <div className="sm:col-span-2 flex flex-wrap items-center gap-4 text-sm text-slate-700">
           <Checkbox label="Cho xem điểm" checked={form.showScore} onChange={(v) => set('showScore', v)} />
